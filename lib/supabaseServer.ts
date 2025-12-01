@@ -7,20 +7,27 @@ export function createServerClient() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl) {
-    throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL is not set.\nSet NEXT_PUBLIC_SUPABASE_URL in your environment (for example in .env.local during local development, or as an Environment Variable in Vercel).' 
+    console.warn(
+      'NEXT_PUBLIC_SUPABASE_URL is not set. Set NEXT_PUBLIC_SUPABASE_URL in your environment (for example in .env.local during local development, or as an Environment Variable in Vercel).'
     );
   }
 
   const supabaseKey = serviceRoleKey || anonKey;
 
   if (!supabaseKey) {
-    throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set.\nSet one of these in your environment (for example in .env.local during local development, or as an Environment Variable in Vercel).' 
+    console.warn(
+      'SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Set one of these in your environment (for example in .env.local during local development, or as an Environment Variable in Vercel).'
     );
   }
 
-  return createClient(supabaseUrl, supabaseKey, {
+  // If env vars are missing, return a client anyway (with empty strings) so
+  // the application does not crash during server-side module initialization.
+  // Individual calls will fail gracefully and route handlers already check
+  // for `error` from Supabase queries.
+  const urlForClient = supabaseUrl || '';
+  const keyForClient = supabaseKey || '';
+
+  return createClient(urlForClient, keyForClient, {
     auth: { persistSession: false },
   });
 }
