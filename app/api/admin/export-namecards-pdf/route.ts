@@ -34,14 +34,6 @@ function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
 
 export async function GET(req: NextRequest) {
   try {
-    // If caller did not explicitly request the pdf-lib engine, redirect to the
-    // HTML->PDF endpoint which has robust Chromium fallbacks and correct shaping.
-    const reqUrl = new URL(req.url);
-    const requestedEngine = (reqUrl.searchParams.get('engine') ?? 'html').trim().toLowerCase();
-    if (requestedEngine !== 'pdf') {
-      const target = new URL('/api/admin/export-namecards-pdf-html' + reqUrl.search, reqUrl);
-      return NextResponse.redirect(target);
-    }
     const supabase = createServerClient();
     const { searchParams } = new URL(req.url);
     const keyword = (searchParams.get('q') ?? '').trim().toLowerCase();

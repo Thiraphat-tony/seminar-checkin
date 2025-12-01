@@ -82,7 +82,6 @@ async function renderHtml(attendees: Array<any>) {
 }
 
 export async function GET(req: NextRequest) {
-  let html: string | null = null;
   try {
     const supabase = createServerClient();
     const { searchParams } = new URL(req.url);
@@ -116,107 +115,46 @@ export async function GET(req: NextRequest) {
     // Only render the first 6 entries (one page)
     const pageItems = attendees.slice(0, 6);
 
-    html = await renderHtml(attendees);
+    const html = await renderHtml(attendees);
 
-    // By default return the printable HTML (so Vercel callers can Print -> Save as PDF).
-    // To force server-side PDF rendering attempt, call with `?pdf=1`.
-    if ((searchParams.get('pdf') ?? '').trim() !== '1') {
-      const printUi = `
-        <div style="position:fixed;right:12px;top:12px;z-index:9999">
-          <button onclick="window.print()" style="padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;">Print / Save as PDF</button>
-        </div>
-        <script>
-          try {
-            if (new URLSearchParams(location.search).get('print') === '1') {
-              setTimeout(()=>window.print(), 300);
-            }
-          } catch(e) { /* ignore */ }
-        </script>
-      `;
-      const finalHtml = html.replace('</body>', `${printUi}</body>`);
-      return new NextResponse(finalHtml, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
-    }
-
-    // Attempt server-side PDF rendering only when requested (pdf=1)
+    // Try to use a chromium binary packaged for serverless (works on Vercel).
+    // If that's not available, fall back to the regular `puppeteer` package (local dev).
+    let browser: any;
     try {
-      const puppeteer = (await import('puppeteer')) as any;
-      const browser = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] });
-      const page = await browser.newPage();
-      // allow loading local fonts and external images
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' } });
-      await browser.close();
-
-      // convert Buffer -> ArrayBuffer
-      const arr = new Uint8Array(pdfBuffer as any);
-      const buffer = new ArrayBuffer(arr.length);
-      new Uint8Array(buffer).set(arr);
-
-      return new NextResponse(buffer, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': 'inline; filename="namecards-html.pdf"',
-        },
+      const chromium = (await import('@sparticuz/chromium')) as any;
+      const puppeteer = (await import('puppeteer-core')) as any;
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: { width: 1200, height: 800 },
+        executablePath: await chromium.executablePath,
+        headless: chromium.headless,
       });
     } catch (e) {
-      console.error('[pdf] server-side puppeteer attempt failed:', String(e));
-      // If server-side rendering fails, fall back to printable HTML
-      const printUi = `
-        <div style="position:fixed;right:12px;top:12px;z-index:9999">
-          <button onclick="window.print()" style="padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;">Print / Save as PDF</button>
-        </div>
-        <script>
-          try {
-            if (new URLSearchParams(location.search).get('print') === '1') {
-              setTimeout(()=>window.print(), 300);
-            }
-          } catch(e) { /* ignore */ }
-        </script>
-      `;
-      const finalHtml = html ? html.replace('</body>', `${printUi}</body>`) : `<!doctype html><html><head><meta charset="utf-8" /></head><body><div style="padding:24px">PDF rendering failed on server. Use the button to print/save as PDF.</div>${printUi}</body></html>`;
-      return new NextResponse(finalHtml, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
+      // Fallback for local development where @sparticuz/chromium is not installed
+      const puppeteer = (await import('puppeteer')) as any;
+      browser = await puppeteer.launch();
     }
+    const page = await browser.newPage();
+    // allow loading local fonts and external images
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' } });
+    await browser.close();
 
-    
+    // convert Buffer -> ArrayBuffer
+    const arr = new Uint8Array(pdfBuffer as any);
+    const buffer = new ArrayBuffer(arr.length);
+    new Uint8Array(buffer).set(arr);
+
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'inline; filename="namecards-html.pdf"',
+      },
+    });
   } catch (err) {
     console.error('Error generating HTML->PDF:', err);
     const detail = err instanceof Error ? err.message : String(err);
-    // If the error is due to missing Chrome / launch failures, return printable HTML fallback
-    const lower = String(detail).toLowerCase();
-    if (lower.includes('could not find chrome') || lower.includes('unable to launch chromium') || lower.includes('could not find chromium') || lower.includes('no usable chromium')) {
-      try {
-        const printUi = `
-          <div style="position:fixed;right:12px;top:12px;z-index:9999">
-            <button onclick="window.print()" style="padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;">Print / Save as PDF</button>
-          </div>
-          <script>
-            try {
-              if (new URLSearchParams(location.search).get('print') === '1') {
-                setTimeout(()=>window.print(), 300);
-              }
-            } catch(e) { /* ignore */ }
-          </script>
-        `;
-        const finalHtml = html
-          ? html.replace('</body>', `${printUi}</body>`)
-          : `<!doctype html><html><head><meta charset="utf-8" /></head><body><div style="padding:24px">PDF rendering is currently unavailable on the server. Use the button to print/save as PDF.</div>${printUi}</body></html>`;
-        return new NextResponse(finalHtml, {
-          status: 200,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        });
-      } catch (e2) {
-        console.error('Failed to return HTML fallback after chrome error:', e2);
-        return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
-      }
-    }
-
     return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
   }
 }
