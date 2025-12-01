@@ -117,9 +117,23 @@ export async function GET(req: NextRequest) {
 
     const html = await renderHtml(attendees);
 
-    // dynamic import puppeteer to avoid top-level require issues
-    const puppeteer = await import('puppeteer');
-    const browser = await puppeteer.launch();
+    // Try to use a chromium binary packaged for serverless (works on Vercel).
+    // If that's not available, fall back to the regular `puppeteer` package (local dev).
+    let browser: any;
+    try {
+      const chromium = (await import('@sparticuz/chromium')) as any;
+      const puppeteer = (await import('puppeteer-core')) as any;
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: { width: 1200, height: 800 },
+        executablePath: await chromium.executablePath,
+        headless: chromium.headless,
+      });
+    } catch (e) {
+      // Fallback for local development where @sparticuz/chromium is not installed
+      const puppeteer = (await import('puppeteer')) as any;
+      browser = await puppeteer.launch();
+    }
     const page = await browser.newPage();
     // allow loading local fonts and external images
     await page.setContent(html, { waitUntil: 'networkidle0' });
