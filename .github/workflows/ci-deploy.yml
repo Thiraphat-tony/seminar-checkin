@@ -35,11 +35,11 @@ jobs:
           docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }} .
 
       - name: Login to GHCR
-        if: secrets.GHCR_PAT != ''
+        if: ${{ secrets.GHCR_PAT != '' }}
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
       - name: Push to GHCR
-        if: secrets.GHCR_PAT != ''
+        if: ${{ secrets.GHCR_PAT != '' }}
         run: |
           docker tag ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }} ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
           docker push ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
