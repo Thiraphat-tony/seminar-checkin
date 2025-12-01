@@ -82,6 +82,7 @@ async function renderHtml(attendees: Array<any>) {
 }
 
 export async function GET(req: NextRequest) {
+  let html: string | null = null;
   try {
     const supabase = createServerClient();
     const { searchParams } = new URL(req.url);
@@ -115,7 +116,7 @@ export async function GET(req: NextRequest) {
     // Only render the first 6 entries (one page)
     const pageItems = attendees.slice(0, 6);
 
-    const html = await renderHtml(attendees);
+    html = await renderHtml(attendees);
 
     // Try several strategies to get a runnable Chromium on serverless hosts.
     // 1) @sparticuz/chromium + puppeteer-core (works on Vercel when available)
@@ -142,25 +143,7 @@ export async function GET(req: NextRequest) {
       console.warn('[pdf] @sparticuz/chromium launch failed:', String(e));
     }
 
-    // Strategy 2: chrome-aws-lambda
-    if (!browser) {
-      try {
-        const chromeAws = (await import('chrome-aws-lambda')) as any;
-        const puppeteer = (await import('puppeteer-core')) as any;
-        const exe = await chromeAws.executablePath;
-        console.log('[pdf] chrome-aws-lambda.executablePath=', exe);
-        browser = await puppeteer.launch({
-          args: chromeAws.args || [],
-          defaultViewport: { width: 1200, height: 800 },
-          executablePath: exe || undefined,
-          headless: chromeAws.headless ?? true,
-        });
-        console.log('[pdf] Launched browser via chrome-aws-lambda');
-      } catch (e) {
-        launchErrors.push({ method: 'chrome-aws-lambda', error: e });
-        console.warn('[pdf] chrome-aws-lambda launch failed:', String(e));
-      }
-    }
+    // (chrome-aws-lambda fallback removed to avoid peer-dep conflicts)
 
     // Strategy 3: full puppeteer (development)
     if (!browser) {
@@ -218,6 +201,35 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error('Error generating HTML->PDF:', err);
     const detail = err instanceof Error ? err.message : String(err);
+    // If the error is due to missing Chrome / launch failures, return printable HTML fallback
+    const lower = String(detail).toLowerCase();
+    if (lower.includes('could not find chrome') || lower.includes('unable to launch chromium') || lower.includes('could not find chromium') || lower.includes('no usable chromium')) {
+      try {
+        const printUi = `
+          <div style="position:fixed;right:12px;top:12px;z-index:9999">
+            <button onclick="window.print()" style="padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;">Print / Save as PDF</button>
+          </div>
+          <script>
+            try {
+              if (new URLSearchParams(location.search).get('print') === '1') {
+                setTimeout(()=>window.print(), 300);
+              }
+            } catch(e) { /* ignore */ }
+          </script>
+        `;
+        const finalHtml = html
+          ? html.replace('</body>', `${printUi}</body>`)
+          : `<!doctype html><html><head><meta charset="utf-8" /></head><body><div style="padding:24px">PDF rendering is currently unavailable on the server. Use the button to print/save as PDF.</div>${printUi}</body></html>`;
+        return new NextResponse(finalHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      } catch (e2) {
+        console.error('Failed to return HTML fallback after chrome error:', e2);
+        return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
+      }
+    }
+
     return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
   }
 }
