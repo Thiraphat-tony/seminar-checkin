@@ -177,7 +177,12 @@ export async function GET(req: NextRequest) {
 
     if (!browser) {
       const details = launchErrors.map(le => `${le.method}: ${String(le.error)}`).join(' | ');
-      throw new Error(`Unable to launch Chromium. Attempts: ${details}`);
+      console.error('[pdf] Unable to launch Chromium. Attempts:', details);
+      // Fallback: return the rendered HTML so the user can open in browser and print to PDF manually.
+      return new NextResponse(html, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
     const page = await browser.newPage();
     // allow loading local fonts and external images
