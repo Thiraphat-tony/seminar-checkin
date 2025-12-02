@@ -126,11 +126,15 @@ export async function GET(req: NextRequest) {
       browser = await puppeteer.launch({
         args: chromium.args,
         defaultViewport: { width: 1200, height: 800 },
-        executablePath: await chromium.executablePath,
+        executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       });
     } catch (e) {
       // Fallback for local development where @sparticuz/chromium is not installed
+      console.error('Failed to launch chromium-serverless:', e);
+      if (process.env.VERCEL) {
+        throw new Error('Chromium serverless initialization failed on Vercel. Please check @sparticuz/chromium installation.');
+      }
       const puppeteer = (await import('puppeteer')) as any;
       browser = await puppeteer.launch();
     }
