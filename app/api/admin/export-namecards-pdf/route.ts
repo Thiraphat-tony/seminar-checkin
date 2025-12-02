@@ -1,4 +1,3 @@
-// app/api/admin/export-namecards-pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fs from 'fs/promises';
@@ -20,7 +19,12 @@ type AttendeeCardRow = {
   food_type: string | null;
 };
 
-
+// small helper to consistently prefix debug logs
+function log(...args: any[]) {
+  // keep logs lightweight and readable
+  // include timestamp and a fixed tag so you can grep logs easily
+  console.log('[export-namecards-pdf]', new Date().toISOString(), ...args);
+}
 
 // ถ้าใน DB ยังไม่มี qr_image_url ให้ fallback เป็นลิงก์ QR จาก ticket_token
 function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
@@ -42,8 +46,19 @@ async function launchHtmlBrowser() {
     ? process.env.PUPPETEER_ARGS.split(/\s+/).filter(Boolean)
     : ['--no-sandbox', '--disable-setuid-sandbox'];
 
+  log('launchHtmlBrowser start', { envExecutable, headlessEnv, normalizeHeadless, baseArgs });
+
   const useEnvExecutable = async () => {
     const puppeteerCore = (await import('puppeteer-core')) as any;
+    // best-effort: log puppeteer-core version
+    try {
+      const pcorePkg = await import('puppeteer-core/package.json').catch(() => null);
+      if (pcorePkg && pcorePkg.version) log('puppeteer-core version:', pcorePkg.version);
+    } catch (_) {
+      /* ignore */
+    }
+
+    log('Attempting puppeteer-core.launch with env executable:', envExecutable);
     return puppeteerCore.launch({
       executablePath: envExecutable,
       headless: normalizeHeadless,
@@ -53,27 +68,82 @@ async function launchHtmlBrowser() {
 
   if (envExecutable) {
     try {
-      return await useEnvExecutable();
+      // check if path exists and is readable (useful when env points to a missing file)
+      try {
+        await fs.access(envExecutable);
+        log('env executable path exists and is readable:', envExecutable);
+      } catch (err) {
+        log('env executable path does not exist or is not readable:', envExecutable, err && (err as Error).message);
+      }
+
+      const browser = await useEnvExecutable();
+      log('Launched browser using env executable.');
+      return browser;
     } catch (envErr) {
-      console.warn('Failed to launch Puppeteer with env executable, falling back:', envErr);
+      log('Failed to launch Puppeteer with env executable, falling back. Error:', (envErr as Error).message || envErr);
     }
+  } else {
+    log('No PUPPETEER_EXECUTABLE_PATH / CHROME_EXECUTABLE_PATH provided, skipping env executable attempt.');
   }
 
   try {
     const chromium = (await import('@sparticuz/chromium')) as any;
     const puppeteerCore = (await import('puppeteer-core')) as any;
-    return await puppeteerCore.launch({
+
+    // try to read executablePath returned by sparticuz/chromium for debugging
+    let sparticuzExec: string | null = null;
+    try {
+      sparticuzExec = await chromium.executablePath;
+      log('@sparticuz/chromium provided executablePath:', sparticuzExec);
+      if (sparticuzExec) {
+        try {
+          await fs.access(sparticuzExec);
+          log('sparticuz executable exists and is readable:', sparticuzExec);
+        } catch (err) {
+          log('sparticuz executable not accessible:', sparticuzExec, err && (err as Error).message);
+        }
+      }
+    } catch (execErr) {
+      log('Could not read sparticuz.executablePath:', execErr && (execErr as Error).message);
+    }
+
+    log('Attempting puppeteer-core.launch with @sparticuz/chromium', {
       args: chromium.args,
       defaultViewport: chromium.defaultViewport ?? { width: 1200, height: 800 },
-      executablePath: await chromium.executablePath,
       headless: chromium.headless,
     });
+
+    const browser = await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport ?? { width: 1200, height: 800 },
+      executablePath: sparticuzExec ?? (await chromium.executablePath).catch?.(() => undefined),
+      headless: chromium.headless,
+    });
+
+    log('Launched browser using @sparticuz/chromium fallback.');
+    return browser;
   } catch (serverlessErr) {
-    console.warn('Falling back to bundled Puppeteer Chrome binary:', serverlessErr);
+    log('Falling back to bundled Puppeteer Chrome binary. Error from sparticuz attempt:', (serverlessErr as Error).message || serverlessErr);
   }
 
-  const puppeteer = (await import('puppeteer')) as any;
-  return puppeteer.launch();
+  try {
+    const puppeteer = (await import('puppeteer')) as any;
+    // best-effort: log puppeteer version
+    try {
+      const pPkg = await import('puppeteer/package.json').catch(() => null);
+      if (pPkg && pPkg.version) log('puppeteer package version:', pPkg.version);
+    } catch (_) {
+      /* ignore */
+    }
+    log('Attempting to launch bundled puppeteer...');
+    const browser = await puppeteer.launch();
+    log('Launched bundled puppeteer successfully.');
+    return browser;
+  } catch (finalErr) {
+    log('All browser launch attempts failed:', finalErr && (finalErr as Error).message);
+    // rethrow so caller receives an error and can log its stack
+    throw finalErr;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -104,7 +174,7 @@ export async function GET(req: NextRequest) {
       .order('full_name', { ascending: true });
 
     if (error || !data) {
-      console.error('Supabase error:', error);
+      log('Supabase error when loading attendees:', error?.message || error);
       return NextResponse.json(
         {
           ok: false,
@@ -151,8 +221,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    log('Attendees loaded, count:', attendees.length, 'engine:', engine, 'injectName:', !!injectName, 'keyword:', keyword || '-');
+
     // If requested, use the HTML->PDF Puppeteer engine for proper complex-script shaping
     if (engine === 'html') {
+      console.log('[export-namecards-pdf] Attempting HTML->PDF rendering with Puppeteer...');
       // inline small HTML renderer (similar to app/api/admin/export-namecards-pdf-html/route.ts)
       function buildQrUrlLocal(ticketToken: string | null, qrImageUrl: string | null) {
         if (qrImageUrl && qrImageUrl.trim().length > 0) return qrImageUrl;
@@ -185,8 +258,8 @@ export async function GET(req: NextRequest) {
           const chunk = all.slice(i, i + perPage);
           const rows = chunk
             .map((a: any) => {
-            const qr = buildQrUrlLocal(a.ticket_token, a.qr_image_url);
-            return `
+              const qr = buildQrUrlLocal(a.ticket_token, a.qr_image_url);
+              return `
               <div class="card">
                 <div class="meta">
                   <div class="name">${a.full_name ?? 'ไม่ระบุชื่อ'}</div>
@@ -201,7 +274,7 @@ export async function GET(req: NextRequest) {
                 </div>
               </div>
             `;
-          })
+            })
             .join('\n');
 
           pagesHtml.push(`
@@ -212,6 +285,7 @@ export async function GET(req: NextRequest) {
           `);
         }
 
+        log('renderHtml created pages:', pagesHtml.length, 'attendeesRendered:', all.length);
         return `
           <!doctype html>
           <html>
@@ -229,12 +303,24 @@ export async function GET(req: NextRequest) {
 
       try {
         const html = await renderHtml(attendees as any[]);
+        log('HTML size (chars):', html.length, 'first200chars:', html.slice(0, 200).replace(/\n/g, ' '));
         let browser: any;
         try {
           browser = await launchHtmlBrowser();
+          log('Browser instance obtained. Creating new page...');
           const page = await browser.newPage();
-          await page.setContent(html, { waitUntil: 'networkidle0' });
+          log('Setting page content (networkidle0)...');
+          try {
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            log('page.setContent resolved.');
+          } catch (setContentErr) {
+            log('page.setContent failed:', (setContentErr as Error).message || setContentErr);
+            throw setContentErr;
+          }
+
+          log('Generating PDF via page.pdf...');
           const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' } });
+          log('page.pdf finished, size bytes:', (pdfBuffer as any)?.byteLength ?? (pdfBuffer as any)?.length);
 
           const arr = new Uint8Array(pdfBuffer as any);
           const buffer = new ArrayBuffer(arr.length);
@@ -249,13 +335,25 @@ export async function GET(req: NextRequest) {
           });
         } finally {
           if (browser) {
-            await browser.close();
+            try {
+              await browser.close();
+              log('Browser closed.');
+            } catch (closeErr) {
+              log('Error while closing browser:', (closeErr as Error).message || closeErr);
+            }
           }
         }
       } catch (htmlErr) {
-        console.error('Error generating HTML->PDF (engine=html):', htmlErr);
+        log('Error generating HTML->PDF (engine=html):', htmlErr && (htmlErr as Error).message, 'stack:', htmlErr instanceof Error ? htmlErr.stack : undefined);
         const detail = htmlErr instanceof Error ? htmlErr.message : String(htmlErr);
-        return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
+        
+        // Auto-fallback to pdf-lib when Puppeteer/Chrome is unavailable (e.g., Vercel serverless)
+        if (detail.includes('Could not find Chrome') || detail.includes('Failed to launch')) {
+          console.warn('[export-namecards-pdf] Chrome not available, falling back to pdf-lib engine (vector-based)...');
+          // Continue to pdf-lib rendering below instead of returning error
+        } else {
+          return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
+        }
       }
     }
 
@@ -289,17 +387,20 @@ export async function GET(req: NextRequest) {
 
       const monoBytes = monoBytes1 ?? monoBytes2 ?? null;
 
-      console.log(
-        'Font files — regular bytes:', regularBytes ? (regularBytes.length ?? regularBytes.byteLength) : 'none',
-        ', bold bytes:', boldBytes ? (boldBytes.length ?? boldBytes.byteLength) : 'none',
-        ', mono present:', monoBytes ? 'yes' : 'no'
+      log(
+        'Font files — regular bytes:',
+        regularBytes ? (regularBytes.length ?? (regularBytes as any).byteLength) : 'none',
+        ', bold bytes:',
+        boldBytes ? (boldBytes.length ?? (boldBytes as any).byteLength) : 'none',
+        ', mono present:',
+        monoBytes ? 'yes' : 'no'
       );
 
       if (regularBytes) {
         try {
           const regularArr = regularBytes instanceof Uint8Array ? regularBytes : Uint8Array.from(regularBytes as any);
           font = await pdfDoc.embedFont(regularArr, { subset: false });
-          console.log('Embedded regular TTF font (no-subset), bytes:', regularArr.length);
+          log('Embedded regular TTF font (no-subset), bytes:', regularArr.length);
         } catch (embedErr) {
           console.warn('Failed to embed regular TTF font, will try fallback. Error:', embedErr);
         }
@@ -309,7 +410,7 @@ export async function GET(req: NextRequest) {
         try {
           const boldArr = boldBytes instanceof Uint8Array ? boldBytes : Uint8Array.from(boldBytes as any);
           fontBold = await pdfDoc.embedFont(boldArr, { subset: false });
-          console.log('Embedded bold TTF font (no-subset), bytes:', boldArr.length);
+          log('Embedded bold TTF font (no-subset), bytes:', boldArr.length);
         } catch (embedErr) {
           console.warn('Failed to embed bold TTF font, continuing. Error:', embedErr);
         }
@@ -320,7 +421,7 @@ export async function GET(req: NextRequest) {
         try {
           const monoArr = monoBytes instanceof Uint8Array ? monoBytes : Uint8Array.from(monoBytes as any);
           fontMono = await pdfDoc.embedFont(monoArr, { subset: false });
-          console.log('Embedded monospace font (no-subset), bytes:', monoArr.length);
+          log('Embedded monospace font (no-subset), bytes:', monoArr.length);
         } catch (embedErr) {
           console.warn('Failed to embed mono font, continuing. Error:', embedErr);
         }
@@ -404,10 +505,10 @@ export async function GET(req: NextRequest) {
       if (attendees.length > 0) {
         const sampleName = attendees[0].full_name || '';
         const codes = Array.from(sampleName).map((ch) => ch.codePointAt(0));
-        console.log('DEBUG sampleName:', sampleName);
-        console.log('DEBUG sampleName codepoints:', codes);
+        log('DEBUG sampleName:', sampleName);
+        log('DEBUG sampleName codepoints:', codes);
       }
-      console.log('DEBUG fonts present: regular=', !!font, 'bold=', !!fontBold, 'mono=', !!fontMono);
+      log('DEBUG fonts present: regular=', !!font, 'bold=', !!fontBold, 'mono=', !!fontMono);
     } catch (dErr) {
       console.warn('DEBUG logging failed:', dErr);
     }
@@ -566,6 +667,8 @@ export async function GET(req: NextRequest) {
     const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
     new Uint8Array(pdfBuffer).set(pdfBytes);
 
+    log('PDF generated successfully, size bytes:', pdfBytes.byteLength);
+
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
@@ -574,7 +677,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('Error generating namecards PDF:', err);
+    log('Error generating namecards PDF:', err && (err as Error).message, 'stack:', err instanceof Error ? err.stack : undefined);
 
     const detail = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error && err.stack ? err.stack : undefined;
