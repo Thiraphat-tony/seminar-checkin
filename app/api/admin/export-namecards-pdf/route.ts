@@ -240,7 +240,11 @@ export async function GET(request: NextRequest) {
     const isProduction = process.env.NODE_ENV === 'production';
     
     const browser = await puppeteer.launch({
-      args: isProduction ? chromium.args : [
+      args: isProduction ? [
+        ...chromium.args,
+        '--single-process',
+        '--no-zygote',
+      ] : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
