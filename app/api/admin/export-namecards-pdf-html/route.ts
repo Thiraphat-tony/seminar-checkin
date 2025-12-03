@@ -4,25 +4,32 @@ import React from 'react';
 import { renderToStream, Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { createServerClient } from '@/lib/supabaseServer';
 import path from 'path';
+import fs from 'fs';
 
 export const runtime = 'nodejs';
 
-// Register fonts using absolute URLs that work on Vercel
-const fontBaseUrl = process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL}/fonts`
-  : 'http://localhost:3000/fonts';
+// Register fonts using base64 data URIs for maximum reliability on Vercel
+function loadFontBase64(relativePath: string) {
+  const abs = path.join(process.cwd(), 'public', 'fonts', relativePath);
+  const bytes = fs.readFileSync(abs);
+  return Buffer.from(bytes).toString('base64');
+}
+
+const sarabunRegularB64 = loadFontBase64('Sarabun-Regular.ttf');
+const sarabunBoldB64 = loadFontBase64('Sarabun-Bold.ttf');
+const notoMonoB64 = loadFontBase64('NotoSansMono-Regular.ttf');
 
 Font.register({
   family: 'Sarabun',
   fonts: [
-    { src: `${fontBaseUrl}/Sarabun-Regular.ttf`, fontWeight: 400 },
-    { src: `${fontBaseUrl}/Sarabun-Bold.ttf`, fontWeight: 700 },
+    { src: `data:font/ttf;charset=utf-8;base64,${sarabunRegularB64}`, fontWeight: 400 },
+    { src: `data:font/ttf;charset=utf-8;base64,${sarabunBoldB64}`, fontWeight: 700 },
   ],
 });
 
 Font.register({
   family: 'NotoSansMono',
-  src: `${fontBaseUrl}/NotoSansMono-Regular.ttf`,
+  src: `data:font/ttf;charset=utf-8;base64,${notoMonoB64}`,
 });
 
 const styles = StyleSheet.create({
