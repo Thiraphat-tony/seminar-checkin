@@ -1,11 +1,11 @@
 // app/api/admin/export-namecards-pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium-min';
+import puppeteer from 'puppeteer';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // สำหรับ Vercel Pro
+export const runtime = 'nodejs';
 
 type AttendeeCardRow = {
   id: string;
@@ -237,30 +237,15 @@ export async function GET(request: NextRequest) {
     const html = generateNamecardsHTML(attendees);
 
     // ใช้ Puppeteer สร้าง PDF
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    let browser;
-    
-    if (isProduction) {
-      // สำหรับ Vercel/Production ใช้ chromium
-      browser = await puppeteer.launch({
-        args: [
-          ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-        ],
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
-    } else {
-      // สำหรับ Local Development
-      browser = await puppeteer.launch({
-        headless: true,
-        executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      });
-    }
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    });
 
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
