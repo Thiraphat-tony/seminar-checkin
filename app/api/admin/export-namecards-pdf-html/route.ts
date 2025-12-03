@@ -1,6 +1,7 @@
 // app/api/admin/export-namecards-pdf-html/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
+import fs from 'fs';
 import { createServerClient } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
@@ -13,20 +14,38 @@ function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encoded}`;
 }
 
+function loadFontBase64(p: string) {
+  try {
+    const file = fs.readFileSync(p);
+    return Buffer.from(file).toString('base64');
+  } catch {
+    return null;
+  }
+}
+
 async function renderHtml(attendees: Array<any>) {
-  // Reference fonts from /fonts (public)
+  // Embed fonts directly to avoid headless Chromium missing Thai glyphs
+  const fontRegularPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansThai-Regular.ttf');
+  const fontBoldPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansThai-Bold.ttf');
+  const fontMonoPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansMono-Regular.ttf');
+  const reg64 = loadFontBase64(fontRegularPath);
+  const bold64 = loadFontBase64(fontBoldPath);
+  const mono64 = loadFontBase64(fontMonoPath);
+
   const css = `
-    @font-face { font-family: 'NotoThai'; src: url('/fonts/NotoSansThai-Regular.ttf') format('truetype'); font-weight: 400; }
-    @font-face { font-family: 'NotoThai'; src: url('/fonts/NotoSansThai-Bold.ttf') format('truetype'); font-weight: 700; }
-    @font-face { font-family: 'MonoLocal'; src: url('/fonts/NotoSansMono-Regular.ttf') format('truetype'); }
+    @font-face { font-family: 'NotoThai'; src: url(data:font/ttf;base64,${reg64}); font-weight: 400; }
+    @font-face { font-family: 'NotoThai'; src: url(data:font/ttf;base64,${bold64}); font-weight: 700; }
+    @font-face { font-family: 'MonoLocal'; src: url(data:font/ttf;base64,${mono64}); }
+    @page { size: A4; margin: 10mm 8mm; }
+    html, body { padding:0; margin:0; }
     body { font-family: 'NotoThai', system-ui, sans-serif; color: #111; }
-    .page { width: 210mm; min-height: 297mm; padding: 24mm; box-sizing: border-box; page-break-after: always; }
+    .page { width: 100%; height: calc(297mm - 20mm); padding: 16mm 16mm 16mm 16mm; box-sizing: border-box; page-break-after: always; }
     .page:last-child { page-break-after: auto; }
     .title { font-weight:700; font-size:18px; margin-bottom:8px; }
-    .card { border:1px solid #ddd; padding:16px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
+    .card { border:1px solid #222; padding:14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
     .meta { flex: 1 1 auto; padding-right: 8px; }
     .name { font-weight:700; font-size:18px; margin-bottom:4px; }
-    .info { font-size:13px; color:#222; margin:1px 0; line-height:1.15; }
+    .info { font-size:13px; color:#222; margin:1px 0; line-height:1.2; }
     .token { font-family: 'MonoLocal', monospace; font-size:11px; color:#555; margin-top:4px; }
     .qr { width:100px; height:100px; object-fit:contain; }
   `;
@@ -112,8 +131,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Only render the first 6 entries (one page)
-    const pageItems = attendees.slice(0, 6);
+    // No longer slice; render all pages.
 
     const html = await renderHtml(attendees);
 
