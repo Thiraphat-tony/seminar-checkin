@@ -44,7 +44,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   card: {
-    border: '1pt solid #222',
     padding: 14,
     marginBottom: 8,
     flexDirection: 'row',
