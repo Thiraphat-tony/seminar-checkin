@@ -223,9 +223,14 @@ export async function GET(req: NextRequest) {
 
     log('Attendees loaded, count:', attendees.length, 'engine:', engine, 'injectName:', !!injectName, 'keyword:', keyword || '-');
 
-    // If requested, use the HTML->PDF Puppeteer engine for proper complex-script shaping
+    // Disable Chromium HTML engine on Vercel Hobby; instruct to use -html route
     if (engine === 'html') {
-      console.log('[export-namecards-pdf] Attempting HTML->PDF rendering with Puppeteer...');
+      return NextResponse.json({
+        ok: false,
+        message: 'HTML engine (Chromium) is disabled on this deployment. Use /api/admin/export-namecards-pdf-html for Thai shaping.',
+        detail: 'Chromium is not available on Vercel Hobby plan. The recommended route is -html which uses @react-pdf/renderer with embedded Sarabun fonts.'
+      }, { status: 400 });
+      // console.log('[export-namecards-pdf] Attempting HTML->PDF rendering with Puppeteer...');
       // inline small HTML renderer (similar to app/api/admin/export-namecards-pdf-html/route.ts)
       function buildQrUrlLocal(ticketToken: string | null, qrImageUrl: string | null) {
         if (qrImageUrl && qrImageUrl.trim().length > 0) return qrImageUrl;
