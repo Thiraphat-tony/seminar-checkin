@@ -142,18 +142,38 @@ export async function GET(req: NextRequest) {
     let browser: any;
     
     if (process.env.VERCEL) {
-      // On Vercel, always use @sparticuz/chromium-min (includes all dependencies)
+      // On Vercel, prefer @sparticuz/chromium-min; fallback to @sparticuz/chromium
       try {
-        const chromium = await import('@sparticuz/chromium-min');
         const puppeteer = await import('puppeteer-core');
-        
+        let chromium: any;
+        let chosen: 'min' | 'full' = 'min';
+        try {
+          chromium = await import('@sparticuz/chromium-min');
+        } catch {
+          console.warn('chromium-min not available, falling back to @sparticuz/chromium');
+          chromium = await import('@sparticuz/chromium');
+          chosen = 'full';
+        }
+
         console.log('Loading Chromium executable for Vercel...');
-        
-        // Get executable path for serverless
         const executablePath = await chromium.executablePath();
-        
         console.log('Chromium path:', executablePath);
-        
+
+        // Sanity check: ensure bundled binaries exist when using -min or full
+        const baseDir = chosen === 'min'
+          ? '/var/task/node_modules/@sparticuz/chromium-min/bin'
+          : '/var/task/node_modules/@sparticuz/chromium/bin';
+        try {
+          const exists = fs.existsSync(baseDir);
+          console.log('Chromium bin exists at', baseDir, ':', exists);
+          if (!exists) {
+            throw new Error(`Chromium binaries not bundled at ${baseDir}. Check vercel.json includeFiles.`);
+          }
+        } catch (chkErr) {
+          console.error('Chromium bundle check failed:', chkErr);
+          throw chkErr;
+        }
+
         browser = await puppeteer.default.launch({
           args: chromium.args,
           defaultViewport: { width: 1200, height: 800 },
@@ -163,7 +183,8 @@ export async function GET(req: NextRequest) {
         console.log('Browser launched successfully on Vercel');
       } catch (e) {
         console.error('Chromium launch error on Vercel:', e);
-        throw new Error(`Chromium serverless initialization failed: ${e instanceof Error ? e.message : String(e)}`);
+        // Provide a helpful message and soft fallback suggestion
+        throw new Error(`Chromium serverless initialization failed: ${e instanceof Error ? e.message : String(e)}. Try /api/admin/export-namecards-pdf as fallback.`);
       }
     } else {
       // Local development - use regular puppeteer
@@ -228,6 +249,12 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error('Error generating HTML->PDF:', err);
     const detail = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', detail }, { status: 500 });
+    // Provide a clear suggestion to use React-PDF fallback route when Chromium is unavailable
+    return NextResponse.json({ 
+      ok: false, 
+      message: 'เกิดข้อผิดพลาดในการสร้าง PDF (HTML engine)', 
+      detail, 
+      fallback: '/api/admin/export-namecards-pdf' 
+    }, { status: 500 });
   }
 }
