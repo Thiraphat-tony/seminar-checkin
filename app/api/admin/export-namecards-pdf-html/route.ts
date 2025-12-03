@@ -59,14 +59,20 @@ async function renderHtml(attendees: Array<any>) {
     const rows = chunk
       .map((a: any) => {
       const qr = buildQrUrl(a.ticket_token, a.qr_image_url);
+      // Clean up text fields to remove null bytes and special characters
+      const safeName = (a.full_name ?? 'ไม่ระบุชื่อ').replace(/\u0000/g, '').trim() || 'ไม่ระบุชื่อ';
+      const safeOrg = (a.organization ?? 'ไม่ระบุหน่วยงาน').replace(/\u0000/g, '').trim() || 'ไม่ระบุหน่วยงาน';
+      const safeJob = (a.job_position ?? 'ไม่ระบุตำแหน่ง').replace(/\u0000/g, '').trim() || 'ไม่ระบุตำแหน่ง';
+      const safeProv = (a.province ?? 'ไม่ระบุจังหวัด').replace(/\u0000/g, '').trim() || 'ไม่ระบุจังหวัด';
+      const safePhone = (a.phone ?? 'ไม่ระบุ').replace(/\u0000/g, '').trim() || 'ไม่ระบุ';
       return `
         <div class="card">
           <div class="meta">
-            <div class="name">${a.full_name ?? 'ไม่ระบุชื่อ'}</div>
-            <div class="info">หน่วยงาน: ${a.organization ?? 'ไม่ระบุหน่วยงาน'}</div>
-            <div class="info">ตำแหน่ง: ${a.job_position ?? 'ไม่ระบุตำแหน่ง'}</div>
-            <div class="info">จังหวัด: ${a.province ?? 'ไม่ระบุจังหวัด'}</div>
-            <div class="info">โทรศัพท์: ${a.phone ?? 'ไม่ระบุ'}</div>
+            <div class="name">${safeName}</div>
+            <div class="info">หน่วยงาน: ${safeOrg}</div>
+            <div class="info">ตำแหน่ง: ${safeJob}</div>
+            <div class="info">จังหวัด: ${safeProv}</div>
+            <div class="info">โทรศัพท์: ${safePhone}</div>
             <div class="token">Token: ${a.ticket_token ?? '-'}</div>
           </div>
           <div style="width:110px;flex:0 0 110px;text-align:center">
