@@ -245,7 +245,6 @@ export async function GET(request: NextRequest) {
       // สำหรับ Vercel/Production ใช้ chromium
       browser = await puppeteer.launch({
         args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       });
@@ -277,7 +276,7 @@ export async function GET(request: NextRequest) {
       ? `namecards-${keyword}-${Date.now()}.pdf`
       : `namecards-all-${Date.now()}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
