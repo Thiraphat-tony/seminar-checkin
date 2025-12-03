@@ -354,7 +354,7 @@ export async function GET(req: NextRequest) {
         const detail = htmlErr instanceof Error ? htmlErr.message : String(htmlErr);
         
         // Auto-fallback to pdf-lib when Puppeteer/Chrome is unavailable (e.g., Vercel serverless)
-        if (detail.includes('Could not find Chrome') || detail.includes('Failed to launch')) {
+        if (detail.includes('Could not find Chrome') || detail.includes('Failed to launch') || detail.includes('Chromium serverless initialization failed')) {
           console.warn('[export-namecards-pdf] Chrome not available, falling back to pdf-lib engine (vector-based)...');
           // Continue to pdf-lib rendering below instead of returning error
         } else {
