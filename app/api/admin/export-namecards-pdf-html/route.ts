@@ -155,24 +155,10 @@ export async function GET(req: NextRequest) {
         console.log('Chromium path:', executablePath);
         
         browser = await puppeteer.default.launch({
-          args: [
-            ...chromium.args,
-            '--disable-gpu',
-            '--disable-dev-shm-usage',
-            '--disable-setuid-sandbox',
-            '--no-first-run',
-            '--no-sandbox',
-            '--no-zygote',
-            '--font-render-hinting=none',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding',
-          ],
+          args: chromium.args,
           defaultViewport: { width: 1200, height: 800 },
           executablePath,
-          headless: true,
-          ignoreDefaultArgs: ['--disable-extensions'],
-          protocolTimeout: 30000,
+          headless: chromium.headless,
         });
         console.log('Browser launched successfully on Vercel');
       } catch (e) {
