@@ -123,8 +123,8 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
 
   // 🔗 query สำหรับปุ่มดาวน์โหลด PDF (ให้ตรงกับตัวกรองที่ใช้อยู่)
   const pdfExportHref = keyword
-    ? `/api/admin/export-namecards-pdf-html?q=${encodeURIComponent(keyword)}`
-    : '/api/admin/export-namecards-pdf-html';
+    ? `/api/admin/export-namecards-pdf?q=${encodeURIComponent(keyword)}`
+    : '/api/admin/export-namecards-pdf';
 
   return (
     <div className="page-wrap">
