@@ -33,12 +33,12 @@ async function renderHtml(attendees: Array<any>) {
   const mono64 = loadFontBase64(fontMonoPath);
 
   const css = `
-    @font-face { font-family: 'NotoThai'; src: url(data:font/ttf;base64,${reg64}); font-weight: 400; }
-    @font-face { font-family: 'NotoThai'; src: url(data:font/ttf;base64,${bold64}); font-weight: 700; }
-    @font-face { font-family: 'MonoLocal'; src: url(data:font/ttf;base64,${mono64}); }
+    @font-face { font-family: 'NotoThai'; src: url(data:font/truetype;charset=utf-8;base64,${reg64}) format('truetype'); font-weight: 400; font-style: normal; }
+    @font-face { font-family: 'NotoThai'; src: url(data:font/truetype;charset=utf-8;base64,${bold64}) format('truetype'); font-weight: 700; font-style: normal; }
+    @font-face { font-family: 'MonoLocal'; src: url(data:font/truetype;charset=utf-8;base64,${mono64}) format('truetype'); font-weight: 400; font-style: normal; }
     @page { size: A4; margin: 10mm 8mm; }
     html, body { padding:0; margin:0; }
-    body { font-family: 'NotoThai', system-ui, sans-serif; color: #111; }
+    body { font-family: 'NotoThai', 'Arial', sans-serif; color: #111; }
     .page { width: 100%; height: calc(297mm - 20mm); padding: 16mm 16mm 16mm 16mm; box-sizing: border-box; page-break-after: always; }
     .page:last-child { page-break-after: auto; }
     .title { font-weight:700; font-size:18px; margin-bottom:8px; }
