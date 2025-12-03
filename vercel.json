@@ -3,6 +3,20 @@
     "app/api/admin/export-namecards-pdf-html/route.ts": {
       "memory": 3008,
       "maxDuration": 60
+    },
+    "app/api/admin/export-namecards-pdf/route.ts": {
+      "memory": 3008,
+      "maxDuration": 60
+    },
+    "app/api/admin/export-attendees/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "app/api/admin/import/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
     }
-  }
+  },
+  "regions": ["sin1"],
+  "framework": "nextjs"
 }

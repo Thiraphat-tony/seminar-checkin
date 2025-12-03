@@ -6,6 +6,8 @@ import fontkit from '@pdf-lib/fontkit';
 import { createServerClient } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60; // Vercel Pro: max 60s
+export const dynamic = 'force-dynamic';
 
 type AttendeeCardRow = {
   id: string;
@@ -223,14 +225,9 @@ export async function GET(req: NextRequest) {
 
     log('Attendees loaded, count:', attendees.length, 'engine:', engine, 'injectName:', !!injectName, 'keyword:', keyword || '-');
 
-    // Disable Chromium HTML engine on Vercel Hobby; instruct to use -html route
+    // HTML engine is now enabled on Vercel Pro
     if (engine === 'html') {
-      return NextResponse.json({
-        ok: false,
-        message: 'HTML engine (Chromium) is disabled on this deployment. Use /api/admin/export-namecards-pdf-html for Thai shaping.',
-        detail: 'Chromium is not available on Vercel Hobby plan. The recommended route is -html which uses @react-pdf/renderer with embedded Sarabun fonts.'
-      }, { status: 400 });
-      // console.log('[export-namecards-pdf] Attempting HTML->PDF rendering with Puppeteer...');
+      console.log('[export-namecards-pdf] Attempting HTML->PDF rendering with Puppeteer...');
       // inline small HTML renderer (similar to app/api/admin/export-namecards-pdf-html/route.ts)
       function buildQrUrlLocal(ticketToken: string | null, qrImageUrl: string | null) {
         if (qrImageUrl && qrImageUrl.trim().length > 0) return qrImageUrl;

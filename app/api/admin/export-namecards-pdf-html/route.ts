@@ -5,6 +5,8 @@ import fs from 'fs';
 import { createServerClient } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60; // Vercel Pro: max 60s
+export const dynamic = 'force-dynamic';
 // foodType labels removed per request
 
 function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
@@ -161,13 +163,16 @@ export async function GET(req: NextRequest) {
             '--no-first-run',
             '--no-sandbox',
             '--no-zygote',
-            '--single-process',
             '--font-render-hinting=none',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
           ],
           defaultViewport: { width: 1200, height: 800 },
           executablePath,
           headless: true,
           ignoreDefaultArgs: ['--disable-extensions'],
+          protocolTimeout: 30000,
         });
         console.log('Browser launched successfully on Vercel');
       } catch (e) {
@@ -188,9 +193,38 @@ export async function GET(req: NextRequest) {
       }
     }
     const page = await browser.newPage();
-    // allow loading local fonts and external images
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' } });
+    
+    // Optimize page performance
+    await page.setRequestInterception(true);
+    page.on('request', (req: any) => {
+      // Allow all requests (fonts are embedded as base64)
+      req.continue();
+    });
+    
+    // Set content with optimized waiting strategy
+    await page.setContent(html, { 
+      waitUntil: 'domcontentloaded', // Faster than networkidle0
+      timeout: 30000 
+    });
+    
+    // Wait for images to load (QR codes)
+    await page.evaluate(() => {
+      return Promise.all(
+        Array.from(document.images)
+          .filter(img => !img.complete)
+          .map(img => new Promise(resolve => {
+            img.onload = img.onerror = resolve;
+          }))
+      );
+    });
+    
+    const pdfBuffer = await page.pdf({ 
+      format: 'A4', 
+      printBackground: true, 
+      margin: { top: '10mm', bottom: '10mm', left: '8mm', right: '8mm' },
+      preferCSSPageSize: false,
+      timeout: 30000
+    });
     await browser.close();
 
     // convert Buffer -> ArrayBuffer
