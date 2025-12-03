@@ -12,7 +12,7 @@
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "@react-pdf/renderer": "^4.3.1",
-    "@sparticuz/chromium": "^141.0.0",
+    "@sparticuz/chromium": "131.0.1",
     "@supabase/supabase-js": "^2.86.0",
     "exceljs": "^4.4.0",
     "fontkit": "^2.0.4",

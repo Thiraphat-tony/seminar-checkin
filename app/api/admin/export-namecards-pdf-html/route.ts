@@ -141,26 +141,25 @@ export async function GET(req: NextRequest) {
     
     if (process.env.VERCEL) {
       // On Vercel, always use @sparticuz/chromium
-      const chromium = (await import('@sparticuz/chromium')).default;
-      const puppeteer = (await import('puppeteer-core')).default;
-      
-      const executablePath = await chromium.executablePath();
-      
-      browser = await puppeteer.launch({
-        args: [
-          ...chromium.args,
-          '--disable-gpu',
-          '--disable-dev-shm-usage',
-          '--disable-setuid-sandbox',
-          '--no-first-run',
-          '--no-sandbox',
-          '--no-zygote',
-          '--single-process',
-        ],
-        defaultViewport: { width: 1200, height: 800 },
-        executablePath,
-        headless: true,
-      });
+      try {
+        const chromium = await import('@sparticuz/chromium');
+        const puppeteer = await import('puppeteer-core');
+        
+        console.log('Loading Chromium executable for Vercel...');
+        const executablePath = await chromium.executablePath();
+        console.log('Chromium path:', executablePath);
+        
+        browser = await puppeteer.default.launch({
+          args: chromium.args,
+          defaultViewport: { width: 1200, height: 800 },
+          executablePath,
+          headless: chromium.headless,
+        });
+        console.log('Browser launched successfully on Vercel');
+      } catch (e) {
+        console.error('Chromium launch error on Vercel:', e);
+        throw new Error(`Chromium serverless initialization failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } else {
       // Local development - use regular puppeteer
       try {
