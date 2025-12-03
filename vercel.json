@@ -3,18 +3,12 @@
     "app/api/admin/export-namecards-pdf-html/route.ts": {
       "memory": 3008,
       "maxDuration": 60,
-      "includeFiles": [
-        "node_modules/@sparticuz/chromium-min/**",
-        "public/fonts/**"
-      ]
+      "includeFiles": "node_modules/@sparticuz/**"
     },
     "app/api/admin/export-namecards-pdf/route.ts": {
       "memory": 3008,
       "maxDuration": 60,
-      "includeFiles": [
-        "node_modules/@sparticuz/chromium-min/**",
-        "public/fonts/**"
-      ]
+      "includeFiles": "node_modules/@sparticuz/**"
     },
     "app/api/admin/export-attendees/route.ts": {
       "memory": 1024,
@@ -25,6 +19,5 @@
       "maxDuration": 30
     }
   },
-  "regions": ["sin1"],
-  "framework": "nextjs"
+  "regions": ["sin1"]
 }
