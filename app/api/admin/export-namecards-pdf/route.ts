@@ -1,7 +1,8 @@
 // app/api/admin/export-namecards-pdf/route.ts
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -48,6 +49,14 @@ async function generateNameCardsPDF(
   attendees: AttendeeForCard[]
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
+  
+  // ลงทะเบียน fontkit สำหรับใช้ฟอนต์ custom
+  pdfDoc.registerFontkit(fontkit);
+  
+  // โหลดฟอนต์ภาษาไทย (Sarabun) จาก Google Fonts
+  const fontUrl = 'https://fonts.gstatic.com/s/sarabun/v13/DtVjJx26TKEr37c9YHZJmnYI5gnOpg.ttf';
+  const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
+  const thaiFont = await pdfDoc.embedFont(fontBytes);
   
   // ขนาด A4
   const pageWidth = 210; // mm
@@ -101,6 +110,7 @@ async function generateNameCardsPDF(
       x: x + 5,
       y: y + cardHeight - 15,
       size: 12,
+      font: thaiFont,
       color: rgb(0, 0, 0),
       maxWidth: cardWidth - 10,
     });
@@ -132,6 +142,7 @@ async function generateNameCardsPDF(
           x: x + 3,
           y: textY,
           size: fontSize,
+          font: thaiFont,
           color: rgb(0, 0, 0),
           maxWidth: cardWidth - 6,
         });
