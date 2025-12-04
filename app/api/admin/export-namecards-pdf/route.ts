@@ -49,6 +49,49 @@ function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encoded}`;
 }
 
+// โหลดฟอนต์ไทย
+async function registerThaiFont(doc: jsPDF): Promise<void> {
+  try {
+    // อ่านไฟล์ฟอนต์จาก lib/fonts/Sarabun-normal.js
+    const fs = require('fs');
+    const path = require('path');
+    const fontPath = path.join(process.cwd(), 'lib', 'fonts', 'Sarabun-normal.js');
+    
+    if (!fs.existsSync(fontPath)) {
+      console.warn(`Font file not found at ${fontPath}`);
+      doc.setFont('helvetica');
+      return;
+    }
+    
+    // อ่านไฟล์และดึง base64 string ออกมา
+    const fontFileContent = fs.readFileSync(fontPath, 'utf8');
+    const base64Match = fontFileContent.match(/export const SarabunFont = '([^']+)'/);
+    
+    if (!base64Match || !base64Match[1]) {
+      console.warn('Could not extract font data from Sarabun-normal.js');
+      doc.setFont('helvetica');
+      return;
+    }
+    
+    const base64Font = base64Match[1];
+    
+    // เพิ่มฟอนต์เข้า jsPDF VFS
+    const docAny = doc as any;
+    if (docAny.internal?.vfs) {
+      docAny.internal.vfs['Sarabun-Regular.ttf'] = base64Font;
+      doc.addFont('Sarabun-Regular.ttf', 'Sarabun', 'normal');
+      doc.setFont('Sarabun');
+      console.log('Thai font loaded successfully');
+    } else {
+      console.warn('jsPDF VFS not available');
+      doc.setFont('helvetica');
+    }
+  } catch (error) {
+    console.error('Error loading Thai font:', error);
+    doc.setFont('helvetica');
+  }
+}
+
 export async function GET(req: NextRequest) {
   // ดึง query parameter สำหรับการค้นหา
   const { searchParams } = new URL(req.url);
@@ -117,6 +160,9 @@ export async function GET(req: NextRequest) {
     format: 'a4',
   });
 
+  // *** ส่วนสำคัญ: การลงทะเบียนและตั้งค่าฟอนต์ไทย ***
+  await registerThaiFont(doc);
+
   // สำหรับแต่ละนามบัตร
   for (let i = 0; i < filtered.length; i++) {
     const a = filtered[i];
@@ -155,15 +201,15 @@ export async function GET(req: NextRequest) {
 
         doc.addImage(qrBase64, 'PNG', 70, 100, 70, 70);
         doc.setFontSize(10);
-        doc.text('QR Code สำหรับเช็คอิน', 105, 180, { align: 'center' });
+        doc.text('คิวอาร์โค้ดสำหรับเช็คอิน', 105, 180, { align: 'center' });
       } catch (err) {
         // ถ้าดาวน์โหลด QR ไม่ได้ ให้แสดง text แทน
         doc.setFontSize(10);
-        doc.text('ไม่สามารถโหลด QR Code ได้', 105, 140, { align: 'center' });
+        doc.text('ไม่สามารถโหลดคิวอาร์โค้ดได้', 105, 140, { align: 'center' });
       }
     } else {
       doc.setFontSize(10);
-      doc.text('ไม่มี QR Code', 105, 140, { align: 'center' });
+      doc.text('ไม่มีคิวอาร์โค้ด', 105, 140, { align: 'center' });
     }
   }
 
