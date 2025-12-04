@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jsPDF } from 'jspdf';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export async function GET(req: NextRequest) {
 	// ตัวอย่างข้อมูล namecards
@@ -8,18 +8,37 @@ export async function GET(req: NextRequest) {
 		{ name: 'Jane Smith', company: 'XYZ Inc', position: 'Developer' },
 	];
 
-	// สร้าง PDF
-	const doc = new jsPDF();
+	// สร้าง PDF ด้วย pdf-lib
+	const pdfDoc = await PDFDocument.create();
+	const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
 	namecards.forEach((card, idx) => {
-		doc.text(`Name: ${card.name}`, 10, 10 + idx * 30);
-		doc.text(`Company: ${card.company}`, 10, 20 + idx * 30);
-		doc.text(`Position: ${card.position}`, 10, 30 + idx * 30);
-		if (idx < namecards.length - 1) doc.addPage();
+		const page = pdfDoc.addPage([300, 150]);
+		page.drawText(`Name: ${card.name}`, {
+			x: 20,
+			y: 120,
+			size: 16,
+			font,
+			color: rgb(0, 0, 0),
+		});
+		page.drawText(`Company: ${card.company}`, {
+			x: 20,
+			y: 90,
+			size: 12,
+			font,
+			color: rgb(0, 0, 0),
+		});
+		page.drawText(`Position: ${card.position}`, {
+			x: 20,
+			y: 70,
+			size: 12,
+			font,
+			color: rgb(0, 0, 0),
+		});
 	});
 
-	// ส่ง PDF กลับเป็น response
-	const pdfData = doc.output('arraybuffer');
-	return new NextResponse(Buffer.from(pdfData), {
+	const pdfBytes = await pdfDoc.save();
+	return new NextResponse(Buffer.from(pdfBytes), {
 		status: 200,
 		headers: {
 			'Content-Type': 'application/pdf',
@@ -27,3 +46,4 @@ export async function GET(req: NextRequest) {
 		},
 	});
 }
+// ...existing code...
