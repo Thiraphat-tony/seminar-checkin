@@ -17,12 +17,11 @@
     "exceljs": "^4.4.0",
     "fontkit": "^2.0.4",
     "js-cookie": "^3.0.5",
-    "next": "^16.0.3",
+    "next": "^16.0.7",
     "pdf-lib": "^1.17.1",
     "puppeteer-core": "^23.6.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "xlsx": "^0.17.5"
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -30,7 +29,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/xlsx": "^0.0.35",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "tailwindcss": "^4",
