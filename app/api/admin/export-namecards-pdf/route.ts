@@ -255,16 +255,23 @@ export async function GET(request: Request) {
     const htmlContent = generateFullHTML(attendees);
 
     // เช็คว่ารันบน local หรือ production
-    const isLocal = process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+    const isLocal = process.env.NODE_ENV === 'development';
 
     let browser;
     
     if (isLocal) {
-      // สำหรับ local development
+      // สำหรับ local development - ลอง paths ที่เป็นไปได้
+      const possiblePaths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        '/usr/bin/chromium-browser',
+        '/snap/bin/chromium',
+      ].filter(Boolean);
+
       browser = await puppeteer.launch({
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows default
+        executablePath: possiblePaths[0],
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
     } else {
