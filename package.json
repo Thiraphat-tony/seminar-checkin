@@ -17,6 +17,7 @@
     "exceljs": "^4.4.0",
     "fontkit": "^2.0.4",
     "js-cookie": "^3.0.5",
+    "jspdf": "^3.0.4",
     "next": "^16.0.7",
     "pdf-lib": "^1.17.1",
     "puppeteer-core": "^23.6.0",
