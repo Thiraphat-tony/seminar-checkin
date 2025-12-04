@@ -1,11 +1,10 @@
 // app/api/admin/export-namecards-pdf/route.ts
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import { PDFDocument, rgb } from 'pdf-lib';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes for large PDFs
+export const maxDuration = 300;
 
 type AttendeeForCard = {
   id: string;
@@ -44,173 +43,107 @@ function formatFoodType(foodType: string | null): string {
   }
 }
 
-// สร้าง QR URL ถ้าไม่มี qr_image_url
-function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
-  if (qrImageUrl && qrImageUrl.trim().length > 0) {
-    return qrImageUrl;
-  }
-  if (ticketToken) {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(ticketToken)}`;
-  }
-  return '';
-}
-
-// สร้าง HTML สำหรับ name card แต่ละใบ
-function generateNameCardHTML(attendee: AttendeeForCard): string {
-  const qrUrl = buildQrUrl(attendee.ticket_token, attendee.qr_image_url);
-  const foodLabel = formatFoodType(attendee.food_type);
+// สร้าง PDF name cards โดยใช้ pdf-lib
+async function generateNameCardsPDF(
+  attendees: AttendeeForCard[]
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
   
-  return `
-    <div class="namecard">
-      <div class="card-header">
-        <h1 class="name">${attendee.full_name || 'ไม่ระบุชื่อ'}</h1>
-      </div>
-      <div class="card-body">
-        <div class="info-section">
-          <div class="info-row">
-            <span class="label">องค์กร:</span>
-            <span class="value">${attendee.organization || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">ตำแหน่ง:</span>
-            <span class="value">${attendee.job_position || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">จังหวัด:</span>
-            <span class="value">${attendee.province || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">เบอร์โทร:</span>
-            <span class="value">${attendee.phone || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">ประเภทอาหาร:</span>
-            <span class="value">${foodLabel}</span>
-          </div>
-        </div>
-        ${qrUrl ? `
-        <div class="qr-section">
-          <img src="${qrUrl}" alt="QR Code" class="qr-code" />
-        </div>
-        ` : ''}
-      </div>
-    </div>
-  `;
-}
-
-// สร้าง HTML เต็มหน้าสำหรับ PDF
-function generateFullHTML(attendees: AttendeeForCard[]): string {
-  const cardsHTML = attendees.map(a => generateNameCardHTML(a)).join('\n');
+  // ขนาด A4
+  const pageWidth = 210; // mm
+  const pageHeight = 297; // mm
+  const mmToPoint = 2.834646; // 1mm = 2.834646 points
   
-  return `
-<!DOCTYPE html>
-<html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Name Cards</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+  // card size: 90mm x 60mm
+  const cardWidth = 90 * mmToPoint;
+  const cardHeight = 60 * mmToPoint;
+  
+  // margin
+  const margin = 10 * mmToPoint;
+  const gap = 8 * mmToPoint;
+  
+  // Cards per page: 2 columns x 4 rows = 8 cards
+  const cardsPerPage = 8;
+  const cardsPerRow = 2;
+  
+  let cardIndex = 0;
+  
+  for (const attendee of attendees) {
+    // สร้าง page ใหม่ทุก 8 cards
+    if (cardIndex % cardsPerPage === 0) {
+      pdfDoc.addPage([pageWidth * mmToPoint, pageHeight * mmToPoint]);
     }
     
-    body {
-      font-family: 'Sarabun', sans-serif;
-      background: white;
-      padding: 10mm;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8mm;
-      width: 210mm;
-      min-height: 297mm;
-    }
+    const pages = pdfDoc.getPages();
+    const page = pages[pages.length - 1];
     
-    .namecard {
-      width: 90mm;
-      height: 60mm;
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 10px;
-      page-break-inside: avoid;
-      background: white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
+    // คำนวณตำแหน่ง card
+    const posInPage = cardIndex % cardsPerPage;
+    const row = Math.floor(posInPage / cardsPerRow);
+    const col = posInPage % cardsPerRow;
     
-    .card-header {
-      border-bottom: 2px solid #0066cc;
-      padding-bottom: 8px;
-      margin-bottom: 8px;
-    }
+    const x = margin + col * (cardWidth + gap);
+    const y = pageHeight * mmToPoint - margin - (row + 1) * cardHeight - row * gap;
     
-    .name {
-      font-size: 18px;
-      font-weight: 700;
-      color: #0066cc;
-      text-align: center;
-    }
+    // วาดพื้นหลังการ์ด
+    page.drawRectangle({
+      x,
+      y,
+      width: cardWidth,
+      height: cardHeight,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
     
-    .card-body {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
+    // ชื่อ (หัวการ์ด)
+    const nameText = (attendee.full_name || 'ไม่ระบุชื่อ').substring(0, 30);
+    page.drawText(nameText, {
+      x: x + 5,
+      y: y + cardHeight - 15,
+      size: 12,
+      color: rgb(0, 0, 0),
+      maxWidth: cardWidth - 10,
+    });
     
-    .info-section {
-      flex: 1;
-      font-size: 11px;
-    }
+    // เส้นแบ่ง
+    page.drawLine({
+      start: { x: x + 5, y: y + cardHeight - 20 },
+      end: { x: x + cardWidth - 5, y: y + cardHeight - 20 },
+      color: rgb(0, 102, 204),
+      thickness: 1,
+    });
     
-    .info-row {
-      margin-bottom: 4px;
-      display: flex;
-      gap: 6px;
-    }
+    // ข้อมูลเล็ก ๆ
+    const fontSize = 7;
+    const lineHeight = 8;
+    let textY = y + cardHeight - 28;
     
-    .label {
-      font-weight: 600;
-      color: #555;
-      min-width: 70px;
-    }
+    const infoLines = [
+      `องค์กร: ${(attendee.organization || '-').substring(0, 20)}`,
+      `ตำแหน่ง: ${(attendee.job_position || '-').substring(0, 20)}`,
+      `จังหวัด: ${(attendee.province || '-').substring(0, 15)}`,
+      `เบอร์โทร: ${(attendee.phone || '-').substring(0, 15)}`,
+      `อาหาร: ${formatFoodType(attendee.food_type)}`,
+    ];
     
-    .value {
-      color: #333;
-      word-break: break-word;
-    }
-    
-    .qr-section {
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .qr-code {
-      width: 80px;
-      height: 80px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    
-    @media print {
-      body {
-        padding: 10mm;
-      }
-      
-      .namecard:nth-child(8n) {
-        page-break-after: always;
+    for (const line of infoLines) {
+      if (textY > y + 5) {
+        page.drawText(line, {
+          x: x + 3,
+          y: textY,
+          size: fontSize,
+          color: rgb(0, 0, 0),
+          maxWidth: cardWidth - 6,
+        });
+        textY -= lineHeight;
       }
     }
-  </style>
-</head>
-<body>
-  ${cardsHTML}
-</body>
-</html>
-  `;
+    
+    cardIndex++;
+  }
+  
+  // Save PDF
+  return await pdfDoc.save();
 }
 
 export async function GET(request: Request) {
@@ -237,7 +170,7 @@ export async function GET(request: Request) {
 
     if (error || !data) {
       return NextResponse.json(
-        { success: false, message: 'ไม่สามารถโหลดข้อมูลได้', error },
+        { success: false, message: 'ไม่สามารถโหลดข้อมูลได้', error: error?.message },
         { status: 500 }
       );
     }
@@ -251,57 +184,11 @@ export async function GET(request: Request) {
       );
     }
 
-    // สร้าง HTML
-    const htmlContent = generateFullHTML(attendees);
-
-    // เช็คว่ารันบน local หรือ production
-    const isLocal = process.env.NODE_ENV === 'development';
-
-    let browser;
-    
-    if (isLocal) {
-      // สำหรับ local development - ลอง paths ที่เป็นไปได้
-      const possiblePaths = [
-        process.env.PUPPETEER_EXECUTABLE_PATH,
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        '/usr/bin/chromium-browser',
-        '/snap/bin/chromium',
-      ].filter(Boolean);
-
-      browser = await puppeteer.launch({
-        headless: true,
-        executablePath: possiblePaths[0],
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-    } else {
-      // สำหรับ Vercel/Production
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
-    }
-
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
     // สร้าง PDF
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '10mm',
-        bottom: '10mm',
-        left: '10mm',
-        right: '10mm',
-      },
-    });
-
-    await browser.close();
+    const pdfBytes = await generateNameCardsPDF(attendees);
 
     // ส่ง PDF กลับไป
-    return new NextResponse(Buffer.from(pdfBuffer), {
+    return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -310,12 +197,14 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
-    console.error('Error generating PDF:', error);
+    console.error('[Export Namecards PDF Error]:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { 
         success: false, 
         message: 'เกิดข้อผิดพลาดในการสร้าง PDF',
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: 'ใช้ pdf-lib สำหรับสร้าง PDF โดยไม่ต้องใช้ Chromium'
       },
       { status: 500 }
     );
