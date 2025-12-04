@@ -20,16 +20,19 @@ type AdminPageProps = {
 
 type AttendeeRow = {
   id: string;
+  event_id: string | null;       // ✅ event_id
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;   // ✅ ตำแหน่ง
   province: string | null;       // ✅ จังหวัด
+  region: number | null;         // ✅ ภาค 1-9
   qr_image_url: string | null;   // ✅ URL รูป QR
   slip_url: string | null;
   checked_in_at: string | null;
   ticket_token: string | null;
   food_type: string | null;      // ✅ ประเภทอาหาร
+  hotel_name: string | null;     // ✅ ชื่อโรงแรม
 };
 
 function formatDateTime(isoString: string | null) {
@@ -81,16 +84,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .select(
       `
       id,
+      event_id,
       full_name,
       phone,
       organization,
       job_position,
       province,
+      region,
       qr_image_url,
       slip_url,
       checked_in_at,
       ticket_token,
-      food_type
+      food_type,
+      hotel_name
     `
     )
     .order('full_name', { ascending: true });
@@ -255,8 +261,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <th>ชื่อ - นามสกุล</th>
                   <th>หน่วยงาน</th>
                   <th>จังหวัด</th>
+                  <th>ภาค</th>
                   <th>เบอร์โทร</th>
                   <th>ตำแหน่ง</th>
+                  <th>โรงแรม</th>
                   <th>สลิป</th>
                   <th>เช็กอิน</th>
                   <th>ประเภทอาหาร</th>
@@ -268,7 +276,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="admin-table__empty">
+                    <td colSpan={13} className="admin-table__empty">
                       ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา
                     </td>
                   </tr>
@@ -284,8 +292,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <td>{a.full_name || '-'}</td>
                         <td>{a.organization || '-'}</td>
                         <td>{a.province || '-'}</td>
+                        <td>{a.region ?? '-'}</td>
                         <td>{a.phone || '-'}</td>
                         <td>{a.job_position || '-'}</td>
+                        <td>{a.hotel_name || '-'}</td>
                         <td>
                           {hasSlip ? (
                             <div className="admin-table__slip-cell">

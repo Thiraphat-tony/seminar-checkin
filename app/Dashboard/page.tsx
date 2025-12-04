@@ -8,14 +8,17 @@ export const dynamic = 'force-dynamic';
 
 type AttendeeRow = {
   id: string;
+  event_id: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;  // ✅ ตำแหน่ง
   province: string | null;      // ✅ จังหวัด
+  region: number | null;        // ✅ ภาค 1-9
   qr_image_url: string | null;  // ✅ รูป QR
   slip_url: string | null;
-  food_type: string | null;     // ✅ ประเภทอาหาร (ตอนนี้ยังไม่เอาไปใช้คำนวณ แต่เก็บให้ตรง DB)
+  food_type: string | null;     // ✅ ประเภทอาหาร
+  hotel_name: string | null;    // ✅ ชื่อโรงแรม
   checked_in_at: string | null;
   created_at: string | null;
 };
@@ -61,14 +64,17 @@ export default function DashboardPage() {
         .select(
           `
           id,
+          event_id,
           full_name,
           phone,
           organization,
           job_position,
           province,
+          region,
           qr_image_url,
           slip_url,
           food_type,
+          hotel_name,
           checked_in_at,
           created_at
         `

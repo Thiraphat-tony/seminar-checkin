@@ -2104,3 +2104,228 @@ a:hover {
     padding: 1rem 3rem;
   }
 }
+
+/* ============================
+   Register Page (ศาลเยาวชน)
+   ============================ */
+
+/* ถ้าเพิ่ม className="register-page" ให้ main แล้วค่อยใช้ .register-page แทน main */
+.register-page,
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+  color: #111827;
+  background-color: #f3f4f6;
+}
+
+.register-page h1,
+main > h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+  color: #111827;
+}
+
+.register-page form,
+main > form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* กล่อง section แยกหัวข้อ 1,2,3,4 */
+.register-page form section,
+main form section {
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 16px 16px 20px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.register-page form section h2,
+main form section h2 {
+  margin: 0 0 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ช่องกรอกแต่ละบรรทัด */
+.register-page form section > div,
+main form section > div {
+  margin-bottom: 10px;
+}
+
+/* label ให้ตัวใหญ่ ๆ อ่านง่าย */
+.register-page label,
+main label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* input / select / textarea ใหญ่ ๆ คลิกง่าย */
+.register-page input[type='text'],
+.register-page input[type='tel'],
+.register-page input[type='number'],
+.register-page select,
+.register-page textarea,
+main input[type='text'],
+main input[type='tel'],
+main input[type='number'],
+main select,
+main textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.register-page input[type='text']:focus,
+.register-page input[type='tel']:focus,
+.register-page input[type='number']:focus,
+.register-page select:focus,
+.register-page textarea:focus,
+main input[type='text']:focus,
+main input[type='tel']:focus,
+main input[type='number']:focus,
+main select:focus,
+main textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* fieldset สำหรับผู้เข้าร่วมแต่ละคน */
+.register-page fieldset,
+main fieldset {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 12px 14px;
+  margin: 10px 0;
+  background-color: #f9fafb;
+}
+
+.register-page fieldset legend,
+main fieldset legend {
+  padding: 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ปุ่มลบผู้เข้าร่วม */
+.register-page fieldset button[type='button'],
+main fieldset button[type='button'] {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #f97373;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  cursor: pointer;
+}
+
+.register-page fieldset button[type='button']:hover,
+main fieldset button[type='button']:hover {
+  background-color: #fecaca;
+}
+
+/* ปุ่มเพิ่มผู้เข้าร่วม */
+.register-page button[type='button'],
+main button[type='button'] {
+  font-size: 0.95rem;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #2563eb;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.register-page button[type='button']:hover,
+main button[type='button']:hover {
+  background-color: #dbeafe;
+}
+
+/* input file */
+.register-page input[type='file'],
+main input[type='file'] {
+  padding: 6px 0;
+  font-size: 0.95rem;
+}
+
+/* ข้อความสำเร็จ / error */
+.register-page p,
+main p {
+  margin: 6px 0;
+}
+
+.register-page p:nth-last-child(2),
+main p:nth-last-child(2) {
+  /* เผื่อใช้ class เพิ่มภายหลังได้ */
+}
+
+/* ปุ่ม submit หลัก */
+.register-page button[type='submit'],
+main button[type='submit'] {
+  margin-top: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #f9fafb;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
+  transition: transform 0.1s ease, box-shadow 0.1s ease,
+    opacity 0.1s ease;
+}
+
+.register-page button[type='submit']:hover:not(:disabled),
+main button[type='submit']:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.45);
+}
+
+.register-page button[type='submit']:disabled,
+main button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* ============================
+   Responsive (tablet ขึ้นไป)
+   ============================ */
+
+@media (min-width: 768px) {
+  .register-page,
+  main {
+    padding: 32px 24px 48px;
+  }
+
+  .register-page form section > div,
+  main form section > div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* จัดสองช่องให้แนวนอนบ้างก็ได้ แต่ตอนนี้เน้นตัวใหญ่อ่านง่าย */
+}

@@ -39,16 +39,19 @@ const FOOD_OPTIONS: { value: FoodType; label: string }[] = [
 
 type Attendee = {
   id: string;
+  event_id: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;   // ✅ ตำแหน่ง
-  province: string | null;       // ✅ จังหวัด (ใหม่)
+  province: string | null;       // ✅ จังหวัด
+  region: number | null;         // ✅ ภาค 1-9
   qr_image_url: string | null;   // ✅ URL รูป QR
   slip_url: string | null;
   checked_in_at: string | null;
   ticket_token: string | null;
   food_type: FoodType | null;
+  hotel_name: string | null;     // ✅ โรงแรม
 };
 
 function getAvatarInitial(name: string | null): string {
@@ -110,16 +113,19 @@ export default function Page() {
           .select(
             `
             id,
+            event_id,
             full_name,
             phone,
             organization,
             job_position,
             province,
+            region,
             qr_image_url,
             slip_url,
             checked_in_at,
             ticket_token,
-            food_type
+            food_type,
+            hotel_name
           `
           )
           .eq('ticket_token', ticketToken)
@@ -403,6 +409,7 @@ export default function Page() {
           <div className="attendee-details">
             <div>โทรศัพท์: {attendee.phone || 'ไม่ระบุ'}</div>
             <div>ตำแหน่ง: {attendee.job_position || 'ไม่ระบุตำแหน่ง'}</div>
+            <div>ภาค: {attendee.region ? `ภาค ${attendee.region}` : 'ไม่ระบุภาค'}</div>
           </div>
 
           <div

@@ -18,14 +18,17 @@ type FoodType =
 
 // row ที่เตรียมแล้วสำหรับใส่ใน attendees
 type PreparedRow = {
+  event_id: string | null;
   full_name: string;
   ticket_token: string;
   phone: string | null;
   organization: string | null;
   job_position: string | null;
   province: string | null;
+  region: number | null;
   qr_image_url: string | null;
   food_type: FoodType | null;
+  hotel_name: string | null;
 };
 
 // แปลงค่าจาก Excel → food_type ที่ใช้ใน DB
@@ -164,6 +167,12 @@ export async function POST(req: NextRequest) {
           row['จังหวัด'] ??
           null;
 
+        const region_raw =
+          row.region ??
+          row['ภาค'] ??
+          row['สังกัดภาค'] ??
+          null;
+
         const qr_image_url =
           row.qr_image_url ??
           row['qr_image_url'] ??
@@ -177,17 +186,41 @@ export async function POST(req: NextRequest) {
           row['ประเภทอาหาร'] ??
           null;
 
+        const hotel_name =
+          row.hotel_name ??
+          row['โรงแรม'] ??
+          row['โรงแรมที่พัก'] ??
+          row['ที่พัก'] ??
+          null;
+
+        const event_id =
+          row.event_id ??
+          row['event_id'] ??
+          null;
+
         if (!full_name || !ticket_token) return null;
 
+        // แปลง region เป็นตัวเลข 1-9
+        let regionNum: number | null = null;
+        if (region_raw != null) {
+          const parsed = parseInt(String(region_raw).trim());
+          if (!isNaN(parsed) && parsed >= 1 && parsed <= 9) {
+            regionNum = parsed;
+          }
+        }
+
         return {
+          event_id: event_id ? String(event_id).trim() : null,
           full_name: String(full_name).trim(),
           ticket_token: String(ticket_token).trim(),
           phone: phone ? String(phone).trim() : null,
           organization: organization ? String(organization).trim() : null,
           job_position: job_position ? String(job_position).trim() : null,
           province: province ? String(province).trim() : null,
+          region: regionNum,
           qr_image_url: qr_image_url ? String(qr_image_url).trim() : null,
           food_type: normalizeFoodType(food_type_raw),
+          hotel_name: hotel_name ? String(hotel_name).trim() : null,
         };
       })
       .filter(Boolean) as PreparedRow[];

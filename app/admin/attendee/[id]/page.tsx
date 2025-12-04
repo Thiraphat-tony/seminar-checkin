@@ -54,6 +54,8 @@ export default async function AttendeeEditPage({ params }: PageProps) {
       organization,
       job_position,
       province,
+      region,
+      hotel_name,
       ticket_token
     `
     )

@@ -10,6 +10,8 @@ type AttendeeForEdit = {
   organization: string | null;
   job_position: string | null; // ✅ ตำแหน่ง
   province: string | null;     // ✅ จังหวัด
+  region: number | null;       // ✅ ภาค 1-9
+  hotel_name: string | null;   // ✅ โรงแรม
   ticket_token: string | null;
 };
 
@@ -24,6 +26,8 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
   const [organization, setOrganization] = useState(attendee.organization ?? '');
   const [jobPosition, setJobPosition] = useState(attendee.job_position ?? '');
   const [province, setProvince] = useState(attendee.province ?? '');
+  const [region, setRegion] = useState(attendee.region?.toString() ?? '');
+  const [hotelName, setHotelName] = useState(attendee.hotel_name ?? '');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,6 +48,8 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
           organization: organization.trim() || null,
           job_position: jobPosition.trim() || null,
           province: province.trim() || null,
+          region: region.trim() ? parseInt(region.trim()) : null,
+          hotel_name: hotelName.trim() || null,
         }),
       });
 
@@ -117,7 +123,7 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
             />
           </div>
 
-          <div className="admin-form__field admin-form__field--full">
+          <div className="admin-form__field">
             <label className="admin-form__label">จังหวัด</label>
             <input
               type="text"
@@ -125,6 +131,37 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
               value={province}
               onChange={(e) => setProvince(e.target.value)}
               placeholder="เช่น สุราษฎร์ธานี"
+            />
+          </div>
+
+          <div className="admin-form__field">
+            <label className="admin-form__label">ภาค (1-9)</label>
+            <select
+              className="admin-form__input"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+            >
+              <option value="">-- ไม่ระบุ --</option>
+              <option value="1">1 - กรุงเทพฯ และภาคกลาง</option>
+              <option value="2">2 - ภาคตะวันออก</option>
+              <option value="3">3 - ภาคอีสานตอนล่าง</option>
+              <option value="4">4 - ภาคอีสานตอนบน</option>
+              <option value="5">5 - ภาคเหนือ</option>
+              <option value="6">6 - ภาคกลางตอนบน</option>
+              <option value="7">7 - ภาคตะวันตก</option>
+              <option value="8">8 - ภาคใต้ตอนบน</option>
+              <option value="9">9 - ภาคใต้ตอนล่าง</option>
+            </select>
+          </div>
+
+          <div className="admin-form__field admin-form__field--full">
+            <label className="admin-form__label">โรงแรมที่พัก</label>
+            <input
+              type="text"
+              className="admin-form__input"
+              value={hotelName}
+              onChange={(e) => setHotelName(e.target.value)}
+              placeholder="เช่น โรงแรมเดอะวานา, โรงแรมแกรนด์พาร์ค"
             />
           </div>
 

@@ -5,15 +5,18 @@ import { createServerClient } from '@/lib/supabaseServer';
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as {
     id?: string;
+    event_id?: string | null;
     full_name?: string | null;
     phone?: string | null;
     organization?: string | null;
     job_position?: string | null;
     province?: string | null;
+    region?: number | null;
     ticket_token?: string | null;
     qr_image_url?: string | null;
     slip_url?: string | null;
     food_type?: string | null;
+    hotel_name?: string | null;
     checked_in_at?: string | null; // ISO timestamp expected, or null
     origin_host?: string | null;
   } | null;
@@ -30,15 +33,18 @@ export async function POST(req: NextRequest) {
   // Build update object only from allowed fields (match DB schema)
   const updateData: Record<string, any> = {};
   const allowed = [
+    'event_id',
     'full_name',
     'phone',
     'organization',
     'job_position',
     'province',
+    'region',
     'ticket_token',
     'qr_image_url',
     'slip_url',
     'food_type',
+    'hotel_name',
     'checked_in_at',
     'origin_host',
   ];
@@ -46,6 +52,15 @@ export async function POST(req: NextRequest) {
     if (Object.prototype.hasOwnProperty.call(body, key)) {
       updateData[key] = (body as any)[key] ?? null;
     }
+  }
+
+  // Validate region if present (must be 1-9)
+  if (Object.prototype.hasOwnProperty.call(body, 'region') && updateData.region != null) {
+    const regionNum = Number(updateData.region);
+    if (!Number.isInteger(regionNum) || regionNum < 1 || regionNum > 9) {
+      return NextResponse.json({ error: 'invalid region (must be 1-9)' }, { status: 400 });
+    }
+    updateData.region = regionNum;
   }
 
   // Validate food_type if present

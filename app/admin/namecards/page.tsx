@@ -13,14 +13,17 @@ type PageProps = {
 
 type AttendeeCardRow = {
   id: string;
+  event_id: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;
   province: string | null;
+  region: number | null;
   qr_image_url: string | null;
   ticket_token: string | null;
   food_type: string | null;
+  hotel_name: string | null;
 };
 
 // แปลง code ประเภทอาหารเป็น label ภาษาไทย
@@ -66,14 +69,17 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
     .select(
       `
       id,
+      event_id,
       full_name,
       phone,
       organization,
       job_position,
       province,
+      region,
       qr_image_url,
       ticket_token,
-      food_type
+      food_type,
+      hotel_name
     `
     )
     .order('full_name', { ascending: true });

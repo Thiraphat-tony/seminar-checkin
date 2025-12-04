@@ -1,24 +1,28 @@
 // app/api/admin/export-namecards-pdf/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
-export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // สำหรับ Vercel Pro
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes for large PDFs
 
-type AttendeeCardRow = {
+type AttendeeForCard = {
   id: string;
+  event_id: string | null;
   full_name: string | null;
-  phone: string | null;
   organization: string | null;
   job_position: string | null;
   province: string | null;
+  region: number | null;
+  phone: string | null;
+  food_type: string | null;
+  hotel_name: string | null;
   qr_image_url: string | null;
   ticket_token: string | null;
-  food_type: string | null;
 };
 
+// แปลง code ประเภทอาหารเป็นภาษาไทย
 function formatFoodType(foodType: string | null): string {
   switch (foodType) {
     case 'normal':
@@ -40,49 +44,70 @@ function formatFoodType(foodType: string | null): string {
   }
 }
 
+// สร้าง QR URL ถ้าไม่มี qr_image_url
 function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
   if (qrImageUrl && qrImageUrl.trim().length > 0) {
     return qrImageUrl;
   }
-  if (!ticketToken) return null;
-  const encoded = encodeURIComponent(ticketToken);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encoded}`;
+  if (ticketToken) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(ticketToken)}`;
+  }
+  return '';
 }
 
-function generateNamecardsHTML(attendees: AttendeeCardRow[]): string {
-  const cards = attendees
-    .map((a) => {
-      const qrUrl = buildQrUrl(a.ticket_token, a.qr_image_url);
-      const foodLabel = formatFoodType(a.food_type);
-
-      return `
-        <div class="namecard">
-          <div class="namecard-header">
-            <h2 class="namecard-name">${a.full_name || 'ไม่ระบุชื่อ'}</h2>
-            <p class="namecard-detail">หน่วยงาน: ${a.organization || 'ไม่ระบุหน่วยงาน'}</p>
-            <p class="namecard-detail">ตำแหน่ง: ${a.job_position || 'ไม่ระบุตำแหน่ง'}</p>
-            <p class="namecard-detail">จังหวัด: ${a.province || 'ไม่ระบุจังหวัด'}</p>
-            <p class="namecard-detail">โทรศัพท์: ${a.phone || 'ไม่ระบุ'}</p>
-            <p class="namecard-detail">ประเภทอาหาร: ${foodLabel}</p>
+// สร้าง HTML สำหรับ name card แต่ละใบ
+function generateNameCardHTML(attendee: AttendeeForCard): string {
+  const qrUrl = buildQrUrl(attendee.ticket_token, attendee.qr_image_url);
+  const foodLabel = formatFoodType(attendee.food_type);
+  
+  return `
+    <div class="namecard">
+      <div class="card-header">
+        <h1 class="name">${attendee.full_name || 'ไม่ระบุชื่อ'}</h1>
+      </div>
+      <div class="card-body">
+        <div class="info-section">
+          <div class="info-row">
+            <span class="label">องค์กร:</span>
+            <span class="value">${attendee.organization || '-'}</span>
           </div>
-          <div class="namecard-qr">
-            ${
-              qrUrl
-                ? `<img src="${qrUrl}" alt="QR Code" />`
-                : '<span>ไม่มี QR Code</span>'
-            }
+          <div class="info-row">
+            <span class="label">ตำแหน่ง:</span>
+            <span class="value">${attendee.job_position || '-'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">จังหวัด:</span>
+            <span class="value">${attendee.province || '-'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">เบอร์โทร:</span>
+            <span class="value">${attendee.phone || '-'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">ประเภทอาหาร:</span>
+            <span class="value">${foodLabel}</span>
           </div>
         </div>
-      `;
-    })
-    .join('');
+        ${qrUrl ? `
+        <div class="qr-section">
+          <img src="${qrUrl}" alt="QR Code" class="qr-code" />
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
 
+// สร้าง HTML เต็มหน้าสำหรับ PDF
+function generateFullHTML(attendees: AttendeeForCard[]): string {
+  const cardsHTML = attendees.map(a => generateNameCardHTML(a)).join('\n');
+  
   return `
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Name Cards</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
@@ -96,199 +121,194 @@ function generateNamecardsHTML(attendees: AttendeeCardRow[]): string {
     body {
       font-family: 'Sarabun', sans-serif;
       background: white;
-      padding: 20px;
-    }
-    
-    .namecard-grid {
+      padding: 10mm;
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      page-break-inside: avoid;
+      gap: 8mm;
+      width: 210mm;
+      min-height: 297mm;
     }
     
     .namecard {
+      width: 90mm;
+      height: 60mm;
       border: 2px solid #333;
-      border-radius: 12px;
-      padding: 20px;
-      background: white;
+      border-radius: 8px;
+      padding: 10px;
       page-break-inside: avoid;
-      display: flex;
-      flex-direction: column;
-      min-height: 350px;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    .namecard-header {
-      flex: 1;
-      margin-bottom: 15px;
-    }
-    
-    .namecard-name {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 12px;
+    .card-header {
       border-bottom: 2px solid #0066cc;
       padding-bottom: 8px;
+      margin-bottom: 8px;
     }
     
-    .namecard-detail {
-      font-size: 16px;
-      color: #333;
-      margin-bottom: 6px;
-      line-height: 1.4;
-    }
-    
-    .namecard-qr {
+    .name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0066cc;
       text-align: center;
-      margin-top: auto;
     }
     
-    .namecard-qr img {
-      width: 180px;
-      height: 180px;
+    .card-body {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    
+    .info-section {
+      flex: 1;
+      font-size: 11px;
+    }
+    
+    .info-row {
+      margin-bottom: 4px;
+      display: flex;
+      gap: 6px;
+    }
+    
+    .label {
+      font-weight: 600;
+      color: #555;
+      min-width: 70px;
+    }
+    
+    .value {
+      color: #333;
+      word-break: break-word;
+    }
+    
+    .qr-section {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .qr-code {
+      width: 80px;
+      height: 80px;
       border: 1px solid #ddd;
-      border-radius: 8px;
+      border-radius: 4px;
     }
     
     @media print {
       body {
-        padding: 0;
+        padding: 10mm;
       }
       
-      .namecard-grid {
-        gap: 15px;
-      }
-      
-      .namecard {
-        page-break-inside: avoid;
-        break-inside: avoid;
+      .namecard:nth-child(8n) {
+        page-break-after: always;
       }
     }
   </style>
 </head>
 <body>
-  <div class="namecard-grid">
-    ${cards}
-  </div>
+  ${cardsHTML}
 </body>
 </html>
   `;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const keyword = (searchParams.get('q') ?? '').trim().toLowerCase();
+    const query = searchParams.get('q') || '';
 
     const supabase = createServerClient();
 
-    const { data, error } = await supabase
+    // ดึงข้อมูลผู้เข้าร่วม
+    let dbQuery = supabase
       .from('attendees')
-      .select(
-        `
-        id,
-        full_name,
-        phone,
-        organization,
-        job_position,
-        province,
-        qr_image_url,
-        ticket_token,
-        food_type
-      `
-      )
+      .select('id, event_id, full_name, organization, job_position, province, region, phone, food_type, hotel_name, qr_image_url, ticket_token')
       .order('full_name', { ascending: true });
+
+    // ถ้ามีการค้นหา
+    if (query.trim()) {
+      dbQuery = dbQuery.or(
+        `full_name.ilike.%${query}%,organization.ilike.%${query}%,phone.ilike.%${query}%,province.ilike.%${query}%`
+      );
+    }
+
+    const { data, error } = await dbQuery;
 
     if (error || !data) {
       return NextResponse.json(
-        { error: 'ไม่สามารถโหลดข้อมูลผู้เข้าร่วมได้' },
+        { success: false, message: 'ไม่สามารถโหลดข้อมูลได้', error },
         { status: 500 }
       );
     }
 
-    let attendees: AttendeeCardRow[] = data as AttendeeCardRow[];
-
-    // Filter ตาม keyword
-    if (keyword) {
-      attendees = attendees.filter((a) => {
-        const name = (a.full_name ?? '').toLowerCase();
-        const org = (a.organization ?? '').toLowerCase();
-        const job = (a.job_position ?? '').toLowerCase();
-        const prov = (a.province ?? '').toLowerCase();
-        const token = (a.ticket_token ?? '').toLowerCase();
-        return (
-          name.includes(keyword) ||
-          org.includes(keyword) ||
-          job.includes(keyword) ||
-          prov.includes(keyword) ||
-          token.includes(keyword)
-        );
-      });
-    }
+    const attendees = data as AttendeeForCard[];
 
     if (attendees.length === 0) {
       return NextResponse.json(
-        { error: 'ไม่พบข้อมูลผู้เข้าร่วมตามเงื่อนไข' },
+        { success: false, message: 'ไม่พบข้อมูลผู้เข้าร่วม' },
         { status: 404 }
       );
     }
 
     // สร้าง HTML
-    const html = generateNamecardsHTML(attendees);
+    const htmlContent = generateFullHTML(attendees);
 
-    // ใช้ Puppeteer สร้าง PDF
-    const isProduction = process.env.NODE_ENV === 'production';
+    // เช็คว่ารันบน local หรือ production
+    const isLocal = process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+
+    let browser;
     
-    const browser = await puppeteer.launch({
-      args: isProduction ? chromium.args : [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-      executablePath: isProduction 
-        ? await chromium.executablePath()
-        : process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      headless: isProduction ? chromium.headless : true,
-    });
+    if (isLocal) {
+      // สำหรับ local development
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows default
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    } else {
+      // สำหรับ Vercel/Production
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
+    }
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
+    // สร้าง PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: {
-        top: '20px',
-        right: '20px',
-        bottom: '20px',
-        left: '20px',
+        top: '10mm',
+        bottom: '10mm',
+        left: '10mm',
+        right: '10mm',
       },
     });
 
     await browser.close();
 
-    const fileName = keyword
-      ? `namecards-${keyword}-${Date.now()}.pdf`
-      : `namecards-all-${Date.now()}.pdf`;
-
+    // ส่ง PDF กลับไป
     return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${fileName}"`,
-        'Content-Length': pdfBuffer.length.toString(),
+        'Content-Disposition': `attachment; filename="namecards-${new Date().toISOString().split('T')[0]}.pdf"`,
       },
     });
-  } catch (err: any) {
-    console.error('Export PDF Error:', err);
+
+  } catch (error) {
+    console.error('Error generating PDF:', error);
     return NextResponse.json(
       { 
-        error: 'เกิดข้อผิดพลาดในการสร้าง PDF', 
-        details: err.message,
-        stack: err.stack,
-        name: err.name,
-        cause: err.cause
+        success: false, 
+        message: 'เกิดข้อผิดพลาดในการสร้าง PDF',
+        error: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
