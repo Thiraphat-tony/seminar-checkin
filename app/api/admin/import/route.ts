@@ -28,6 +28,7 @@ type PreparedRow = {
   region: number | null;
   qr_image_url: string | null;
   food_type: FoodType | null;
+  coordinator_name: string | null;
   hotel_name: string | null;
 };
 
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
           row['ticket_token'] ??
           row['Token'] ??
           row['token'] ??
+          row['รหัสบัตร'] ??
           row['โทเคน'] ??
           null;
 
@@ -213,6 +215,13 @@ export async function POST(req: NextRequest) {
           row['ประเภทอาหาร'] ??
           null;
 
+        const coordinator_name =
+          row.coordinator_name ??
+          row['coordinator_name'] ??
+          row['ชื่อผู้ประสานงาน'] ??
+          row['ผู้ประสานงาน'] ??
+          null;
+
         const hotel_name =
           row.hotel_name ??
           row['โรงแรม'] ??
@@ -247,6 +256,7 @@ export async function POST(req: NextRequest) {
           region: regionNum,
           qr_image_url: qr_image_url ? String(qr_image_url).trim() : null,
           food_type: normalizeFoodType(food_type_raw),
+          coordinator_name: coordinator_name ? String(coordinator_name).trim() : null,
           hotel_name: hotel_name ? String(hotel_name).trim() : null,
         };
       })
@@ -294,8 +304,11 @@ export async function POST(req: NextRequest) {
           organization: row.organization,
           job_position: row.job_position,
           province: row.province,
+          region: row.region,
           qr_image_url: row.qr_image_url,
           food_type: row.food_type,
+          coordinator_name: row.coordinator_name,
+          hotel_name: row.hotel_name,
           ticket_token: row.ticket_token,
         })),
         { onConflict: 'ticket_token' }

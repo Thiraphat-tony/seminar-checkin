@@ -72,8 +72,11 @@ export default function AdminImportButton() {
         // รีเฟรชข้อมูลตารางในหน้า /admin ให้ตรงกับข้อมูลใหม่
         router.refresh();
       } else {
-        setMessage(data?.error || 'นำเข้าข้อมูลไม่สำเร็จ');
+        // แสดง error message จาก API
+        const errorMsg = data?.message || data?.detail || 'นำเข้าข้อมูลไม่สำเร็จ';
+        setMessage(errorMsg);
         setIsError(true);
+        console.error('Import error:', data);
       }
     } catch {
       setMessage('เกิดข้อผิดพลาดระหว่างนำเข้าข้อมูล');

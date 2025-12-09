@@ -1500,6 +1500,72 @@ a:hover {
     color: var(--error-text-main);
 }
 
+/* Export by region */
+.admin-export {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-export__controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-export__label {
+    font-size: 14px;
+    color: #324057;
+    font-weight: 600;
+}
+
+.admin-export__select {
+    padding: 10px 12px;
+    border: 1px solid #d6dee6;
+    border-radius: 10px;
+    background: #fff;
+    font-size: 14px;
+    color: #1f2d3d;
+    transition: border-color 0.2s ease;
+}
+
+.admin-export__select:focus {
+    outline: none;
+    border-color: #4c6fff;
+    box-shadow: 0 0 0 3px rgba(76, 111, 255, 0.15);
+}
+
+.admin-export__button {
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #4c6fff, #6f9bff);
+    color: #fff;
+    padding: 12px 18px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 12px 30px rgba(76, 111, 255, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-export__button:hover:enabled {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 38px rgba(76, 111, 255, 0.3);
+}
+
+.admin-export__button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-export__hint {
+    font-size: 13px;
+    color: #324057;
+}
+
+.admin-export__hint.error {
+    color: #c2351e;
+}
+
 /* Keyframes สำหรับการหมุนของ Spinner */
 @keyframes spin {
     to { 

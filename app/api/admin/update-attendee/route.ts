@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     qr_image_url?: string | null;
     slip_url?: string | null;
     food_type?: string | null;
+    coordinator_name?: string | null;
     hotel_name?: string | null;
     checked_in_at?: string | null; // ISO timestamp expected, or null
   } | null;
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     'qr_image_url',
     'slip_url',
     'food_type',
+    'coordinator_name',
     'hotel_name',
     'checked_in_at',
   ];

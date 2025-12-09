@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
         qr_image_url: null,
         slip_url: slipUrl,
         food_type: p.foodType || 'normal',
+        coordinator_name: coordinatorName || null,
         hotel_name: hotelName || null,
       };
     });
