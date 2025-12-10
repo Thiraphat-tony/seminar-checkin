@@ -1,12 +1,11 @@
 // app/register/page.tsx
 'use client';
+
 import './register.css';
 import { useState, type FormEvent, type ChangeEvent } from 'react';
 
-type FoodType =
-  | 'normal'
-  | 'vegetarian'
-  | 'halal'
+// ✅ เพิ่ม 'other' เพื่อใช้กับกรณีระบุเอง
+type FoodType = 'normal' | 'vegetarian' | 'halal' | 'other';
 
 type PositionType = 'chief_judge' | 'associate_judge';
 
@@ -15,31 +14,31 @@ type Participant = {
   position: PositionType;
   phone: string;
   foodType: FoodType;
+  // ✅ ช่องให้พิมพ์อาหารอื่น ๆ
+  foodOther?: string;
 };
 
-// ✅ รายชื่อโรงแรมในตัวเมืองสุราษฎร์ธานี (ภาษาไทย)
+// ✅ รายชื่อโรงแรมในตัวเมืองสุราษฎร์ธานี (ตามแผนที่ข้อ 1–13)
 const SURAT_CITY_HOTELS: string[] = [
-  'โรงแรมบีทู สุราษฎร์ธานี พรีเมียร์ (B2 Surat Thani Premier Hotel)',
-  'โรงแรมบีทู สุราษฎร์ธานี บูทีค แอนด์ บัดเจท (B2 Surat Thani Boutique & Budget Hotel)',
-  'โรงแรมเอเวอร์กรีน สวีท (Evergreen Suite Hotel)',
-  'โรงแรมเอส.22 สุราษฎร์ธานี (S.22 Hotel Suratthani)',
-  'โรงแรมมายเพลซ แอท สุราษฎร์ (Myplace@Surat Hotel)',
-  'โรงแรมราชธานี (Rajthani Hotel)',
-  'โรงแรมซีบีดี สุราษฎร์ธานี (CBD Hotel Suratthani)',
-  'โรงแรมไดมอนด์ พลาซ่า (Diamond Plaza Hotel)',
-  'โรงแรมวังใต้ (Wangtai Hotel)',
-  'โรงแรมเค ปาร์ค แกรนด์ (K Park Grand Hotel)',
-  'โรงแรม 100 ไอส์แลนด์ รีสอร์ท แอนด์ สปา (100 Islands Resort & Spa)',
-  'โรงแรมออคิด ริเวอร์วิว (Orchid Riverview Hotel)',
-  'โรงแรมเอส ธารา แกรนด์ (S Tara Grand Hotel)',
-  'โรงแรมเซ็นทริโน เซอร์วิส เรสซิเดนซ์ (The Centrino Serviced Residence)',
-  'โรงแรมมาร์ลิน (Marlin Hotel)',
-  'โรงแรมบลู มังกี้ ฮับ แอนด์ โฮเทล สุราษฎร์ธานี (Blu Monkey Hub & Hotel Surat Thani)',
-  'กรีน โฮม รีสอร์ท (Green Home Resort)',
+  'โรงแรม ไดมอนด์พลาซ่า',
+  'โรงแรม ร้อยเกาะ',
+  'โรงแรม เอสธาราแกรนด์',
+  'โรงแรม เอสอาร์',
+  'โรงแรม บรรโฮเตล',
+  'โรงแรม บ้านไมตรีจิต',
+  'โรงแรม สยามธานี',
+  'โรงแรม วังใต้',
+  'โรงแรม บรรจงบุรี',
+  'โรงแรม นิภาการ์เด้น',
+  'โรงแรม เดอะรัช',
+  'โรงแรม เพ็ชรพะงัน',
+  'โรงแรม แก้วสมุยรีสอร์ท',
 ];
 
-// ✅ mapping ภาค → รายชื่อศาลเยาวชนและครอบครัว / แผนกคดีเยาวชนฯ
+// ✅ mapping ภาค/ศาลกลาง → รายชื่อศาลเยาวชนและครอบครัว / แผนกคดีเยาวชนฯ
+// '0' = ศาลเยาวชนและครอบครัวกลาง (ไม่อยู่ในภาค 1–9)
 const REGION_ORGANIZATIONS: Record<string, string[]> = {
+  '0': ['ศาลเยาวชนและครอบครัวกลาง (กรุงเทพมหานคร)'],
   '1': [
     'ศาลเยาวชนและครอบครัวจังหวัดชัยนาท',
     'ศาลเยาวชนและครอบครัวจังหวัดนนทบุรี',
@@ -145,7 +144,7 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
 export default function RegisterPage() {
   const [organization, setOrganization] = useState(''); // จะมาจาก list ตามภาค
   const [province, setProvince] = useState('');
-  const [region, setRegion] = useState(''); // 1–9
+  const [region, setRegion] = useState(''); // 0–9
   const [coordinatorName, setCoordinatorName] = useState(''); // ชื่อ-สกุลผู้ประสานงานของศาลนี้
   const [hotelName, setHotelName] = useState('');
   const [participants, setParticipants] = useState<Participant[]>([
@@ -154,6 +153,7 @@ export default function RegisterPage() {
       position: 'associate_judge',
       phone: '',
       foodType: 'normal',
+      foodOther: '',
     },
   ]);
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -173,7 +173,14 @@ export default function RegisterPage() {
   ) {
     setParticipants((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value } as Participant;
+      const updated: Participant = { ...copy[index], [field]: value } as Participant;
+
+      // ✅ ถ้าเปลี่ยนประเภทอาหารเป็นอย่างอื่นที่ไม่ใช่ other ให้ล้างข้อความ foodOther ทิ้ง
+      if (field === 'foodType' && value !== 'other') {
+        updated.foodOther = '';
+      }
+
+      copy[index] = updated;
       return copy;
     });
   }
@@ -186,6 +193,7 @@ export default function RegisterPage() {
         position: 'associate_judge',
         phone: '',
         foodType: 'normal',
+        foodOther: '',
       },
     ]);
   }
@@ -208,11 +216,25 @@ export default function RegisterPage() {
     if (!orgs.includes(organization)) {
       setOrganization('');
     }
+
+    // ✅ ถ้าเลือกศาลกลาง (region = 0) ให้ตั้งจังหวัดเป็นกรุงเทพฯ อัตโนมัติ
+    if (newRegion === '0') {
+      setProvince('กรุงเทพมหานคร');
+    } else {
+      // ภาคอื่น ๆ ให้เคลียร์จังหวัด รอให้ดึงจากชื่อศาลอีกที หรือพิมพ์เอง
+      setProvince('');
+    }
   }
 
   function handleOrganizationChange(e: ChangeEvent<HTMLSelectElement>) {
     const org = e.target.value;
     setOrganization(org);
+
+    // ✅ ถ้าเป็นศาลเยาวชนและครอบครัวกลาง ให้ fix จังหวัดเป็นกรุงเทพฯ
+    if (region === '0') {
+      setProvince('กรุงเทพมหานคร');
+      return;
+    }
 
     // ดึงชื่อจังหวัดจากข้อความหลังคำว่า "จังหวัด" ถ้ามี
     const provinceMatch = org.split('จังหวัด')[1]?.trim();
@@ -227,7 +249,7 @@ export default function RegisterPage() {
     setErrorMessage(null);
 
     if (!region) {
-      setErrorMessage('กรุณาเลือกสังกัดภาค');
+      setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
       return;
     }
     if (!organization.trim()) {
@@ -269,10 +291,11 @@ export default function RegisterPage() {
       formData.append('coordinatorName', coordinatorName);
       formData.append('hotelName', hotelName);
       formData.append('totalAttendees', String(totalAttendees));
+      // ✅ ตอนนี้ participants มีทั้ง foodType + foodOther แล้ว
       formData.append('participants', JSON.stringify(participants));
 
       if (slipFile) {
-        formData.append('slip', slipFile); // << แนบสลีปแค่ไฟล์เดียว
+        formData.append('slip', slipFile); // << แนบสลิปแค่ไฟล์เดียว
       }
 
       const res = await fetch('/api/register', {
@@ -289,7 +312,10 @@ export default function RegisterPage() {
         }
 
         const errorMsg =
-          (data && typeof data === 'object' && 'message' in data && data.message) ||
+          (data &&
+            typeof data === 'object' &&
+            'message' in data &&
+            data.message) ||
           'ไม่สามารถบันทึกข้อมูลได้';
 
         console.error('API Error:', { status: res.status, data });
@@ -307,13 +333,17 @@ export default function RegisterPage() {
           position: 'associate_judge',
           phone: '',
           foodType: 'normal',
+          foodOther: '',
         },
       ]);
       setSlipFile(null);
-      // ถ้าอยากล้างโรงแรม/จังหวัด/หน่วยงานด้วยให้ setState เป็นค่าว่างเพิ่มได้
+      // ถ้าต้องการ reset อย่างอื่น เพิ่ม setState ตรงนี้ได้ เช่น:
+      // setRegion(''); setOrganization(''); setProvince(''); setCoordinatorName(''); setHotelName('');
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+      setErrorMessage(
+        err.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -329,14 +359,15 @@ export default function RegisterPage() {
           <h2>1. ข้อมูลหน่วยงาน</h2>
 
           <div>
-            <label htmlFor="region">สังกัดภาค *</label>
+            <label htmlFor="region">สังกัดภาค / ศาลกลาง *</label>
             <select
               id="region"
               value={region}
               onChange={handleRegionChange}
               required
             >
-              <option value="">-- เลือกสังกัดภาค --</option>
+              <option value="">-- เลือกสังกัดภาค / ศาลกลาง --</option>
+              <option value="0">ศาลเยาวชนและครอบครัวกลาง</option>
               <option value="1">1 (กรุงเทพฯ และจังหวัดในภาคกลาง)</option>
               <option value="2">2 (จังหวัดในภาคตะวันออก)</option>
               <option value="3">3 (จังหวัดในภาคอีสานตอนล่าง)</option>
@@ -361,7 +392,7 @@ export default function RegisterPage() {
               <option value="">
                 {region
                   ? '-- เลือกศาลเยาวชนและครอบครัว / แผนกฯ --'
-                  : 'กรุณาเลือกสังกัดภาคก่อน'}
+                  : 'กรุณาเลือกสังกัดภาค / ศาลกลางก่อน'}
               </option>
               {currentOrganizations.map((org) => (
                 <option key={org} value={org}>
@@ -377,8 +408,8 @@ export default function RegisterPage() {
               id="province"
               type="text"
               value={province}
+              onChange={(e) => setProvince(e.target.value)} // ✅ แก้ไขได้เอง
               required
-              readOnly
             />
           </div>
 
@@ -459,8 +490,28 @@ export default function RegisterPage() {
                   <option value="normal">ทั่วไป</option>
                   <option value="vegetarian">มังสวิรัติ</option>
                   <option value="halal">อิสลาม</option>
+                  <option value="other">อื่น ๆ (ระบุ)</option>
                 </select>
               </div>
+
+              {/* ✅ ถ้าเลือก "อื่น ๆ" ให้แสดงช่องกรอกรายละเอียด */}
+              {p.foodType === 'other' && (
+                <div>
+                  <label>ระบุอาหารอื่น ๆ</label>
+                  <input
+                    type="text"
+                    value={p.foodOther ?? ''}
+                    onChange={(e) =>
+                      handleParticipantChange(
+                        index,
+                        'foodOther',
+                        e.target.value
+                      )
+                    }
+                    placeholder="เช่น ไม่ทานเนื้อวัว, แพ้ไข่, แพ้ถั่ว ฯลฯ"
+                  />
+                </div>
+              )}
 
               {participants.length > 1 && (
                 <button

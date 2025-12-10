@@ -15,6 +15,8 @@ type ParticipantPayload = {
     | 'halal'
     | 'seafood_allergy'
     | 'other';
+  // ✅ รองรับข้อความระบุอาหารอื่น ๆ
+  foodOther?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -32,14 +34,21 @@ export async function POST(req: NextRequest) {
       .toString()
       .trim();
     const slip = formData.get('slip') as File | null;
-    const coordinatorName = (formData.get('coordinatorName') || '').toString().trim();
+    const coordinatorName = (formData.get('coordinatorName') || '')
+      .toString()
+      .trim();
 
-    const region = Number.parseInt(regionStr || '0', 10);
+    // ✅ แปลง region เป็นตัวเลข (รองรับ 0–9 โดย 0 = ศาลเยาวชนและครอบครัวกลาง)
+    const region = Number.parseInt(regionStr, 10);
     const totalAttendees = Number.parseInt(totalAttendeesStr || '0', 10) || 0;
 
-    if (!region || region < 1 || region > 9) {
+    if (Number.isNaN(region) || region < 0 || region > 9) {
       return NextResponse.json(
-        { ok: false, message: 'สังกัดภาคไม่ถูกต้อง (ต้องเป็น 1-9)' },
+        {
+          ok: false,
+          message:
+            'สังกัดภาคไม่ถูกต้อง (ต้องเป็น 0–9 โดย 0 = ศาลเยาวชนและครอบครัวกลาง)',
+        },
         { status: 400 }
       );
     }
@@ -58,7 +67,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ทำให้สลิปเป็น optional ชั่วคราว
+    // ✅ เพิ่ม validation โรงแรมฝั่ง backend ให้ตรงกับฟอร์มหน้าเว็บ
+    if (!hotelName) {
+      return NextResponse.json(
+        { ok: false, message: 'กรุณาเลือกโรงแรมที่พัก' },
+        { status: 400 }
+      );
+    }
+
+    // ถ้าจะบังคับ coordinatorName ฝั่ง backend ด้วยก็ทำได้ (ทาง frontend บังคับแล้ว)
+    // if (!coordinatorName) {
+    //   return NextResponse.json(
+    //     { ok: false, message: 'กรุณากรอกชื่อ-สกุลผู้ประสานงาน' },
+    //     { status: 400 }
+    //   );
+    // }
+
+    // ทำให้สลิปเป็น optional ชั่วคราว (ถ้าจะบังคับก็เอา comment ออก)
     // if (!slip) {
     //   return NextResponse.json(
     //     { ok: false, message: 'กรุณาแนบไฟล์หลักฐานค่าลงทะเบียน' },
@@ -123,7 +148,10 @@ export async function POST(req: NextRequest) {
       if (uploadError) {
         console.error('[Register] Upload error:', uploadError);
         return NextResponse.json(
-          { ok: false, message: `อัปโหลดไฟล์สลิปไม่สำเร็จ: ${uploadError.message}` },
+          {
+            ok: false,
+            message: `อัปโหลดไฟล์สลิปไม่สำเร็จ: ${uploadError.message}`,
+          },
           { status: 500 }
         );
       }
@@ -146,6 +174,14 @@ export async function POST(req: NextRequest) {
           ? 'ผู้พิพากษาหัวหน้าศาลฯ'
           : 'ผู้พิพากษาสมทบ';
 
+      // ✅ รองรับข้อความอาหารอื่น ๆ จาก payload (ถ้ามี)
+      const rawFoodOther =
+        typeof (p as any).foodOther === 'string'
+          ? (p as any).foodOther.trim()
+          : '';
+
+      const foodType = p.foodType || 'normal';
+
       return {
         event_id: EVENT_ID,
         full_name: p.fullName,
@@ -153,11 +189,15 @@ export async function POST(req: NextRequest) {
         organization,
         job_position: jobPosition,
         province,
-        region, // smallint 1–9
+        region, // 0–9 (0 = ศาลเยาวชนกลาง)
         ticket_token: randomUUID(), // ใช้ uuid เป็น token
         qr_image_url: null,
         slip_url: slipUrl,
-        food_type: p.foodType || 'normal',
+        food_type: foodType,
+        food_other:
+          foodType === 'other' && rawFoodOther.length > 0
+            ? rawFoodOther
+            : null,
         coordinator_name: coordinatorName || null,
         hotel_name: hotelName || null,
       };
@@ -172,7 +212,10 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error('[Register] Insert error:', insertError);
       return NextResponse.json(
-        { ok: false, message: `บันทึกข้อมูลผู้เข้าร่วมไม่สำเร็จ: ${insertError.message}` },
+        {
+          ok: false,
+          message: `บันทึกข้อมูลผู้เข้าร่วมไม่สำเร็จ: ${insertError.message}`,
+        },
         { status: 500 }
       );
     }
@@ -190,7 +233,8 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     console.error('[Register] Unexpected error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { ok: false, message: `เกิดข้อผิดพลาด: ${errorMessage}` },
       { status: 500 }

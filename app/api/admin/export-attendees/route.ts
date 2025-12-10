@@ -46,7 +46,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   }
 }
 
-// แปลง code ประเภทอาหารเป็นภาษาไทย
+// แปลง code ประเภทอาหารเป็นภาษาไทย (เวอร์ชันเดิมแบบสั้น ๆ)
 function formatFoodType(foodType: string | null): string {
   switch (foodType) {
     case 'normal':
@@ -81,20 +81,24 @@ function setupSheetColumns(sheet: ExcelJS.Worksheet) {
   headerRow.font = { bold: true };
   headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-  // ถ้าอยากให้หัวตารางค้างไว้ เวลาเลื่อนลง
+  // ให้หัวตารางค้างไว้ เวลาเลื่อนลง
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 }
 
 export async function GET(req: NextRequest) {
   const supabase = createServerClient();
 
-  // ถ้า query มี ?region=3 จะ export เฉพาะภาค 3
+  // ✅ รองรับ region = 0 (ศาลกลาง) + 1–9
   const regionParam = req.nextUrl.searchParams.get('region');
-  const regionNumber = regionParam ? Number(regionParam) : Number.NaN;
-  const regionFilter =
-    Number.isFinite(regionNumber) && regionNumber >= 1 && regionNumber <= 9
-      ? regionNumber
-      : null;
+  const regionNumberRaw =
+    regionParam !== null ? Number(regionParam) : Number.NaN;
+
+  const hasRegionFilter =
+    Number.isFinite(regionNumberRaw) &&
+    regionNumberRaw >= 0 &&
+    regionNumberRaw <= 9;
+
+  const regionFilter: number | null = hasRegionFilter ? regionNumberRaw : null;
 
   const query = supabase
     .from('attendees')
@@ -120,7 +124,7 @@ export async function GET(req: NextRequest) {
     .order('region', { ascending: true, nullsFirst: false })
     .order('full_name', { ascending: true });
 
-  if (regionFilter) {
+  if (regionFilter !== null) {
     query.eq('region', regionFilter);
   }
 
@@ -139,8 +143,10 @@ export async function GET(req: NextRequest) {
   const workbook = new ExcelJS.Workbook();
 
   // -------------------- โหมด 1: export เฉพาะภาคเดียว (มี ?region=) --------------------
-  if (regionFilter) {
-    const sheet = workbook.addWorksheet(`ภาค ${regionFilter}`);
+  if (regionFilter !== null) {
+    const sheetName =
+      regionFilter === 0 ? 'ศาลกลาง' : `ภาค ${regionFilter}`;
+    const sheet = workbook.addWorksheet(sheetName);
     setupSheetColumns(sheet);
 
     for (const a of attendees) {
@@ -184,7 +190,10 @@ export async function GET(req: NextRequest) {
     }
 
     const fileArrayBuffer = await workbook.xlsx.writeBuffer();
-    const filename = `attendees-region-${regionFilter}.xlsx`;
+    const filename =
+      regionFilter === 0
+        ? 'attendees-central-court.xlsx'
+        : `attendees-region-${regionFilter}.xlsx`;
 
     return new NextResponse(fileArrayBuffer, {
       status: 200,
@@ -197,7 +206,10 @@ export async function GET(req: NextRequest) {
   }
 
   // -------------------- โหมด 2: export ทุกภาค แยกชีต --------------------
-  // เตรียมชีต ภาค 1 - ภาค 9 ล่วงหน้า
+  // ✅ เตรียมชีต: ศาลกลาง, ภาค 1–9, และ ไม่ระบุภาค
+  const centralSheet = workbook.addWorksheet('ศาลกลาง');
+  setupSheetColumns(centralSheet);
+
   const regionSheets: Record<string, ExcelJS.Worksheet> = {};
   for (let r = 1; r <= 9; r += 1) {
     const sheet = workbook.addWorksheet(`ภาค ${r}`);
@@ -205,7 +217,6 @@ export async function GET(req: NextRequest) {
     regionSheets[String(r)] = sheet;
   }
 
-  // ชีต "ไม่ระบุภาค" กรณีมี region null หรืออยู่นอกช่วง 1-9
   let otherSheet: ExcelJS.Worksheet | null = null;
   const getOtherSheet = () => {
     if (!otherSheet) {
@@ -216,11 +227,18 @@ export async function GET(req: NextRequest) {
   };
 
   for (const a of attendees) {
-    const region = a.region ?? 0;
-    const key = region >= 1 && region <= 9 ? String(region) : 'other';
+    const regionValue = a.region ?? -1;
 
-    const targetSheet =
-      key === 'other' ? getOtherSheet() : regionSheets[key];
+    let targetSheet: ExcelJS.Worksheet;
+
+    if (regionValue === 0) {
+      // ✅ ศาลเยาวชนและครอบครัวกลาง
+      targetSheet = centralSheet;
+    } else if (regionValue >= 1 && regionValue <= 9) {
+      targetSheet = regionSheets[String(regionValue)];
+    } else {
+      targetSheet = getOtherSheet();
+    }
 
     const row = targetSheet.addRow({
       full_name: a.full_name ?? '',

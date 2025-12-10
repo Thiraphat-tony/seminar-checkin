@@ -1,3 +1,4 @@
+// app/admin/page.tsx
 import { createServerClient } from '@/lib/supabaseServer';
 import ForceCheckinButton from './ForceCheckinButton';
 import AdminSlipUploadButton from './AdminSlipUploadButton';
@@ -30,7 +31,7 @@ type AttendeeRow = {
   organization: string | null;
   job_position: string | null;   // ✅ ตำแหน่ง
   province: string | null;       // ✅ จังหวัด
-  region: number | null;         // ✅ ภาค 1-9
+  region: number | null;         // ✅ ภาค 0–9 (0 = ศาลกลาง)
   qr_image_url: string | null;   // ✅ URL รูป QR
   slip_url: string | null;
   checked_in_at: string | null;
@@ -74,6 +75,18 @@ function formatFoodType(foodType: string | null): string {
     default:
       return 'ไม่ระบุ';
   }
+}
+
+// ✅ แสดง label สำหรับ region (รองรับ 0 = ศาลกลาง)
+function formatRegion(region: number | null): string {
+  if (region === null || Number.isNaN(region as any)) return '-';
+
+  if (region === 0) {
+    return 'ศาลเยาวชนกลาง ';
+  }
+
+  // ถ้าอยากละเอียดกว่านี้ สามารถ map ตามภาคได้ภายหลัง
+  return `ภาค ${region}`;
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
@@ -128,7 +141,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     );
   }
 
-  const attendees: AttendeeRow[] = data;
+  const attendees: AttendeeRow[] = data as AttendeeRow[];
 
   const total = attendees.length;
   const totalChecked = attendees.filter((a) => a.checked_in_at).length;
@@ -179,7 +192,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   if (regionFilter) {
     const target = regionFilter.trim();
-    filtered = filtered.filter((a) => String(a.region ?? '').trim() === target);
+    filtered = filtered.filter(
+      (a) => String(a.region ?? '').trim() === target
+    );
   }
 
   // ✅ กรองตามจังหวัด (ถ้ามีเลือก)
@@ -259,7 +274,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <th>ชื่อ - นามสกุล</th>
                   <th>หน่วยงาน</th>
                   <th>จังหวัด</th>
-                  <th>ภาค</th>
+                  <th>ภาค / ศาลกลาง</th>
                   <th>เบอร์โทร</th>
                   <th>ตำแหน่ง</th>
                   <th>โรงแรม</th>
@@ -290,7 +305,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <td>{a.full_name || '-'}</td>
                         <td>{a.organization || '-'}</td>
                         <td>{a.province || '-'}</td>
-                        <td>{a.region ?? '-'}</td>
+                        <td>{formatRegion(a.region)}</td>
                         <td>{a.phone || '-'}</td>
                         <td>{a.job_position || '-'}</td>
                         <td>{a.hotel_name || '-'}</td>

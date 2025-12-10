@@ -25,7 +25,7 @@ type PreparedRow = {
   organization: string | null;
   job_position: string | null;
   province: string | null;
-  region: number | null;
+  region: number | null;           // ✅ รองรับ 0–9 (0 = ศาลกลาง)
   qr_image_url: string | null;
   food_type: FoodType | null;
   coordinator_name: string | null;
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     // อ่านแถวข้อมูล
     const rows: RawExcelRow[] = [];
     const headers: string[] = [];
-    
+
     // อ่านส่วนหัว
     const headerRow = worksheet.getRow(1);
     headerRow?.eachCell((cell, colNum) => {
@@ -236,12 +236,24 @@ export async function POST(req: NextRequest) {
 
         if (!full_name || !ticket_token) return null;
 
-        // แปลง region เป็นตัวเลข 1-9
+        // ✅ แปลง region เป็นตัวเลข 0–9
+        // 0 = ศาลเยาวชนและครอบครัวกลาง
         let regionNum: number | null = null;
         if (region_raw != null) {
-          const parsed = parseInt(String(region_raw).trim());
-          if (!isNaN(parsed) && parsed >= 1 && parsed <= 9) {
-            regionNum = parsed;
+          const rawStr = String(region_raw).trim();
+
+          // เผื่อกรณีเขียนเป็นข้อความในไฟล์
+          if (
+            rawStr === 'ศาลกลาง' ||
+            rawStr === 'ศาลเยาวชนและครอบครัวกลาง' ||
+            rawStr === '0'
+          ) {
+            regionNum = 0;
+          } else {
+            const parsed = parseInt(rawStr, 10);
+            if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 9) {
+              regionNum = parsed;
+            }
           }
         }
 
@@ -256,7 +268,9 @@ export async function POST(req: NextRequest) {
           region: regionNum,
           qr_image_url: qr_image_url ? String(qr_image_url).trim() : null,
           food_type: normalizeFoodType(food_type_raw),
-          coordinator_name: coordinator_name ? String(coordinator_name).trim() : null,
+          coordinator_name: coordinator_name
+            ? String(coordinator_name).trim()
+            : null,
           hotel_name: hotel_name ? String(hotel_name).trim() : null,
         };
       })
@@ -293,7 +307,7 @@ export async function POST(req: NextRequest) {
 
     const eventId = events[0].id as string;
 
-    // 6) upsert ลง attendees ตาม schema ใหม่ (ไม่มี origin_host แล้ว)
+    // 6) upsert ลง attendees ตาม schema ใหม่
     const { data: inserted, error: insertError } = await supabase
       .from('attendees')
       .upsert(
