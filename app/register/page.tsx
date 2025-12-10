@@ -146,7 +146,11 @@ export default function RegisterPage() {
   const [province, setProvince] = useState('');
   const [region, setRegion] = useState(''); // 0–9
   const [coordinatorName, setCoordinatorName] = useState(''); // ชื่อ-สกุลผู้ประสานงานของศาลนี้
-  const [hotelName, setHotelName] = useState('');
+
+  // ✅ แยก state ของ "ตัวเลือกใน select" ออกจาก "ชื่อโรงแรมจริงที่ส่งไป backend"
+  const [hotelSelect, setHotelSelect] = useState(''); // ค่าใน <select>
+  const [hotelOther, setHotelOther] = useState('');   // ข้อความโรงแรมอื่น ๆ ที่พิมพ์เอง
+
   const [participants, setParticipants] = useState<Participant[]>([
     {
       fullName: '',
@@ -243,10 +247,25 @@ export default function RegisterPage() {
     }
   }
 
+  // ✅ จัดการตอนเลือกโรงแรมจาก select
+  function handleHotelSelectChange(e: ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    setHotelSelect(value);
+
+    // ถ้าเปลี่ยนจาก "อื่น ๆ" ไปเป็นโรงแรมที่มีใน list ให้ล้างช่องพิมพ์ออก
+    if (value !== '__other') {
+      setHotelOther('');
+    }
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSuccessMessage(null);
     setErrorMessage(null);
+
+    // ✅ คำนวณชื่อโรงแรมจริงที่ต้องส่งไป backend
+    const actualHotelName =
+      hotelSelect === '__other' ? hotelOther.trim() : hotelSelect.trim();
 
     if (!region) {
       setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
@@ -264,8 +283,9 @@ export default function RegisterPage() {
       setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
       return;
     }
-    if (!hotelName) {
-      setErrorMessage('กรุณาเลือกโรงแรมที่พัก');
+    // ✅ ตรวจทั้งกรณีเลือกจาก list และกรณีพิมพ์เอง
+    if (!actualHotelName) {
+      setErrorMessage('กรุณาเลือกหรือระบุโรงแรมที่พัก');
       return;
     }
     if (!slipFile) {
@@ -289,7 +309,8 @@ export default function RegisterPage() {
       formData.append('province', province);
       formData.append('region', region);
       formData.append('coordinatorName', coordinatorName);
-      formData.append('hotelName', hotelName);
+      // ✅ ส่งชื่อโรงแรมจริง (ไม่ว่าจะมาจาก list หรือพิมพ์เอง)
+      formData.append('hotelName', actualHotelName);
       formData.append('totalAttendees', String(totalAttendees));
       // ✅ ตอนนี้ participants มีทั้ง foodType + foodOther แล้ว
       formData.append('participants', JSON.stringify(participants));
@@ -337,8 +358,10 @@ export default function RegisterPage() {
         },
       ]);
       setSlipFile(null);
+      setHotelSelect('');
+      setHotelOther('');
       // ถ้าต้องการ reset อย่างอื่น เพิ่ม setState ตรงนี้ได้ เช่น:
-      // setRegion(''); setOrganization(''); setProvince(''); setCoordinatorName(''); setHotelName('');
+      // setRegion(''); setOrganization(''); setProvince(''); setCoordinatorName('');
     } catch (err: any) {
       console.error(err);
       setErrorMessage(
@@ -558,20 +581,36 @@ export default function RegisterPage() {
             <label htmlFor="hotelName">พักโรงแรมไหน *</label>
             <select
               id="hotelName"
-              value={hotelName}
-              onChange={(e) => setHotelName(e.target.value)}
+              value={hotelSelect}
+              onChange={handleHotelSelectChange}
               required
             >
               <option value="">
-                -- เลือกโรงแรมในตัวเมืองสุราษฎร์ธานี --
+                -- เลือกโรงแรม --
               </option>
               {SURAT_CITY_HOTELS.map((hotel) => (
                 <option key={hotel} value={hotel}>
                   {hotel}
                 </option>
               ))}
+              {/* ✅ ตัวเลือกอื่น ๆ */}
+              <option value="__other">อื่น ๆ (ระบุชื่อโรงแรม)</option>
             </select>
           </div>
+
+          {/* ✅ แสดงช่องกรอกชื่อโรงแรมเมื่อเลือก "อื่น ๆ" */}
+          {hotelSelect === '__other' && (
+            <div>
+              <label htmlFor="hotelOther">ชื่อโรงแรม (กรณีอื่น ๆ)</label>
+              <input
+                id="hotelOther"
+                type="text"
+                value={hotelOther}
+                onChange={(e) => setHotelOther(e.target.value)}
+                placeholder="ระบุชื่อโรงแรมที่พัก"
+              />
+            </div>
+          )}
         </section>
 
         {successMessage && <p>{successMessage}</p>}
