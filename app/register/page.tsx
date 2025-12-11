@@ -4,8 +4,8 @@
 import './register.css';
 import { useState, type FormEvent, type ChangeEvent } from 'react';
 
-// ✅ เพิ่ม 'other' เพื่อใช้กับกรณีระบุเอง
-type FoodType = 'normal' | 'vegetarian' | 'halal' | 'other';
+// ❌ ตัด 'other' ออก เหลือเฉพาะ 3 แบบ
+type FoodType = 'normal' | 'vegetarian' | 'halal';
 
 type PositionType = 'chief_judge' | 'associate_judge';
 
@@ -14,8 +14,6 @@ type Participant = {
   position: PositionType;
   phone: string;
   foodType: FoodType;
-  // ✅ ช่องให้พิมพ์อาหารอื่น ๆ
-  foodOther?: string;
 };
 
 // ✅ รายชื่อโรงแรมในตัวเมืองสุราษฎร์ธานี (ตามแผนที่ข้อ 1–13)
@@ -142,14 +140,14 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
 };
 
 export default function RegisterPage() {
-  const [organization, setOrganization] = useState(''); // จะมาจาก list ตามภาค
+  const [organization, setOrganization] = useState('');
   const [province, setProvince] = useState('');
   const [region, setRegion] = useState(''); // 0–9
-  const [coordinatorName, setCoordinatorName] = useState(''); // ชื่อ-สกุลผู้ประสานงานของศาลนี้
+  const [coordinatorName, setCoordinatorName] = useState('');
 
   // ✅ แยก state ของ "ตัวเลือกใน select" ออกจาก "ชื่อโรงแรมจริงที่ส่งไป backend"
-  const [hotelSelect, setHotelSelect] = useState(''); // ค่าใน <select>
-  const [hotelOther, setHotelOther] = useState(''); // ข้อความโรงแรมอื่น ๆ ที่พิมพ์เอง
+  const [hotelSelect, setHotelSelect] = useState('');
+  const [hotelOther, setHotelOther] = useState('');
 
   const [participants, setParticipants] = useState<Participant[]>([
     {
@@ -157,7 +155,6 @@ export default function RegisterPage() {
       position: 'associate_judge',
       phone: '',
       foodType: 'normal',
-      foodOther: '',
     },
   ]);
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -182,11 +179,6 @@ export default function RegisterPage() {
         [field]: value,
       } as Participant;
 
-      // ✅ ถ้าเปลี่ยนประเภทอาหารเป็นอย่างอื่นที่ไม่ใช่ other ให้ล้างข้อความ foodOther ทิ้ง
-      if (field === 'foodType' && value !== 'other') {
-        updated.foodOther = '';
-      }
-
       copy[index] = updated;
       return copy;
     });
@@ -200,7 +192,6 @@ export default function RegisterPage() {
         position: 'associate_judge',
         phone: '',
         foodType: 'normal',
-        foodOther: '',
       },
     ]);
   }
@@ -219,16 +210,13 @@ export default function RegisterPage() {
     setRegion(newRegion);
 
     const orgs = REGION_ORGANIZATIONS[newRegion] ?? [];
-    // ถ้า organization ปัจจุบันไม่อยู่ใน list ใหม่ ให้เคลียร์
     if (!orgs.includes(organization)) {
       setOrganization('');
     }
 
-    // ✅ ถ้าเลือกศาลกลาง (region = 0) ให้ตั้งจังหวัดเป็นกรุงเทพฯ อัตโนมัติ
     if (newRegion === '0') {
       setProvince('กรุงเทพมหานคร');
     } else {
-      // ภาคอื่น ๆ ให้เคลียร์จังหวัด รอให้ดึงจากชื่อศาลอีกที หรือพิมพ์เอง
       setProvince('');
     }
   }
@@ -237,25 +225,21 @@ export default function RegisterPage() {
     const org = e.target.value;
     setOrganization(org);
 
-    // ✅ ถ้าเป็นศาลเยาวชนและครอบครัวกลาง ให้ fix จังหวัดเป็นกรุงเทพฯ
     if (region === '0') {
       setProvince('กรุงเทพมหานคร');
       return;
     }
 
-    // ดึงชื่อจังหวัดจากข้อความหลังคำว่า "จังหวัด" ถ้ามี
     const provinceMatch = org.split('จังหวัด')[1]?.trim();
     if (provinceMatch) {
       setProvince(provinceMatch);
     }
   }
 
-  // ✅ จัดการตอนเลือกโรงแรมจาก select
   function handleHotelSelectChange(e: ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value;
     setHotelSelect(value);
 
-    // ถ้าเปลี่ยนจาก "อื่น ๆ" ไปเป็นโรงแรมที่มีใน list ให้ล้างช่องพิมพ์ออก
     if (value !== '__other') {
       setHotelOther('');
     }
@@ -266,7 +250,6 @@ export default function RegisterPage() {
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    // ✅ คำนวณชื่อโรงแรมจริงที่ต้องส่งไป backend
     const actualHotelName =
       hotelSelect === '__other' ? hotelOther.trim() : hotelSelect.trim();
 
@@ -286,7 +269,6 @@ export default function RegisterPage() {
       setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
       return;
     }
-    // ✅ ตรวจทั้งกรณีเลือกจาก list และกรณีพิมพ์เอง
     if (!actualHotelName) {
       setErrorMessage('กรุณาเลือกหรือระบุโรงแรมที่พัก');
       return;
@@ -312,14 +294,12 @@ export default function RegisterPage() {
       formData.append('province', province);
       formData.append('region', region);
       formData.append('coordinatorName', coordinatorName);
-      // ✅ ส่งชื่อโรงแรมจริง (ไม่ว่าจะมาจาก list หรือพิมพ์เอง)
       formData.append('hotelName', actualHotelName);
       formData.append('totalAttendees', String(totalAttendees));
-      // ✅ ตอนนี้ participants มีทั้ง foodType + foodOther แล้ว
       formData.append('participants', JSON.stringify(participants));
 
       if (slipFile) {
-        formData.append('slip', slipFile); // << แนบสลิปแค่ไฟล์เดียว
+        formData.append('slip', slipFile);
       }
 
       const res = await fetch('/api/register', {
@@ -357,13 +337,12 @@ export default function RegisterPage() {
           position: 'associate_judge',
           phone: '',
           foodType: 'normal',
-          foodOther: '',
         },
       ]);
       setSlipFile(null);
       setHotelSelect('');
       setHotelOther('');
-      // ถ้าต้องการ reset อย่างอื่น เพิ่ม setState ตรงนี้ได้ เช่น:
+      // ถ้าต้องการ reset อย่างอื่น:
       // setRegion(''); setOrganization(''); setProvince(''); setCoordinatorName('');
     } catch (err: any) {
       console.error(err);
@@ -558,30 +537,8 @@ export default function RegisterPage() {
                     <option value="normal">ทั่วไป</option>
                     <option value="vegetarian">มังสวิรัติ</option>
                     <option value="halal">อิสลาม</option>
-                    <option value="other">อื่น ๆ (ระบุ)</option>
                   </select>
                 </div>
-
-                {p.foodType === 'other' && (
-                  <div className="register-field">
-                    <label className="register-label">
-                      ระบุอาหารอื่น ๆ
-                    </label>
-                    <input
-                      type="text"
-                      className="register-input"
-                      value={p.foodOther ?? ''}
-                      onChange={(e) =>
-                        handleParticipantChange(
-                          index,
-                          'foodOther',
-                          e.target.value,
-                        )
-                      }
-                      placeholder="เช่น ไม่ทานเนื้อวัว, แพ้ไข่, แพ้ถั่ว ฯลฯ"
-                    />
-                  </div>
-                )}
 
                 {participants.length > 1 && (
                   <button
