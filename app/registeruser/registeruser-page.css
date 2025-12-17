@@ -1,0 +1,345 @@
+/* app/registeruser/form/registeruser-form.css
+   ✅ โทนอุ่น-อ่านง่าย (Elder-friendly)
+   ✅ Participants เป็นแถวเดียวบน Desktop / Tablet + Mobile เรียงลง
+*/
+
+/* ===== THEME (fallback ถ้ายังไม่ได้ประกาศใน global) ===== */
+:root {
+  --primary-blue: #5bc0de;
+  --primary-green: #5cb85c;
+  --primary-amber: #f0ad4e;
+  --primary-brown: #8a5c3a;
+
+  --text-primary: #1a1515;
+  --text-secondary: #6b5d54;
+  --text-tertiary: #8a7d74;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #faf8f3;
+  --bg-tertiary: #f5f3ee;
+
+  --border-light: rgba(148, 116, 84, 0.12);
+  --border-medium: rgba(148, 116, 84, 0.2);
+
+  --shadow-soft: 0 4px 12px rgba(139, 92, 56, 0.08);
+  --shadow-medium: 0 8px 24px rgba(139, 92, 56, 0.12);
+
+  --ring: 0 0 0 4px rgba(91, 192, 222, 0.18);
+}
+
+/* ===== BASE ===== */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Kanit', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+}
+
+.registeruser-page {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(240, 173, 78, 0.14), transparent 60%),
+              radial-gradient(900px 500px at 90% 10%, rgba(91, 192, 222, 0.14), transparent 55%),
+              linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 55%, var(--bg-primary) 100%);
+  padding: 28px 16px 56px;
+  display: flex;
+  justify-content: center;
+}
+
+.registeruser-card {
+  width: 100%;
+  max-width: 1100px;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-light);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+/* ===== HEADER ===== */
+.registeruser-header {
+  padding: 22px 22px 18px;
+  border-bottom: 2px solid var(--border-medium);
+  background: linear-gradient(180deg, #fff 0%, rgba(91, 192, 222, 0.06) 100%);
+}
+
+.registeruser-header h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.6vw, 1.9rem);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  font-weight: 900;
+}
+
+.registeruser-header p {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* ===== FORM LAYOUT ===== */
+.registeruser-form {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.registeruser-section {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-light);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.registeruser-section__title {
+  margin: 0 0 14px 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.registeruser-section__title::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--primary-blue);
+  box-shadow: 0 0 0 6px rgba(91, 192, 222, 0.18);
+}
+
+/* ===== FIELD (ใช้กับหน้าที่เรียงเป็นคอลัมน์) ===== */
+.registeruser-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.registeruser-field:last-child { margin-bottom: 0; }
+
+.registeruser-label {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.registeruser-help {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* ===== INPUTS (Global) ===== */
+.registeruser-input,
+.registeruser-select {
+  width: 100%;
+  height: 48px;
+  padding: 10px 12px;
+  font-size: 1.02rem;
+  border-radius: 12px;
+  border: 2px solid var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.02);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .06s ease, background-color .18s ease;
+}
+
+.registeruser-input::placeholder { color: rgba(107, 93, 84, 0.7); }
+
+.registeruser-input:focus,
+.registeruser-select:focus {
+  outline: none;
+  border-color: rgba(91, 192, 222, 0.75);
+  box-shadow: var(--ring);
+}
+
+.registeruser-input:disabled,
+.registeruser-select:disabled {
+  opacity: 0.7;
+  background: var(--bg-tertiary);
+}
+
+/* ===== ACTIONS / BUTTONS ===== */
+.registeruser-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 10px 22px 0;
+}
+
+.registeruser-button {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(91, 192, 222, 0.45);
+  background: linear-gradient(120deg, rgba(91, 192, 222, 0.92), rgba(91, 192, 222, 0.82));
+  color: var(--bg-primary);
+  font-weight: 900;
+  font-size: 1.02rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+.registeruser-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-medium);
+  filter: saturate(1.05);
+}
+
+.registeruser-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-soft);
+}
+
+.registeruser-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+/* ===== MESSAGE ===== */
+.registeruser-error,
+.registeruser-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 2px solid;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.registeruser-error {
+  background: rgba(240, 173, 78, 0.14);
+  border-color: rgba(240, 173, 78, 0.55);
+  color: #6a3f0f;
+}
+
+.registeruser-note {
+  background: rgba(92, 184, 92, 0.14);
+  border-color: rgba(92, 184, 92, 0.55);
+  color: #1f4a1f;
+}
+
+/* =========================================================
+   ✅ PARTICIPANTS (เดสก์ท็อปแถวเดียว)
+========================================================= */
+
+.participants-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.participants-total {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2.1rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* ✅ แถวเดียวบน Desktop */
+.participant-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  flex-wrap: nowrap;        /* ✅ บรรทัดเดียว */
+  overflow: hidden;         /* กันล้น */
+  padding: 12px;
+
+  background: linear-gradient(180deg, #fff 0%, rgba(245, 243, 238, 0.55) 100%);
+  border: 2px solid var(--border-light);
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+
+  transition: transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.participant-row:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-medium);
+  border-color: rgba(148, 116, 84, 0.22);
+}
+
+/* ✅ อนุญาตให้ flex item “หดได้จริง” (สำคัญมาก) */
+.participant-row > * { min-width: 0; }
+
+.participant-left {
+  flex: 0 0 auto;
+  font-weight: 900;
+  color: var(--text-primary);
+  white-space: nowrap;
+
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(138, 92, 58, 0.08);
+  border: 1px solid rgba(138, 92, 58, 0.18);
+}
+
+/* ✅ Inputs ในแถว */
+.participant-input,
+.participant-select {
+  height: 44px;
+  padding: 8px 10px;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: 2px solid var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+  min-width: 0; /* ✅ กันหลุดแถว */
+}
+
+.participant-input::placeholder { color: rgba(107, 93, 84, 0.7); }
+
+.participant-input:focus,
+.participant-select:focus {
+  outline: none;
+  border-color: rgba(91, 192, 222, 0.75);
+  box-shadow: var(--ring);
+}
+
+/* ✅ สัดส่วนเหมือนภาพ: ชื่อกว้างสุด / ตำแหน่งกลาง / เบอร์กลาง / อาหารแคบ */
+.participant-input.name { flex: 1 1 320px; }
+.participant-select.position { flex: 0 1 240px; }
+.participant-input.phone { flex: 0 1 240px; }
+.participant-select.food { flex: 0 0 120px; }
+
+/* ===== Responsive: ถ้าจอเริ่มแคบ ให้ค่อย ๆ อนุญาต wrap ===== */
+@media (max-width: 980px) {
+  .participant-row { flex-wrap: wrap; }
+  .participant-left { width: 100%; text-align: center; }
+  .participant-input,
+  .participant-select { flex: 1 1 240px; }
+  .participant-select.food { flex: 1 1 180px; }
+}
+
+/* ===== MOBILE: เรียงลงเต็มแถว ===== */
+@media (max-width: 768px) {
+  .registeruser-form { padding: 16px; }
+  .registeruser-section { padding: 14px; }
+
+  .participant-row { gap: 8px; }
+  .participant-left { width: 100%; justify-content: center; text-align: center; }
+
+  .participant-input,
+  .participant-select {
+    width: 100%;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}

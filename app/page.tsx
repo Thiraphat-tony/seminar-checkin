@@ -35,7 +35,7 @@ const actions = [
   {
     title: '✍️ ลงทะเบียนใหม่',
     description: 'กรอกข้อมูลผู้เข้าร่วมด้วยตัวเอง',
-    href: '/register',
+    href: '/registeruser',
     icon: '✍️',
     color: 'green',
   },

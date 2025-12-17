@@ -1,12 +1,11 @@
 // app/registeruser/page.tsx
 'use client';
-
-import './registeruser.css';
-import { useState, type FormEvent, type ChangeEvent } from 'react';
+import './registeruser-page.css';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 // ✅ ประเภทอาหาร (ตัด other ออก เหลือ 3 แบบ)
 type FoodType = 'normal' | 'vegetarian' | 'halal';
-
 type PositionType = 'chief_judge' | 'associate_judge';
 
 type Participant = {
@@ -48,7 +47,7 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
     'ศาลเยาวชนและครอบครัวจังหวัดสิงห์บุรี',
     'ศาลเยาวชนและครอบครัวจังหวัดอ่างทอง',
     'ศาลแพ่งมีนบุรีแผนกคดีเยาวชนและครอบครัว',
-    'ศาลอาญามีนบุรีแผนกคดีเยาวชนและครอบครัว'
+    'ศาลอาญามีนบุรีแผนกคดีเยาวชนและครอบครัว',
   ],
   '2': [
     'ศาลเยาวชนและครอบครัวจังหวัดจันทบุรี',
@@ -140,66 +139,99 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
   ],
 };
 
+type SavedState = {
+  region: string;
+  organization: string;
+  province: string;
+  coordinatorName: string;
+  coordinatorPhone: string;
+  hotelSelect: string;
+  hotelOther: string;
+  count: number;
+  completed: boolean;
+};
+
+const STORAGE_KEY = 'registeruser:state';
+const DRAFT_KEY = 'registeruser:draft';
+const PARTICIPANTS_KEY = 'registeruser:participants';
+
+function clampCount(n: number) {
+  if (!Number.isFinite(n)) return 1;
+  const int = Math.floor(n);
+  return Math.max(1, Math.min(500, int));
+}
+
 export default function RegisterUserPage() {
+  const router = useRouter();
+
   const [organization, setOrganization] = useState('');
   const [province, setProvince] = useState('');
   const [region, setRegion] = useState(''); // 0–9
   const [coordinatorName, setCoordinatorName] = useState('');
-  const [coordinatorPhone, setCoordinatorPhone] = useState(''); // ✅ เบอร์โทรผู้ประสานงาน
+  const [coordinatorPhone, setCoordinatorPhone] = useState('');
 
-  // ✅ แยก state ของ "ตัวเลือกใน select" ออกจาก "ชื่อโรงแรมจริงที่ส่งไป backend"
+  // ✅ โรงแรม
   const [hotelSelect, setHotelSelect] = useState('');
   const [hotelOther, setHotelOther] = useState('');
 
-  const [participants, setParticipants] = useState<Participant[]>([
-    {
-      fullName: '',
-      position: 'associate_judge',
-      phone: '',
-      foodType: 'normal',
-    },
-  ]);
+  // ✅ แนบสลิปอยู่หน้านี้
   const [slipFile, setSlipFile] = useState<File | null>(null);
+
+  // ✅ จำนวนผู้เข้าร่วม (พิมพ์ได้)
+  const [totalInput, setTotalInput] = useState<string>('1');
+
+  // ✅ กลับมาหน้านี้แล้วปุ่มเป็น “แก้ไข”
+  const [completed, setCompleted] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const totalAttendees = participants.length;
+  const currentOrganizations = useMemo(
+    () => REGION_ORGANIZATIONS[region] ?? [],
+    [region],
+  );
 
-  const currentOrganizations = REGION_ORGANIZATIONS[region] ?? [];
+  // ✅ โหลดสถานะเดิม (กัน “กดแล้วกลับมาหน้านี้” แล้วข้อความค้าง)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
 
-  function handleParticipantChange(
-    index: number,
-    field: keyof Participant,
-    value: string,
-  ) {
-    setParticipants((prev) => {
-      const copy = [...prev];
-      const updated: Participant = {
-        ...copy[index],
-        [field]: value,
-      } as Participant;
+      const s = JSON.parse(raw) as SavedState;
 
-      copy[index] = updated;
-      return copy;
-    });
-  }
+      setRegion(s.region ?? '');
+      setOrganization(s.organization ?? '');
+      setProvince(s.province ?? '');
+      setCoordinatorName(s.coordinatorName ?? '');
+      setCoordinatorPhone(s.coordinatorPhone ?? '');
+      setHotelSelect(s.hotelSelect ?? '');
+      setHotelOther(s.hotelOther ?? '');
+      setTotalInput(String(s.count ?? 1));
+      setCompleted(!!s.completed);
 
-  function handleAddParticipant() {
-    setParticipants((prev) => [
-      ...prev,
-      {
-        fullName: '',
-        position: 'associate_judge',
-        phone: '',
-        foodType: 'normal',
-      },
-    ]);
-  }
+      setErrorMessage(null);
+      setSuccessMessage(null);
+    } catch {
+      // ignore
+    }
+  }, []);
 
-  function handleRemoveParticipant(index: number) {
-    setParticipants((prev) => prev.filter((_, i) => i !== index));
+  function saveState(nextCount: number, nextCompleted: boolean) {
+    const s: SavedState = {
+      region,
+      organization,
+      province,
+      coordinatorName,
+      coordinatorPhone,
+      hotelSelect,
+      hotelOther,
+      count: nextCount,
+      completed: nextCompleted,
+    };
+
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(s));
   }
 
   function handleSlipChange(e: ChangeEvent<HTMLInputElement>) {
@@ -212,15 +244,10 @@ export default function RegisterUserPage() {
     setRegion(newRegion);
 
     const orgs = REGION_ORGANIZATIONS[newRegion] ?? [];
-    if (!orgs.includes(organization)) {
-      setOrganization('');
-    }
+    if (!orgs.includes(organization)) setOrganization('');
 
-    if (newRegion === '0') {
-      setProvince('กรุงเทพมหานคร');
-    } else {
-      setProvince('');
-    }
+    if (newRegion === '0') setProvince('กรุงเทพมหานคร');
+    else setProvince('');
   }
 
   function handleOrganizationChange(e: ChangeEvent<HTMLSelectElement>) {
@@ -233,20 +260,35 @@ export default function RegisterUserPage() {
     }
 
     const provinceMatch = org.split('จังหวัด')[1]?.trim();
-    if (provinceMatch) {
-      setProvince(provinceMatch);
-    }
+    if (provinceMatch) setProvince(provinceMatch);
   }
 
   function handleHotelSelectChange(e: ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value;
     setHotelSelect(value);
-
-    if (value !== '__other') {
-      setHotelOther('');
-    }
+    if (value !== '__other') setHotelOther('');
   }
 
+  // ✅ ปุ่ม “บันทึกจำนวนผู้เข้าร่วม / แก้ไข” -> ไปหน้า /registeruser/form?count= (แท็บเดิม)
+  function goToFormCount() {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    // ✅ ไม่บังคับ “โรงแรม/สลิป” ตอนกดปุ่มนี้
+    if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
+    if (!organization.trim()) return setErrorMessage('กรุณาเลือกหน่วยงาน / ศาล');
+    if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
+    if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
+    if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
+
+    const count = clampCount(Number(totalInput));
+    setTotalInput(String(count));
+    saveState(count, completed);
+
+    router.push(`/registeruser/form?count=${count}`);
+  }
+
+  // ✅ ส่งแบบฟอร์มจริง (หน้านี้)
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSuccessMessage(null);
@@ -255,41 +297,28 @@ export default function RegisterUserPage() {
     const actualHotelName =
       hotelSelect === '__other' ? hotelOther.trim() : hotelSelect.trim();
 
-    if (!region) {
-      setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
-      return;
+    if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
+    if (!organization.trim()) return setErrorMessage('กรุณาเลือกหน่วยงาน / ศาล');
+    if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
+    if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
+    if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
+    if (!actualHotelName) return setErrorMessage('กรุณาเลือกหรือระบุโรงแรมที่พัก');
+    if (!slipFile) return setErrorMessage('กรุณาแนบไฟล์หลักฐานค่าลงทะเบียน');
+
+    // ✅ ดึงผู้เข้าร่วมจากหน้า /registeruser/form
+    let participants: Participant[] = [];
+    try {
+      const raw = sessionStorage.getItem(PARTICIPANTS_KEY);
+      if (raw) participants = JSON.parse(raw) as Participant[];
+    } catch {
+      // ignore
     }
-    if (!organization.trim()) {
-      setErrorMessage('กรุณาเลือกหน่วยงาน / ศาล');
-      return;
+
+    if (!Array.isArray(participants) || participants.length === 0) {
+      return setErrorMessage('กรุณากด “บันทึกจำนวนผู้เข้าร่วม” แล้วกรอกข้อมูลผู้เข้าร่วมให้ครบถ้วน');
     }
-    if (!province.trim()) {
-      setErrorMessage('กรุณากรอกจังหวัด');
-      return;
-    }
-    if (!coordinatorName.trim()) {
-      setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
-      return;
-    }
-    if (!coordinatorPhone.trim()) {
-      setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
-      return;
-    }
-    if (!actualHotelName) {
-      setErrorMessage('กรุณาเลือกหรือระบุโรงแรมที่พัก');
-      return;
-    }
-    if (!slipFile) {
-      setErrorMessage('กรุณาแนบไฟล์หลักฐานค่าลงทะเบียน');
-      return;
-    }
-    if (participants.length === 0) {
-      setErrorMessage('ต้องมีผู้เข้าร่วมอย่างน้อย 1 คน');
-      return;
-    }
-    if (!participants[0].fullName.trim()) {
-      setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
-      return;
+    if (!participants[0]?.fullName?.trim()) {
+      return setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
     }
 
     try {
@@ -300,14 +329,11 @@ export default function RegisterUserPage() {
       formData.append('province', province);
       formData.append('region', region);
       formData.append('coordinatorName', coordinatorName);
-      formData.append('coordinatorPhone', coordinatorPhone); // ✅ ส่งไป backend
+      formData.append('coordinatorPhone', coordinatorPhone);
       formData.append('hotelName', actualHotelName);
-      formData.append('totalAttendees', String(totalAttendees));
+      formData.append('totalAttendees', String(participants.length));
       formData.append('participants', JSON.stringify(participants));
-
-      if (slipFile) {
-        formData.append('slip', slipFile);
-      }
+      formData.append('slip', slipFile);
 
       const res = await fetch('/api/registeruser', {
         method: 'POST',
@@ -321,45 +347,19 @@ export default function RegisterUserPage() {
         } catch {
           // ignore
         }
-
-        const errorMsg =
-          (data &&
-            typeof data === 'object' &&
-            'message' in data &&
-            data.message) ||
+        const msg =
+          (data && typeof data === 'object' && 'message' in data && data.message) ||
           'ไม่สามารถบันทึกข้อมูลได้';
-
-        console.error('API Error:', { status: res.status, data });
-        throw new Error(String(errorMsg));
+        throw new Error(String(msg));
       }
 
-      const result = await res.json();
-      console.log('Registration success:', result);
-      setSuccessMessage('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว');
-      setErrorMessage(null);
+      await res.json();
 
-      setParticipants([
-        {
-          fullName: '',
-          position: 'associate_judge',
-          phone: '',
-          foodType: 'normal',
-        },
-      ]);
-      setSlipFile(null);
-      setHotelSelect('');
-      setHotelOther('');
-      // ถ้าต้องการ reset อย่างอื่น:
-      // setRegion('');
-      // setOrganization('');
-      // setProvince('');
-      // setCoordinatorName('');
-      // setCoordinatorPhone('');
+      setSuccessMessage('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว');
+      setCompleted(true);
+      saveState(clampCount(Number(totalInput)), true);
     } catch (err: any) {
-      console.error(err);
-      setErrorMessage(
-        err.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
-      );
+      setErrorMessage(err?.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setSubmitting(false);
     }
@@ -369,9 +369,11 @@ export default function RegisterUserPage() {
     <main className="registeruser-page">
       <div className="registeruser-card">
         <header className="registeruser-header">
-          <h1>แบบฟอร์มลงทะเบียนการประชุมสัมมนาทางวิชาการ
-ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัว
-ทั่วราชอาณาจักร ประจำปี ๒๕๖๙</h1>
+          <h1>
+            แบบฟอร์มลงทะเบียนการประชุมสัมมนาทางวิชาการ
+            ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัว
+            ทั่วราชอาณาจักร ประจำปี ๒๕๖๙
+          </h1>
           <p>
             สำหรับผู้พิพากษาหัวหน้าศาลฯ และผู้พิพากษาสมทบ
             กรุณากรอกข้อมูลให้ครบถ้วนก่อนกดส่งแบบฟอร์ม
@@ -396,33 +398,15 @@ export default function RegisterUserPage() {
               >
                 <option value="">-- เลือกสังกัดภาค / ศาลกลาง --</option>
                 <option value="0">ศาลเยาวชนและครอบครัวกลาง</option>
-                <option value="1">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 1
-                </option>
-                <option value="2">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 2
-                </option>
-                <option value="3">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 3
-                </option>
-                <option value="4">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 4
-                </option>
-                <option value="5">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 5
-                </option>
-                <option value="6">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 6
-                </option>
-                <option value="7">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 7
-                </option>
-                <option value="8">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 8
-                </option>
-                <option value="9">
-                  ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 9
-                </option>
+                <option value="1">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 1</option>
+                <option value="2">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 2</option>
+                <option value="3">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 3</option>
+                <option value="4">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 4</option>
+                <option value="5">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 5</option>
+                <option value="6">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 6</option>
+                <option value="7">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 7</option>
+                <option value="8">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 8</option>
+                <option value="9">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 9</option>
               </select>
             </div>
 
@@ -466,10 +450,7 @@ export default function RegisterUserPage() {
             </div>
 
             <div className="registeruser-field">
-              <label
-                htmlFor="coordinatorName"
-                className="registeruser-label"
-              >
+              <label htmlFor="coordinatorName" className="registeruser-label">
                 ชื่อ-สกุลผู้ประสานงาน *
               </label>
               <input
@@ -484,10 +465,7 @@ export default function RegisterUserPage() {
             </div>
 
             <div className="registeruser-field">
-              <label
-                htmlFor="coordinatorPhone"
-                className="registeruser-label"
-              >
+              <label htmlFor="coordinatorPhone" className="registeruser-label">
                 เบอร์โทรศัพท์ผู้ประสานงาน *
               </label>
               <input
@@ -504,125 +482,47 @@ export default function RegisterUserPage() {
 
           {/* 2. ผู้เข้าร่วมสัมมนาฯ */}
           <section className="registeruser-section">
-            <h2 className="registeruser-section__title">
-              2. ผู้เข้าร่วมสัมมนาฯ
-            </h2>
-
-            {participants.map((p, index) => (
-              <fieldset key={index}>
-                <legend>ผู้เข้าร่วมคนที่ {index + 1}</legend>
-
-                <div className="registeruser-field">
-                  <label className="registeruser-label">ชื่อ - สกุล *</label>
-                  <input
-                    type="text"
-                    className="registeruser-input"
-                    value={p.fullName}
-                    onChange={(e) =>
-                      handleParticipantChange(
-                        index,
-                        'fullName',
-                        e.target.value,
-                      )
-                    }
-                    required={index === 0}
-                  />
-                </div>
-
-                <div className="registeruser-field">
-                  <label className="registeruser-label">ตำแหน่ง *</label>
-                  <select
-                    className="registeruser-select"
-                    value={p.position}
-                    onChange={(e) =>
-                      handleParticipantChange(
-                        index,
-                        'position',
-                        e.target.value as PositionType,
-                      )
-                    }
-                    required
-                  >
-                    <option value="chief_judge">
-                      ผู้พิพากษาหัวหน้าศาลฯ
-                    </option>
-                    <option value="associate_judge">
-                      ผู้พิพากษาสมทบ
-                    </option>
-                  </select>
-                </div>
-
-                <div className="registeruser-field">
-                  <label className="registeruser-label">เบอร์โทรศัพท์</label>
-                  <input
-                    type="tel"
-                    className="registeruser-input"
-                    value={p.phone}
-                    onChange={(e) =>
-                      handleParticipantChange(
-                        index,
-                        'phone',
-                        e.target.value,
-                      )
-                    }
-                  />
-                </div>
-
-                <div className="registeruser-field">
-                  <label className="registeruser-label">ประเภทอาหาร</label>
-                  <select
-                    className="registeruser-select"
-                    value={p.foodType}
-                    onChange={(e) =>
-                      handleParticipantChange(
-                        index,
-                        'foodType',
-                        e.target.value as FoodType,
-                      )
-                    }
-                  >
-                    <option value="normal">ทั่วไป</option>
-                    <option value="vegetarian">มังสวิรัติ</option>
-                    <option value="halal">อิสลาม</option>
-                  </select>
-                </div>
-
-                {participants.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveParticipant(index)}
-                  >
-                    ลบผู้เข้าร่วมคนที่ {index + 1}
-                  </button>
-                )}
-              </fieldset>
-            ))}
-
-            <button
-              type="button"
-              onClick={handleAddParticipant}
-            >
-              + เพิ่มผู้เข้าร่วม
-            </button>
+            <h2 className="registeruser-section__title">2. ผู้เข้าร่วมสัมมนาฯ</h2>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">
-                รวมผู้เข้าร่วมทั้งหมด
-              </label>
+              <label className="registeruser-label">รวมผู้เข้าร่วมทั้งหมด *</label>
               <input
                 type="number"
+                min={1}
+                step={1}
                 className="registeruser-input"
-                value={totalAttendees}
-                readOnly
+                value={totalInput}
+                onChange={(e) => setTotalInput(e.target.value)}
+                onKeyDown={(e) => {
+                  // ✅ กัน Enter แล้วไป submit form โดยไม่ตั้งใจ
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    goToFormCount();
+                  }
+                }}
+                required
               />
+
+              <div className="registeruser-actions">
+                <button
+                  type="button"
+                  className="registeruser-button"
+                  onClick={goToFormCount}
+                  disabled={submitting}
+                >
+                  {completed ? 'แก้ไข' : 'บันทึกจำนวนผู้เข้าร่วม'}
+                </button>
+              </div>
+
+              {/* <p className="registeruser-help">
+                เมื่อกดปุ่ม ระบบจะไปหน้า <b>/registeruser/form?count=</b> เพื่อกรอกข้อมูลผู้เข้าร่วม
+              </p> */}
             </div>
           </section>
 
           {/* 3. หลักฐานค่าลงทะเบียน */}
           <section className="registeruser-section">
-            <h2 className="registeruser-section__title">
-              3. หลักฐานค่าลงทะเบียน
-            </h2>
+            <h2 className="registeruser-section__title">3. หลักฐานค่าลงทะเบียน</h2>
             <div className="registeruser-field">
               <label htmlFor="slip" className="registeruser-label">
                 แนบไฟล์ *
@@ -635,15 +535,14 @@ export default function RegisterUserPage() {
                 onChange={handleSlipChange}
                 required
               />
-              <p className="registeruser-help">
-                รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF
-              </p>
+              <p className="registeruser-help">รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF</p>
             </div>
           </section>
 
           {/* 4. โรงแรมที่พัก */}
           <section className="registeruser-section">
             <h2 className="registeruser-section__title">4. ข้อมูลเพิ่มเติม</h2>
+
             <div className="registeruser-field">
               <label htmlFor="hotelName" className="registeruser-label">
                 พักโรงแรมไหน *
@@ -667,10 +566,7 @@ export default function RegisterUserPage() {
 
             {hotelSelect === '__other' && (
               <div className="registeruser-field">
-                <label
-                  htmlFor="hotelOther"
-                  className="registeruser-label"
-                >
+                <label htmlFor="hotelOther" className="registeruser-label">
                   ชื่อโรงแรม (กรณีอื่น ๆ)
                 </label>
                 <input
@@ -685,22 +581,12 @@ export default function RegisterUserPage() {
             )}
           </section>
 
-          {successMessage && (
-            <p className="registeruser-note">{successMessage}</p>
-          )}
-          {errorMessage && (
-            <p className="registeruser-error">{errorMessage}</p>
-          )}
+          {successMessage && <p className="registeruser-note">{successMessage}</p>}
+          {errorMessage && <p className="registeruser-error">{errorMessage}</p>}
 
           <div className="registeruser-actions">
-            <button
-              type="submit"
-              className="registeruser-button"
-              disabled={submitting}
-            >
-              {submitting
-                ? 'กำลังบันทึก...'
-                : 'ส่งแบบฟอร์มลงทะเบียน'}
+            <button type="submit" className="registeruser-button" disabled={submitting}>
+              {submitting ? 'กำลังบันทึก...' : 'ส่งแบบฟอร์มลงทะเบียน'}
             </button>
           </div>
         </form>
