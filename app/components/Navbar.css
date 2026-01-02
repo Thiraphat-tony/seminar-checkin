@@ -11,7 +11,7 @@
 }
 
 .navbar__container {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
   padding: 0 16px;
   display: flex;
@@ -50,7 +50,7 @@
   transform: scale(1.05);
 }
 
-.navbar__menu {
+.navbar__menu {         /* เริ่มบรรทัด 53 */
   display: flex;
   list-style: none;
   gap: 8px;
@@ -58,8 +58,18 @@
   padding: 0;
   flex: 1;
   justify-content: center;
-  flex-wrap: wrap;
+
+  flex-wrap: nowrap;    /* ✅ แนะนำให้เป็นบรรทัดเดียว */
+  overflow: visible;    /* ✅ ไม่ให้มีแถบเลื่อน */
+        /* ✅ แก้บรรทัด 61 */
+
+  overflow-x: auto;           /* ✅ เพิ่ม */
+  overflow-y: hidden;         /* ✅ เพิ่ม */
+  -webkit-overflow-scrolling: touch; /* ✅ เพิ่ม */
+  min-width: 0;               /* ✅ เพิ่ม */
 }
+
+
 
 .navbar__item {
   flex-shrink: 0;

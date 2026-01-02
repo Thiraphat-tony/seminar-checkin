@@ -3,8 +3,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, useMemo } from 'react';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { useEffect, useMemo, useState } from 'react';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabaseBrowser';
+import { getProvinceNameFromKey } from '@/lib/provinceKeys';
 import './Navbar.css';
 
 const navLinks = [
@@ -16,18 +18,47 @@ const navLinks = [
   { href: '/admin/hotel-summary', label: 'ตัวสรุปยอด', icon: '🧾' },
 ];
 
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getDisplayNameFromEmail(email?: string | null) {
+  if (!email) return null;
+
+  const localPart = (email.split('@')[0] ?? '').trim();
+
+  // ✅ staff email (encode จังหวัดไว้)
+  if (email.endsWith('@staff.local')) {
+    // Prefer the canonical Thai province name when we can map it from the local part
+    const fromKey = getProvinceNameFromKey(localPart);
+    if (fromKey) return fromKey;
+
+    const province = safeDecodeURIComponent(localPart).trim();
+    return province || 'เจ้าหน้าที่';
+  }
+
+  // email ปกติ
+  return localPart || 'User';
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const supabase = useMemo<SupabaseClient | null>(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-    if (!url || !anon) return null;
-    return createClient(url, anon);
+    try {
+      return getBrowserClient();
+    } catch {
+      return null as any;
+    }
   }, []);
 
   useEffect(() => {
@@ -36,35 +67,28 @@ export default function Navbar() {
       return;
     }
 
-    // Check initial session
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      const session = data?.session;
-      
-      if (session?.user) {
+    const applySession = (session: any) => {
+      const user = session?.user;
+      if (user) {
         setIsLoggedIn(true);
-        setUserName(session.user.email?.split('@')[0] || 'User');
+        setUserName(getDisplayNameFromEmail(user.email));
       } else {
         setIsLoggedIn(false);
         setUserName(null);
       }
+    };
+
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      applySession(data?.session);
       setLoading(false);
     };
 
     checkAuth();
 
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session?.user) {
-          setIsLoggedIn(true);
-          setUserName(session.user.email?.split('@')[0] || 'User');
-        } else {
-          setIsLoggedIn(false);
-          setUserName(null);
-        }
-      }
-    );
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session);
+    });
 
     return () => {
       authListener?.subscription.unsubscribe();
@@ -73,22 +97,23 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     if (!supabase) return;
+
     await supabase.auth.signOut();
-    
-    // ลบ cookie
     document.cookie = 'sb-access-token=; path=/; max-age=0';
-    
+
     router.push('/login');
     router.refresh();
   };
 
-  // ตรวจสอบว่าลิงก์ไหน active
   const isActive = (href: string) => {
-    if (href === '/') {
-      return pathname === '/';
-    }
+    if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
   };
+
+  // ✅ ถ้ายังไม่ล็อกอิน: โชว์เมนูแค่ /registeruser เท่านั้น
+  const visibleLinks = isLoggedIn
+    ? navLinks
+    : navLinks.filter((l) => l.href === '/registeruser');
 
   return (
     <nav className="navbar">
@@ -100,11 +125,12 @@ export default function Navbar() {
         </div>
 
         <ul className="navbar__menu">
-          {navLinks.map((link) => (
+          {visibleLinks.map((link) => (
             <li key={link.href} className="navbar__item">
               <Link
                 href={link.href}
                 className={`navbar__link ${isActive(link.href) ? 'navbar__link--active' : ''}`}
+                aria-current={isActive(link.href) ? 'page' : undefined}
               >
                 <span className="navbar__link-icon">{link.icon}</span>
                 <span className="navbar__link-label">{link.label}</span>
@@ -118,17 +144,28 @@ export default function Navbar() {
             <>
               {isLoggedIn ? (
                 <div className="navbar__user">
-                  <span className="navbar__username">👤 {userName}</span>
-                  <Link href="/profile" className="navbar__profile-btn" style={{ marginRight: '10px', padding: '8px 16px', background: '#667eea', color: 'white', borderRadius: '6px', textDecoration: 'none' }}>
-                    โปรไฟล์
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="navbar__logout-btn"
-                  >
-                    ออกจากระบบ
-                  </button>
-                </div>
+  <span className="navbar__username">👤 {userName}</span>
+
+  <button onClick={handleLogout} className="navbar__logout-btn">
+    ออกจากระบบ
+  </button>
+
+  <Link
+    href="/profile"
+    className="navbar__profile-btn"
+    style={{
+      marginRight: '10px',
+      padding: '8px 16px',
+      background: '#667eea',
+      color: 'white',
+      borderRadius: '6px',
+      textDecoration: 'none',
+    }}
+  >
+    โปรไฟล์
+  </Link>
+</div>
+
               ) : (
                 <Link href="/login" className="navbar__login-btn">
                   🔐 เข้าสู่ระบบ

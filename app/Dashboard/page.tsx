@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '../../lib/supabaseBrowser';
 import './Dashboard.css';
 
 export const dynamic = 'force-dynamic';
@@ -25,24 +25,12 @@ type AttendeeRow = {
 };
 
 // ---- ตั้งค่า Supabase ฝั่ง client ----
-// Use fallback empty string to prevent build-time errors; client will check at runtime
-const supabaseUrl = typeof window !== 'undefined' 
-  ? (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') 
-  : '';
-const supabaseAnonKey = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '')
-  : '';
-
-if (typeof window !== 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
-  console.warn(
-    'กรุณาตรวจสอบ NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ในไฟล์ .env.local'
-  );
+let supabase = null;
+try {
+  supabase = getBrowserClient();
+} catch (err) {
+  console.warn('Supabase browser client not configured:', err);
 }
-
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
 
 export default function DashboardPage() {
   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);

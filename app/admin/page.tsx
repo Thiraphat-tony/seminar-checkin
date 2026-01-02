@@ -1,5 +1,5 @@
 // app/admin/page.tsx
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForPage } from '@/lib/requireStaffForPage';
 import ForceCheckinButton from './ForceCheckinButton';
 import AdminSlipUploadButton from './AdminSlipUploadButton';
 import AdminSlipClearButton from './AdminSlipClearButton';
@@ -111,7 +111,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const organizationFilter = (sp.organization ?? '').trim().toLowerCase();
   const provinceFilter = (sp.province ?? '').trim().toLowerCase();
 
-  const supabase = createServerClient();
+  const { supabase, staff } = await requireStaffForPage({ redirectTo: '/login' });
 
   // --- Count all filtered rows (for pagination) ---
   let countQuery = supabase
@@ -129,6 +129,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   if (regionFilter) countQuery = countQuery.eq('region', regionFilter);
   if (provinceFilter) countQuery = countQuery.ilike('province', `%${provinceFilter}%`);
   if (organizationFilter) countQuery = countQuery.ilike('organization', `%${organizationFilter}%`);
+
+  // If the logged-in staff is not super_admin, restrict to their province only
+  // Exception: staff from สุราษฎร์ธานี can view all provinces
+  if (staff && staff.role !== 'super_admin') {
+    const prov = (staff.province_name ?? '').trim();
+    const isSurat = prov.includes('สุราษฎร์');
+    if (prov && !isSurat) {
+      // apply additional province filter (case-insensitive)
+      countQuery = countQuery.ilike('province', `%${prov}%`);
+    }
+  }
 
   const { count: totalFiltered = 0 } = await countQuery;
 
@@ -168,6 +179,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   if (regionFilter) dataQuery = dataQuery.eq('region', regionFilter);
   if (provinceFilter) dataQuery = dataQuery.ilike('province', `%${provinceFilter}%`);
   if (organizationFilter) dataQuery = dataQuery.ilike('organization', `%${organizationFilter}%`);
+
+  // If the logged-in staff is not super_admin, restrict to their province only
+  // Exception: staff from สุราษฎร์ธานี can view all provinces
+  if (staff && staff.role !== 'super_admin') {
+    const prov = (staff.province_name ?? '').trim();
+    const isSurat = prov.includes('สุราษฎร์');
+    if (prov && !isSurat) {
+      dataQuery = dataQuery.ilike('province', `%${prov}%`);
+    }
+  }
 
   const { data, error } = await dataQuery;
 

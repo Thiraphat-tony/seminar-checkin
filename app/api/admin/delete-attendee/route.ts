@@ -1,6 +1,6 @@
 // app/api/admin/delete-attendee/route.ts
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
 type DeleteBody = {
   attendeeId?: string;
@@ -21,12 +21,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServerClient();
-
-    const { error } = await supabase
+    const auth = await requireStaffForApi();
+    if (!auth.ok) return auth.response;
+    const { supabase, staff } = auth;
+    let del = supabase
       .from('attendees')
       .delete()
       .eq('id', attendeeId);
+    if (staff.role !== 'super_admin') {
+      del = del.eq('province', staff.province_name);
+    }
+    const { error } = await del;
 
     if (error) {
       console.error('Delete attendee error:', error);

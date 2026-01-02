@@ -2,19 +2,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { getBrowserClient } from '../../../lib/supabaseBrowser';
 import "./attendee.css";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'กรุณาตรวจสอบ NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ใน .env.local'
-  );
+let supabase = null;
+try {
+  supabase = getBrowserClient();
+} catch (err) {
+  console.warn('Supabase browser client not configured:', err);
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type Attendee = {
   id: string;
