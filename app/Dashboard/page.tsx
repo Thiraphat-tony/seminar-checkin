@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { getBrowserClient } from '../../lib/supabaseBrowser';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import './Dashboard.css';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ type AttendeeRow = {
 };
 
 // ---- ตั้งค่า Supabase ฝั่ง client ----
-let supabase = null;
+let supabase: SupabaseClient | null = null;
 try {
   supabase = getBrowserClient();
 } catch (err) {
