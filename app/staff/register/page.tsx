@@ -34,7 +34,6 @@ export default function StaffRegisterPage() {
   })();
 
 
-  const [inviteCode, setInviteCode] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
@@ -75,7 +74,6 @@ export default function StaffRegisterPage() {
         body: JSON.stringify({
           provinceName: selectedProvince,
           password: password.trim(),
-          inviteCode: inviteCode.trim() || undefined,
         }),
       });
 
@@ -162,14 +160,7 @@ export default function StaffRegisterPage() {
           ตัวอย่างอีเมลสำหรับล็อกอิน: <code>{selectedProvinceKey ? `${selectedProvinceKey}@staff.local` : '-'}</code>
         </div>
 
-        <label htmlFor="invite">รหัสเชิญ (ถ้ามี)</label>
-        <input
-          id="invite"
-          type="text"
-          value={inviteCode}
-          onChange={(e) => setInviteCode(e.target.value)}
-          placeholder="กรอกเฉพาะกรณีมีรหัสเชิญ"
-        />
+
 
         <label htmlFor="password">ตั้งรหัสผ่าน</label>
         <input
