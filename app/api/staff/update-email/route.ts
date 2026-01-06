@@ -10,7 +10,7 @@ type Body = {
 
 export async function POST(req: Request) {
   try {
-    const auth = await requireStaffForApi();
+    const auth = await requireStaffForApi(req);
     if (!auth.ok) return auth.response;
 
     const body = (await req.json()) as Body;

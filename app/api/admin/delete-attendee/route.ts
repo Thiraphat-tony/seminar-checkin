@@ -21,17 +21,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const auth = await requireStaffForApi();
+    const auth = await requireStaffForApi(request);
     if (!auth.ok) return auth.response;
     const { supabase, staff } = auth;
-    let del = supabase
+    // Log attempt for debugging
+    console.log('Attempt delete attendee', { attendeeId, staff_user: staff.user_id, staff_province: staff.province_name, staff_role: staff.role });
+
+    let delQuery = supabase
       .from('attendees')
       .delete()
       .eq('id', attendeeId);
+
+    // If not super_admin, restrict by province — but staff from สุราษฎร์ธานี can operate across provinces (same logic as admin page)
     if (staff.role !== 'super_admin') {
-      del = del.eq('province', staff.province_name);
+      const prov = (staff.province_name ?? '').trim();
+      const isSurat = prov.includes('สุราษฎร์');
+      if (prov && !isSurat) {
+        delQuery = delQuery.eq('province', prov);
+      }
     }
-    const { error } = await del;
+
+    // Request deleted rows back to confirm deletion
+    const { data, error } = await delQuery.select('id');
 
     if (error) {
       console.error('Delete attendee error:', error);
@@ -39,8 +50,21 @@ export async function POST(request: Request) {
         {
           ok: false,
           message: 'ลบข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+          error: error.message,
         },
         { status: 500 }
+      );
+    }
+
+    // If nothing was deleted, return 404 so client can show appropriate message
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      console.warn('Delete attendee: no matching row found for delete', { attendeeId, staff_user: staff.user_id, staff_province: staff.province_name });
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'ไม่พบผู้เข้าร่วมที่ต้องการลบ หรือคุณไม่มีสิทธิ์ลบข้อมูลนี้',
+        },
+        { status: 404 }
       );
     }
 

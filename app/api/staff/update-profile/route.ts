@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
 export async function POST(req: NextRequest) {
-  const auth = await requireStaffForApi();
+  const auth = await requireStaffForApi(req);
   if (!auth.ok) return auth.response;
 
   const { supabase, staff } = auth;

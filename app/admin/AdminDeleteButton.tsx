@@ -64,13 +64,20 @@ export default function AdminDeleteButton({
         body: JSON.stringify({ attendeeId }),
       });
 
+      const data = await res.json().catch(() => null);
+
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(data?.message || 'ลบข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+        // If unauthorized/forbidden, prompt to re-login
+        if (res.status === 401 || res.status === 403) {
+          alert(data?.message || data?.error || 'ไม่ได้รับอนุญาต โปรดล็อกอินอีกครั้ง');
+          window.location.href = '/login';
+          return;
+        }
+
+        alert(data?.message || data?.error || 'ลบข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         return;
       }
 
-      const data = await res.json().catch(() => null);
       if (data?.message) {
         console.log(data.message);
       }

@@ -5,12 +5,13 @@ import { createServerClient } from '@/lib/supabaseServer';
 import type { StaffProfile } from '@/lib/requireStaffForPage';
 import { headers } from 'next/headers';
 
-export async function requireStaffForApi() {
+export async function requireStaffForApi(request?: Request) {
   const supabase = await createServerClient();
 
   let token: string | undefined;
   try {
-    const cookieHeader = (await headers()).get('cookie') ?? '';
+    // If a Request object is provided (route handlers), prefer reading the cookie from it.
+    const cookieHeader = request ? (request.headers.get('cookie') ?? '') : ((await headers()).get('cookie') ?? '');
 
     function parseCookies(header: string): Record<string, string> {
       return header
