@@ -134,7 +134,7 @@ export default function RegisterUserFormClient() {
     });
   }
 
-  function handleSave(e: FormEvent<HTMLFormElement>) {
+  async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -151,6 +151,19 @@ export default function RegisterUserFormClient() {
     if (!participants[0].fullName.trim()) {
       setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
       return;
+    }
+
+    // validate participant phones (if entered)
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+      if (p.phone && p.phone.trim()) {
+        const { normalizePhone, isValidPhone } = await import('@/lib/phone');
+        const n = normalizePhone(p.phone);
+        if (!isValidPhone(n)) {
+          setErrorMessage(`เบอร์โทรของผู้เข้าร่วมคนที่ ${i + 1} ต้องเป็นตัวเลข 10 หลัก`);
+          return;
+        }
+      }
     }
 
     try {

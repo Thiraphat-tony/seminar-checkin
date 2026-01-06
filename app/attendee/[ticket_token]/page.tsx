@@ -267,7 +267,7 @@ export default function Page() {
           </div>
 
           <div className="attendee-details">
-            <div>โทรศัพท์: {attendee.phone || 'ไม่ระบุ'}</div>
+            <div>โทรศัพท์: {maskPhone(attendee.phone, 'ไม่ระบุ')}</div>
             <div>ตำแหน่ง: {attendee.job_position || 'ไม่ระบุตำแหน่ง'}</div>
             <div>ภาค: {attendee.region ? `ภาค ${attendee.region}` : 'ไม่ระบุภาค'}</div>
             {attendee.region && (

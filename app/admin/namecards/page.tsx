@@ -2,6 +2,7 @@
 import { createServerClient } from '@/lib/supabaseServer';
 import AdminNav from '../AdminNav';
 import '../admin-page.css';
+import { maskPhone } from '@/lib/maskPhone';
 import DownloadNamecardsPdfButton from './DownloadNamecardsPdfButton';
 
 export const dynamic = 'force-dynamic';
@@ -216,7 +217,7 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
                         จังหวัด: {a.province || 'ไม่ระบุจังหวัด'}
                       </p>
                       <p className="namecard-item__phone">
-                        โทรศัพท์: {a.phone || 'ไม่ระบุ'}
+                        โทรศัพท์: {maskPhone(a.phone, 'ไม่ระบุ')}
                       </p>
                     </header>
 

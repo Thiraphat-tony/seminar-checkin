@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
     updateData.region = regionNum;
   }
 
+  // Validate phone if present: must be 10 digits after normalization
+  if (Object.prototype.hasOwnProperty.call(body, 'phone') && updateData.phone != null) {
+    const { phoneForStorage } = await import('@/lib/phone');
+    const normalized = phoneForStorage(String(updateData.phone));
+    if (!normalized) {
+      return NextResponse.json({ error: 'invalid phone (must be 10 digits)' }, { status: 400 });
+    }
+    updateData.phone = normalized;
+  }
+
   // Validate food_type if present
   if (Object.prototype.hasOwnProperty.call(body, 'food_type') && updateData.food_type != null) {
     const allowedFood = new Set([

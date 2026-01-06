@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { getBrowserClient } from '../../lib/supabaseBrowser';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { maskPhone } from '@/lib/maskPhone';
 import './Dashboard.css';
 
 export const dynamic = 'force-dynamic';
@@ -302,7 +303,7 @@ export default function DashboardPage() {
                       <tr key={a.id}>
                         <td>{a.full_name || '-'}</td>
                         <td>{a.organization || '-'}</td>
-                        <td>{a.phone || '-'}</td>
+                        <td>{maskPhone(a.phone)}</td>
                       </tr>
                     ))}
                   </tbody>

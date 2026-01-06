@@ -8,6 +8,7 @@ import AdminImportButton from './AdminImportButton';
 import AdminDeleteButton from './AdminDeleteButton';
 import AdminFilters from './AdminFilters';
 import { redirect } from "next/navigation";
+import { maskPhone } from '@/lib/maskPhone';
 
 // 👉 นำเข้าไฟล์ CSS ที่สร้างขึ้นมาใช้กับหน้านี้โดยเฉพาะ
 import './admin-page.css';
@@ -483,7 +484,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <td>
                   <div>{a.full_name || '-'}</div>
                   <div>
-                    <small>{a.phone || '-'}</small>
+                    <small>{maskPhone(a.phone)}</small>
                   </div>
                 </td>
 
@@ -502,7 +503,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <td>
                   <div>{a.coordinator_name || '-'}</div>
                   <div>
-                    <small>{a.coordinator_phone || '-'}</small>
+                    <small>{maskPhone(a.coordinator_phone)}</small>
                   </div>
                 </td>
 

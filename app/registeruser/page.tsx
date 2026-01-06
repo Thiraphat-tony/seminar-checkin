@@ -290,7 +290,7 @@ export default function RegisterUserPage() {
   }
 
   // ✅ ปุ่ม “บันทึกจำนวนผู้เข้าร่วม / แก้ไข” -> ไปหน้า /registeruser/form?count=
-  function goToFormCount() {
+  async function goToFormCount() {
     setSuccessMessage(null);
     setErrorMessage(null);
 
@@ -299,6 +299,10 @@ export default function RegisterUserPage() {
     if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
     if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
     if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
+
+    // validate coordinator phone format (10 digits)
+    const { isValidPhone } = await import('@/lib/phone');
+    if (!isValidPhone(coordinatorPhone)) return setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
 
     const count = clampCount(Number(totalInput));
     setTotalInput(String(count));
@@ -342,15 +346,33 @@ export default function RegisterUserPage() {
     try {
       setSubmitting(true);
 
+      // validate coordinator phone
+      const { normalizePhone, isValidPhone, phoneForStorage } = await import('@/lib/phone');
+      const normCoordinator = normalizePhone(coordinatorPhone);
+      if (!isValidPhone(normCoordinator)) {
+        setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
+        setSubmitting(false);
+        return;
+      }
+
+      // normalize participant phones and validate
+      const normalizedParticipants = participants.map((p) => {
+        const n = phoneForStorage(p.phone);
+        return { ...p, phone: n };
+      });
+
+      // If any participant had invalid non-empty phone, phoneForStorage returns null; that's acceptable
+      // but if you want to force participants to have valid phones, add a check here.
+
       const formData = new FormData();
       formData.append('organization', organization);
       formData.append('province', province);
       formData.append('region', region);
       formData.append('coordinatorName', coordinatorName);
-      formData.append('coordinatorPhone', coordinatorPhone);
+      formData.append('coordinatorPhone', phoneForStorage(coordinatorPhone) ?? '');
       formData.append('hotelName', actualHotelName);
       formData.append('totalAttendees', String(participants.length));
-      formData.append('participants', JSON.stringify(participants));
+      formData.append('participants', JSON.stringify(normalizedParticipants));
       formData.append('slip', slipFile);
 
       const res = await fetch('/api/registeruser', {

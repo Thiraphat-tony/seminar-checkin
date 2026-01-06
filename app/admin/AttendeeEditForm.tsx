@@ -37,6 +37,15 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    // validate phone
+    const { normalizePhone, isValidPhone, phoneForStorage } = await import('@/lib/phone');
+    const normalized = normalizePhone(phone);
+    if (normalized && !isValidPhone(normalized)) {
+      setErrorMsg('เบอร์โทรต้องเป็นตัวเลข 10 หลัก');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/admin/update-attendee', {
         method: 'POST',
@@ -44,7 +53,7 @@ export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
         body: JSON.stringify({
           id: attendee.id,
           full_name: fullName.trim(),
-          phone: phone.trim() || null,
+          phone: phoneForStorage(phone),
           organization: organization.trim() || null,
           job_position: jobPosition.trim() || null,
           province: province.trim() || null,

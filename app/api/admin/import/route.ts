@@ -248,11 +248,23 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        const { phoneForStorage } = await import('@/lib/phone');
+        const normalizedPhone = phone ? phoneForStorage(String(phone).trim()) : null;
+        const normalizedCoordinatorPhone = coordinator_phone
+          ? phoneForStorage(String(coordinator_phone).trim())
+          : null;
+        if (phone && !normalizedPhone) {
+          console.warn('[IMPORT] invalid phone, setting null', { phone });
+        }
+        if (coordinator_phone && !normalizedCoordinatorPhone) {
+          console.warn('[IMPORT] invalid coordinator phone, setting null', { coordinator_phone });
+        }
+
         return {
           event_id: event_id ? String(event_id).trim() : null,
           full_name: String(full_name).trim(),
           ticket_token: String(ticket_token).trim(),
-          phone: phone ? String(phone).trim() : null,
+          phone: normalizedPhone,
           organization: organization ? String(organization).trim() : null,
           job_position: job_position ? String(job_position).trim() : null,
           province: province ? String(province).trim() : null,
@@ -262,9 +274,7 @@ export async function POST(req: NextRequest) {
           coordinator_name: coordinator_name
             ? String(coordinator_name).trim()
             : null,
-          coordinator_phone: coordinator_phone
-            ? String(coordinator_phone).trim()
-            : null,
+          coordinator_phone: normalizedCoordinatorPhone,
           hotel_name: hotel_name ? String(hotel_name).trim() : null,
         };
       })

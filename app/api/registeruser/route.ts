@@ -32,6 +32,10 @@ export async function POST(req: NextRequest) {
       .toString()
       .trim();
 
+    // normalize and validate phones
+    const { phoneForStorage } = await import('@/lib/phone');
+    const coordinatorPhoneNormalized = phoneForStorage(coordinatorPhone);
+
     // ✅ แปลง region เป็นตัวเลข (รองรับ 0–9 โดย 0 = ศาลเยาวชนและครอบครัวกลาง)
     const region = Number.parseInt(regionStr, 10);
     const totalAttendees = Number.parseInt(totalAttendeesStr || '0', 10) || 0;
@@ -80,6 +84,13 @@ export async function POST(req: NextRequest) {
     if (!coordinatorPhone) {
       return NextResponse.json(
         { ok: false, message: 'กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน' },
+        { status: 400 },
+      );
+    }
+
+    if (!coordinatorPhoneNormalized) {
+      return NextResponse.json(
+        { ok: false, message: 'เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก' },
         { status: 400 },
       );
     }
@@ -169,10 +180,13 @@ export async function POST(req: NextRequest) {
 
       const foodType = p.foodType || 'normal';
 
+      const { phoneForStorage } = await import('@/lib/phone');
+      const normalizedParticipantPhone = phoneForStorage(p.phone);
+
       return {
         event_id: EVENT_ID,
         full_name: p.fullName,
-        phone: p.phone || null,
+        phone: normalizedParticipantPhone || null,
         organization,
         job_position: jobPosition,
         province,
@@ -182,7 +196,7 @@ export async function POST(req: NextRequest) {
         slip_url: slipUrl,
         food_type: foodType,
         coordinator_name: coordinatorName || null,
-        coordinator_phone: coordinatorPhone || null,
+        coordinator_phone: coordinatorPhoneNormalized || null,
         hotel_name: hotelName || null,
       };
     });
