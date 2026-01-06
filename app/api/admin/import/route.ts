@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { createServerClient } from '@/lib/supabaseServer';
+import { phoneForStorage } from '@/lib/phone';
 
 // raw row จาก Excel
 type RawExcelRow = { [key: string]: any };
@@ -248,7 +249,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        const { phoneForStorage } = await import('@/lib/phone');
         const normalizedPhone = phone ? phoneForStorage(String(phone).trim()) : null;
         const normalizedCoordinatorPhone = coordinator_phone
           ? phoneForStorage(String(coordinator_phone).trim())

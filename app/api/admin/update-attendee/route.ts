@@ -1,6 +1,7 @@
 // app/api/admin/update-attendee/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
+import { phoneForStorage } from '@/lib/phone';
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as {
@@ -65,7 +66,6 @@ export async function POST(req: NextRequest) {
 
   // Validate phone if present: must be 10 digits after normalization
   if (Object.prototype.hasOwnProperty.call(body, 'phone') && updateData.phone != null) {
-    const { phoneForStorage } = await import('@/lib/phone');
     const normalized = phoneForStorage(String(updateData.phone));
     if (!normalized) {
       return NextResponse.json({ error: 'invalid phone (must be 10 digits)' }, { status: 400 });

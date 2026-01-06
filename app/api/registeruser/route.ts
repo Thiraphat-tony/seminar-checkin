@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServerClient } from '@/lib/supabaseServer';
+import { phoneForStorage } from '@/lib/phone';
 
 type ParticipantPayload = {
   fullName: string;
@@ -33,7 +34,6 @@ export async function POST(req: NextRequest) {
       .trim();
 
     // normalize and validate phones
-    const { phoneForStorage } = await import('@/lib/phone');
     const coordinatorPhoneNormalized = phoneForStorage(coordinatorPhone);
 
     // ✅ แปลง region เป็นตัวเลข (รองรับ 0–9 โดย 0 = ศาลเยาวชนและครอบครัวกลาง)
@@ -180,7 +180,6 @@ export async function POST(req: NextRequest) {
 
       const foodType = p.foodType || 'normal';
 
-      const { phoneForStorage } = await import('@/lib/phone');
       const normalizedParticipantPhone = phoneForStorage(p.phone);
 
       return {
