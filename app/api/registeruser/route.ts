@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServerClient } from '@/lib/supabaseServer';
 import { phoneForStorage } from '@/lib/phone';
+import { makeProvinceKey } from '@/lib/provinceKeys';
 
 type ParticipantPayload = {
   fullName: string;
@@ -10,6 +11,15 @@ type ParticipantPayload = {
   phone: string;
   foodType: 'normal' | 'vegetarian' | 'halal';
 };
+
+function makeSafeFilename(value: string) {
+  const cleaned = makeProvinceKey(value)
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:"*?<>|]+/g, '')
+    .replace(/\.+$/g, '');
+  return cleaned || 'unknown';
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -136,7 +146,8 @@ export async function POST(req: NextRequest) {
       console.log('[Register] Starting upload for:', slip.name);
 
       const ext = slip.name.split('.').pop() || 'bin';
-      const filePath = `slips/${Date.now()}-${randomUUID()}.${ext}`;
+      const safeProvince = makeSafeFilename(province);
+      const filePath = `slips/${safeProvince}.${ext}`;
 
       const arrayBuffer = await slip.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);

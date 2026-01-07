@@ -1,8 +1,18 @@
 // app/api/upload-slip/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
+import { makeProvinceKey } from '@/lib/provinceKeys';
 
 export const runtime = 'nodejs';
+
+function makeSafeFilename(value: string) {
+  const cleaned = makeProvinceKey(value)
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:"*?<>|]+/g, '')
+    .replace(/\.+$/g, '');
+  return cleaned || 'unknown';
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,9 +44,17 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient();
 
+    const { data: attendee } = await supabase
+      .from('attendees')
+      .select('province')
+      .eq('id', attendeeId)
+      .single();
+
+    const safeProvince = makeSafeFilename(attendee?.province ?? '');
+
     // ✅ ใช้ bucket ชื่อ payments (ตามที่คุณสร้างไว้)
     const fileExt = 'jpg'; // จะปรับตาม type จริงก็ได้
-    const fileName = `${attendeeId}-${Date.now()}.${fileExt}`;
+    const fileName = `${safeProvince}.${fileExt}`;
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
 

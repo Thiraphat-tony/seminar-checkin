@@ -3,9 +3,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getBrowserClient } from '@/lib/supabaseBrowser';
-
-import { makeProvinceKey } from '@/lib/provinceKeys';
+import { getBrowserClient } from "@/lib/supabaseBrowser";
+import { makeProvinceKey } from "@/lib/provinceKeys";
 
 function provinceToEmail(provinceName: string) {
   const localPart = makeProvinceKey(provinceName);
@@ -21,7 +20,83 @@ export default function LoginPage() {
   const provinceInputRef = useRef<HTMLInputElement>(null);
 
   const provinces = [
-    "กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","พะเยา","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"
+    "กรุงเทพมหานคร",
+    "กระบี่",
+    "กาญจนบุรี",
+    "กาฬสินธุ์",
+    "กำแพงเพชร",
+    "ขอนแก่น",
+    "จันทบุรี",
+    "ฉะเชิงเทรา",
+    "ชลบุรี",
+    "ชัยนาท",
+    "ชัยภูมิ",
+    "ชุมพร",
+    "เชียงราย",
+    "เชียงใหม่",
+    "ตรัง",
+    "ตราด",
+    "ตาก",
+    "นครนายก",
+    "นครปฐม",
+    "นครพนม",
+    "นครราชสีมา",
+    "นครศรีธรรมราช",
+    "นครสวรรค์",
+    "นนทบุรี",
+    "นราธิวาส",
+    "น่าน",
+    "บึงกาฬ",
+    "บุรีรัมย์",
+    "ปทุมธานี",
+    "ประจวบคีรีขันธ์",
+    "ปราจีนบุรี",
+    "ปัตตานี",
+    "พระนครศรีอยุธยา",
+    "พะเยา",
+    "พังงา",
+    "พัทลุง",
+    "พิจิตร",
+    "พิษณุโลก",
+    "เพชรบุรี",
+    "เพชรบูรณ์",
+    "แพร่",
+    "ภูเก็ต",
+    "มหาสารคาม",
+    "มุกดาหาร",
+    "แม่ฮ่องสอน",
+    "ยโสธร",
+    "ยะลา",
+    "ร้อยเอ็ด",
+    "ระนอง",
+    "ระยอง",
+    "ราชบุรี",
+    "ลพบุรี",
+    "ลำปาง",
+    "ลำพูน",
+    "เลย",
+    "ศรีสะเกษ",
+    "สกลนคร",
+    "สงขลา",
+    "สตูล",
+    "สมุทรปราการ",
+    "สมุทรสงคราม",
+    "สมุทรสาคร",
+    "สระแก้ว",
+    "สระบุรี",
+    "สิงห์บุรี",
+    "สุโขทัย",
+    "สุพรรณบุรี",
+    "สุราษฎร์ธานี",
+    "สุรินทร์",
+    "หนองคาย",
+    "หนองบัวลำภู",
+    "อ่างทอง",
+    "อำนาจเจริญ",
+    "อุดรธานี",
+    "อุตรดิตถ์",
+    "อุทัยธานี",
+    "อุบลราชธานี",
   ];
 
   const filteredProvinces = provinceInput
@@ -46,7 +121,7 @@ export default function LoginPage() {
     setError("");
 
     if (!supabase) {
-      setError("ระบบยังไม่ได้ตั้งค่า Supabase (ตรวจสอบไฟล์ .env.local)");
+      setError("ไม่พบการตั้งค่า Supabase (ตรวจ .env.local)");
       setLoading(false);
       return;
     }
@@ -56,7 +131,7 @@ export default function LoginPage() {
     const selectedProvince = chosen || (provinces.includes(typed) ? typed : "");
 
     if (!selectedProvince) {
-      setError("กรุณาเลือกจังหวัดจากรายการ");
+      setError("กรุณาเลือกจังหวัด");
       setLoading(false);
       return;
     }
@@ -81,12 +156,10 @@ export default function LoginPage() {
         return;
       }
 
-      // บันทึก access token ในคุกกี้เพื่อให้ server components / API สามารถอ่านได้
       try {
-        // เก็บเฉพาะ access token (ไม่เก็บ refresh token) ชั่วคราว
         document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600; SameSite=Lax`;
       } catch (e) {
-        // ignore cookie errors in strict environments
+        void e;
       }
 
       router.push("/");
@@ -116,7 +189,7 @@ export default function LoginPage() {
             }}
             onFocus={() => setShowProvinceList(true)}
             onBlur={() => setTimeout(() => setShowProvinceList(false), 150)}
-            placeholder="พิมพ์ค้นหาจังหวัด..."
+            placeholder="พิมพ์เพื่อค้นหา..."
             autoComplete="off"
             ref={provinceInputRef}
             required
@@ -128,24 +201,24 @@ export default function LoginPage() {
                 position: "absolute",
                 zIndex: 10,
                 background: "#fff",
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
                 maxHeight: 180,
                 overflowY: "auto",
                 width: "100%",
-                margin: 0,
-                padding: 0,
+                margin: "6px 0 0",
+                padding: "6px 0",
                 listStyle: "none",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)",
               }}
             >
               {filteredProvinces.length === 0 && (
-                <li style={{ padding: "8px", color: "#888" }}>ไม่พบจังหวัด</li>
+                <li style={{ padding: "8px 12px", color: "#64748b" }}>ไม่พบจังหวัด</li>
               )}
               {filteredProvinces.map((p) => (
                 <li
                   key={p}
-                  style={{ padding: "8px", cursor: "pointer" }}
+                  style={{ padding: "8px 12px", cursor: "pointer" }}
                   onMouseDown={() => {
                     setProvince(p);
                     setProvinceInput(p);
@@ -174,9 +247,8 @@ export default function LoginPage() {
           {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
         </button>
 
-        {/* ✅ ปุ่ม/ลิงก์ไปหน้า Register */}
         <div style={{ textAlign: "center", marginTop: 6 }}>
-          <Link href="/staff/register" style={{ color: "#2563eb", textDecoration: "underline" }}>
+          <Link href="/staff/register" style={{ color: "#667eea", textDecoration: "underline" }}>
             สมัครเจ้าหน้าที่ (Register)
           </Link>
         </div>
@@ -189,32 +261,43 @@ export default function LoginPage() {
           align-items: center;
           justify-content: center;
           background: #f5f6fa;
+          padding: 24px;
         }
         .login-form {
           background: #fff;
           padding: 2rem 2.5rem;
           border-radius: 12px;
-          box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
           display: flex;
           flex-direction: column;
           gap: 1rem;
           min-width: 320px;
+          max-width: 420px;
+          width: 100%;
         }
         .login-form h2 {
-          margin-bottom: 1rem;
+          margin-bottom: 0.5rem;
           text-align: center;
         }
         .login-form label {
-          font-weight: 500;
+          font-weight: 600;
         }
         .login-form input {
-          padding: 0.5rem 0.75rem;
+          padding: 0.6rem 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 6px;
           font-size: 1rem;
+          background: #fff;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .login-form input:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
         }
         .login-form button {
-          background: #2563eb;
+          background: #667eea;
           color: #fff;
           border: none;
           border-radius: 6px;
@@ -222,11 +305,16 @@ export default function LoginPage() {
           font-size: 1rem;
           font-weight: 600;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: background 0.2s, transform 0.2s;
+        }
+        .login-form button:hover {
+          background: #5a67d8;
+          transform: translateY(-1px);
         }
         .login-form button:disabled {
           background: #a5b4fc;
           cursor: not-allowed;
+          transform: none;
         }
         .login-error {
           color: #dc2626;

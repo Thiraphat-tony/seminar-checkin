@@ -26,60 +26,41 @@ type DbAttendee = {
   coordinator_phone: string | null;
 };
 
-// เดานามสกุลรูปจาก URL
-function getImageExtension(url: string): 'png' | 'jpeg' | null {
-  const lower = url.toLowerCase();
-  if (lower.endsWith('.png')) return 'png';
-  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'jpeg';
-  return null;
+function setSlipLink(cell: ExcelJS.Cell, url?: string | null, province?: string | null) {
+  if (!url) return;
+  const label = (province ?? '').trim() || 'ดาวน์โหลด';
+  cell.value = { text: label, hyperlink: url };
+  cell.font = { color: { argb: 'FF2563EB' }, underline: true };
 }
 
-// ดึงรูปจาก URL เป็น Buffer
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
-  } catch (e) {
-    console.error('fetchImageBuffer error', e);
-    return null;
-  }
-}
-
-// แปลง code ประเภทอาหารเป็นภาษาไทย
 function formatFoodType(foodType: string | null): string {
   switch (foodType) {
     case 'normal':
-      return 'อาหารทั่วไป';
+      return 'ปกติ';
     case 'vegetarian':
       return 'มังสวิรัติ';
     case 'halal':
       return 'ฮาลาล';
     default:
-      return 'ไม่ระบุ';
+      return '-';
   }
 }
 
 // ตั้งคอลัมน์และ header ให้ชีตแต่ละภาค
 function setupSheetColumns(sheet: ExcelJS.Worksheet) {
   sheet.columns = [
-    { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
-    { header: 'เบอร์โทร', key: 'phone', width: 16 },
+    { header: 'ชื่อ-สกุล', key: 'full_name', width: 30 },
+    { header: 'โทรศัพท์', key: 'phone', width: 16 },
     { header: 'หน่วยงาน', key: 'organization', width: 28 },
     { header: 'ตำแหน่ง', key: 'job_position', width: 24 },
     { header: 'จังหวัด', key: 'province', width: 18 },
     { header: 'ภาค', key: 'region', width: 12 },
-    { header: 'ประเภทอาหาร', key: 'food_type', width: 18 },
-    { header: 'ชื่อผู้ประสานงาน', key: 'coordinator_name', width: 26 },
-    {
-      header: 'เบอร์โทรผู้ประสานงาน',
-      key: 'coordinator_phone',
-      width: 20,
-    },
+    { header: 'อาหาร', key: 'food_type', width: 18 },
+    { header: 'ผู้ประสานงาน', key: 'coordinator_name', width: 26 },
+    { header: 'เบอร์ผู้ประสานงาน', key: 'coordinator_phone', width: 20 },
     { header: 'โรงแรม', key: 'hotel_name', width: 24 },
     { header: 'สถานะเช็กอิน', key: 'checkin_status', width: 16 },
-    { header: 'สลิป (รูป)', key: 'slip', width: 20 },
+    { header: 'สลิป (ลิงก์)', key: 'slip', width: 20 },
     { header: 'รหัสบัตร', key: 'ticket_token', width: 26 },
   ];
 
@@ -97,17 +78,14 @@ export async function GET(req: NextRequest) {
 
     // ✅ รองรับ region = 0 (ศาลกลาง) + 1–9
     const regionParam = req.nextUrl.searchParams.get('region');
-    const regionNumberRaw =
-      regionParam !== null ? Number(regionParam) : Number.NaN;
+    const regionNumberRaw = regionParam !== null ? Number(regionParam) : Number.NaN;
 
     const hasRegionFilter =
       Number.isFinite(regionNumberRaw) &&
       regionNumberRaw >= 0 &&
       regionNumberRaw <= 9;
 
-    const regionFilter: number | null = hasRegionFilter
-      ? regionNumberRaw
-      : null;
+    const regionFilter: number | null = hasRegionFilter ? regionNumberRaw : null;
 
     let query = supabase
       .from('attendees')
@@ -143,11 +121,7 @@ export async function GET(req: NextRequest) {
     if (error || !data) {
       console.error('export-attendees supabase error:', error);
       return NextResponse.json(
-        {
-          success: false,
-          message: 'โหลดข้อมูลไม่สำเร็จจากฐานข้อมูล',
-          error,
-        },
+        { success: false, message: 'ดึงข้อมูลไม่สำเร็จ', error },
         { status: 500 },
       );
     }
@@ -158,8 +132,7 @@ export async function GET(req: NextRequest) {
 
     // -------------------- โหมด 1: export เฉพาะภาคเดียว (มี ?region=) --------------------
     if (regionFilter !== null) {
-      const sheetName =
-        regionFilter === 0 ? 'ศาลกลาง' : `ภาค ${regionFilter}`; // 👈 ใช้ชื่อสั้น ๆ
+      const sheetName = regionFilter === 0 ? 'ส่วนกลาง' : `ภาค ${regionFilter}`;
       const sheet = workbook.addWorksheet(sheetName);
       setupSheetColumns(sheet);
 
@@ -180,33 +153,7 @@ export async function GET(req: NextRequest) {
           ticket_token: a.ticket_token ?? '',
         });
 
-        const excelRow = row.number;
-
-        // ฝังรูปสลิป (ถ้ามี) — ถ้า error ให้ข้าม
-        try {
-          if (a.slip_url) {
-            const ext = getImageExtension(a.slip_url);
-            if (ext) {
-              const imgBuffer = await fetchImageBuffer(a.slip_url);
-              if (imgBuffer) {
-                const imageId = workbook.addImage({
-                  buffer: imgBuffer as any,
-                  extension: ext,
-                });
-
-                // ตอนนี้ "สลิป (รูป)" คือคอลัมน์ลำดับที่ 12 → index 11
-                sheet.addImage(imageId, {
-                  tl: { col: 11.1, row: excelRow - 0.9 },
-                  ext: { width: 90, height: 90 },
-                });
-
-                sheet.getRow(excelRow).height = 80;
-              }
-            }
-          }
-        } catch (imgErr) {
-          console.error('embed slip image error (single sheet)', imgErr);
-        }
+        setSlipLink(row.getCell('slip'), a.slip_url, a.province);
       }
 
       const fileArrayBuffer = await workbook.xlsx.writeBuffer();
@@ -218,20 +165,18 @@ export async function GET(req: NextRequest) {
       return new NextResponse(fileArrayBuffer, {
         status: 200,
         headers: {
-          'Content-Type':
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="${filename}"`,
         },
       });
     }
 
-    // -------------------- โหมด 2: export ทุกภาค แยกชีต --------------------
-    const centralSheet = workbook.addWorksheet('ศาลกลาง');
+    const centralSheet = workbook.addWorksheet('ส่วนกลาง');
     setupSheetColumns(centralSheet);
 
     const regionSheets: Record<string, ExcelJS.Worksheet> = {};
     for (let r = 1; r <= 9; r += 1) {
-      const sheet = workbook.addWorksheet(`ภาค ${r}`); // 👈 ชื่อสั้น ๆ ทั้ง 1–9
+      const sheet = workbook.addWorksheet(`ภาค ${r}`);
       setupSheetColumns(sheet);
       regionSheets[String(r)] = sheet;
     }
@@ -274,31 +219,7 @@ export async function GET(req: NextRequest) {
         ticket_token: a.ticket_token ?? '',
       });
 
-      const excelRow = row.number;
-
-      try {
-        if (a.slip_url) {
-          const ext = getImageExtension(a.slip_url);
-          if (ext) {
-            const imgBuffer = await fetchImageBuffer(a.slip_url);
-            if (imgBuffer) {
-              const imageId = workbook.addImage({
-                buffer: imgBuffer as any,
-                extension: ext,
-              });
-
-              targetSheet.addImage(imageId, {
-                tl: { col: 11.1, row: excelRow - 0.9 },
-                ext: { width: 90, height: 90 },
-              });
-
-              targetSheet.getRow(excelRow).height = 80;
-            }
-          }
-        }
-      } catch (imgErr) {
-        console.error('embed slip image error (multi sheet)', imgErr);
-      }
+      setSlipLink(row.getCell('slip'), a.slip_url, a.province);
     }
 
     const fileArrayBuffer = await workbook.xlsx.writeBuffer();
@@ -307,8 +228,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(fileArrayBuffer, {
       status: 200,
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
@@ -316,7 +236,7 @@ export async function GET(req: NextRequest) {
     console.error('export-attendees unexpected error:', err);
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, message: `เกิดข้อผิดพลาดภายใน: ${msg}` },
+      { success: false, message: `เกิดข้อผิดพลาด: ${msg}` },
       { status: 500 },
     );
   }
