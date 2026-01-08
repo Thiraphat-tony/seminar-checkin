@@ -1,50 +1,58 @@
-﻿// app/admin/namecards/DownloadNamecardsPdfButton.tsx
+﻿// app/admin/AdminExportExcelButton.tsx
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
 
-type RegionOption = { value: number; label: string };
+type RegionOption = { value: string; label: string };
 
-export default function DownloadNamecardsPdfButton() {
+export default function AdminExportExcelButton() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const [region, setRegion] = useState<number>(0);
+  const [region, setRegion] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
 
   const regions = useMemo<RegionOption[]>(
     () => [
-      { value: 0, label: 'ภาค 0 — ศาลเยาวชนและครอบครัวกลาง (กรุงเทพมหานคร)' },
-      { value: 1, label: 'ภาค 1' },
-      { value: 2, label: 'ภาค 2' },
-      { value: 3, label: 'ภาค 3' },
-      { value: 4, label: 'ภาค 4' },
-      { value: 5, label: 'ภาค 5' },
-      { value: 6, label: 'ภาค 6' },
-      { value: 7, label: 'ภาค 7' },
-      { value: 8, label: 'ภาค 8' },
-      { value: 9, label: 'ภาค 9' },
+      { value: 'all', label: 'ทั้งหมด' },
+      {
+        value: '0',
+        label: 'ภาค 0 — ศาลเยาวชนและครอบครัวกลาง (กรุงเทพมหานคร)',
+      },
+      { value: '1', label: 'ภาค 1' },
+      { value: '2', label: 'ภาค 2' },
+      { value: '3', label: 'ภาค 3' },
+      { value: '4', label: 'ภาค 4' },
+      { value: '5', label: 'ภาค 5' },
+      { value: '6', label: 'ภาค 6' },
+      { value: '7', label: 'ภาค 7' },
+      { value: '8', label: 'ภาค 8' },
+      { value: '9', label: 'ภาค 9' },
     ],
-    []
+    [],
   );
 
   const open = () => dialogRef.current?.showModal();
   const close = () => dialogRef.current?.close();
 
-  const onConfirm = async () => {
+  const onConfirm = () => {
     setIsLoading(true);
-    try {
-      const url = `/api/admin/export-namecards-pdf?region=${encodeURIComponent(region)}`;
-      // ✅ ดาวน์โหลดเลย (ไม่เปิดแท็บใหม่)
-      window.location.assign(url);
-      close();
-    } finally {
-      setIsLoading(false);
-    }
+    const url =
+      region === 'all'
+        ? '/api/admin/export-attendees'
+        : `/api/admin/export-attendees?region=${encodeURIComponent(region)}`;
+    window.location.assign(url);
+    close();
+    setIsLoading(false);
   };
 
   return (
     <>
-      <button type="button" className="admin-export-btn" onClick={open} disabled={isLoading}>
-        ⬇️ ดาวน์โหลดนามบัตร (PDF)
+      <button
+        type="button"
+        className="admin-export-btn"
+        onClick={open}
+        disabled={isLoading}
+      >
+        ⬇️ ดาวน์โหลดรายชื่อ (Excel)
       </button>
 
       <dialog ref={dialogRef} className="admin-export-dialog">
@@ -56,7 +64,7 @@ export default function DownloadNamecardsPdfButton() {
               ภาค
               <select
                 value={region}
-                onChange={(e) => setRegion(Number(e.target.value))}
+                onChange={(e) => setRegion(e.target.value)}
                 className="admin-export-dialog__select"
               >
                 {regions.map((r) => (
@@ -70,7 +78,7 @@ export default function DownloadNamecardsPdfButton() {
 
           <div className="admin-export-dialog__actions">
             <button type="button" className="admin-export-dialog__button admin-export-dialog__button--primary" onClick={onConfirm} disabled={isLoading}>
-              {isLoading ? 'กำลังเริ่มดาวน์โหลด…' : 'Export PDF'}
+              {isLoading ? 'กำลังเริ่มดาวน์โหลด…' : 'Export Excel'}
             </button>
             <button type="button" className="admin-export-dialog__button admin-export-dialog__button--ghost" onClick={close} disabled={isLoading}>
               ยกเลิก

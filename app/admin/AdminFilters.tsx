@@ -1,6 +1,7 @@
 "use client";
 
 import AdminImportButton from './AdminImportButton';
+import AdminExportExcelButton from './AdminExportExcelButton';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type AdminFiltersProps = {
@@ -134,9 +135,7 @@ export default function AdminFilters({
 
         <div className="admin-filters__inline-group admin-filters__inline-group--buttons">
           <AdminImportButton />
-          <a href="/api/admin/export-attendees" className="admin-export-btn">
-            ⬇️ ดาวน์โหลดรายชื่อ (Excel)
-          </a>
+          <AdminExportExcelButton />
           <a href="/admin/namecards" className="admin-export-btn">
             🎫 หน้านามบัตร (QR)
           </a>
@@ -145,3 +144,4 @@ export default function AdminFilters({
     </form>
   );
 }
+

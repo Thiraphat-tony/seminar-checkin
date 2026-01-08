@@ -63,6 +63,192 @@ function normalizeFoodType(value: any): FoodType | null {
   }
 }
 
+function normalizeHeader(header: string) {
+  return header
+    .toLowerCase()
+    .replace(/[\s._\-\/\\(){}\[\]]+/g, '')
+    .trim();
+}
+
+const HEADER_ALIAS_MAP: Record<string, keyof PreparedRow> = (() => {
+  const map: Record<string, keyof PreparedRow> = {};
+  const add = (key: keyof PreparedRow, aliases: string[]) => {
+    for (const alias of aliases) {
+      const normalized = normalizeHeader(alias);
+      if (normalized) map[normalized] = key;
+    }
+  };
+
+  add('full_name', [
+    'full_name',
+    'full name',
+    'fullname',
+    'ชื่อ-สกุล',
+    'ชื่อสกุล',
+    'ชื่อ-นามสกุล',
+    'ชื่อและนามสกุล',
+    'ชื่อ',
+  ]);
+  add('ticket_token', [
+    'ticket_token',
+    'ticket token',
+    'token',
+    'ticket',
+    'qr token',
+    'qr code',
+    'qrcode',
+    'qr_code',
+    'ticket id',
+    'ticketid',
+    'token id',
+    'โทเคน',
+    'หมายเลขบัตร',
+    'หมายเลขตั๋ว',
+  ]);
+  add('phone', [
+    'phone',
+    'phone_number',
+    'phone number',
+    'mobile',
+    'mobile_phone',
+    'tel',
+    'telephone',
+    'เบอร์โทร',
+    'เบอร์โทรศัพท์',
+    'โทรศัพท์',
+    'เบอร์มือถือ',
+  ]);
+  add('organization', [
+    'organization',
+    'org',
+    'หน่วยงาน',
+    'หน่วยงานต้นสังกัด',
+    'ต้นสังกัด',
+    'องค์กร',
+    'หน่วยงาน/องค์กร',
+  ]);
+  add('job_position', [
+    'job_position',
+    'job position',
+    'position',
+    'ตำแหน่ง',
+    'ตำแหน่งงาน',
+    'หน้าที่',
+  ]);
+  add('province', ['province', 'จังหวัด']);
+  add('region', ['region', 'ภาค']);
+  add('qr_image_url', [
+    'qr_image_url',
+    'qr image url',
+    'qr url',
+    'qr_url',
+    'qrlink',
+    'qr link',
+    'ลิงก์ qr',
+    'ลิงก์QR',
+  ]);
+  add('food_type', [
+    'food_type',
+    'food type',
+    'food',
+    'ประเภทอาหาร',
+    'อาหาร',
+    'ประเภทอาหารที่ต้องการ',
+  ]);
+  add('coordinator_name', [
+    'coordinator_name',
+    'coordinator name',
+    'coordinator',
+    'ชื่อผู้ประสานงาน',
+    'ผู้ประสานงาน',
+    'ชื่อผู้ติดต่อ',
+    'ผู้ติดต่อ',
+  ]);
+  add('coordinator_phone', [
+    'coordinator_phone',
+    'coordinator phone',
+    'coordinator tel',
+    'coordinator mobile',
+    'เบอร์ผู้ประสานงาน',
+    'โทรผู้ประสานงาน',
+    'เบอร์ผู้ติดต่อ',
+    'โทรผู้ติดต่อ',
+  ]);
+  add('hotel_name', [
+    'hotel_name',
+    'hotel name',
+    'hotel',
+    'โรงแรม',
+    'ชื่อโรงแรม',
+    'ที่พัก',
+  ]);
+  add('event_id', ['event_id', 'event id', 'event']);
+
+  return map;
+})();
+
+function mapHeaderToKey(header: string): keyof PreparedRow | null {
+  const normalized = normalizeHeader(header);
+  if (!normalized) return null;
+
+  const direct = HEADER_ALIAS_MAP[normalized];
+  if (direct) return direct;
+
+  if (normalized.includes('qr') && (normalized.includes('url') || normalized.includes('image'))) {
+    return 'qr_image_url';
+  }
+  if (normalized.includes('token')) return 'ticket_token';
+  if (
+    (normalized.includes('coordinator') ||
+      normalized.includes('ผู้ประสานงาน') ||
+      normalized.includes('ผู้ติดต่อ')) &&
+    (normalized.includes('phone') ||
+      normalized.includes('tel') ||
+      normalized.includes('mobile') ||
+      normalized.includes('เบอร์') ||
+      normalized.includes('โทร'))
+  ) {
+    return 'coordinator_phone';
+  }
+  if (
+    (normalized.includes('coordinator') ||
+      normalized.includes('ผู้ประสานงาน') ||
+      normalized.includes('ผู้ติดต่อ')) &&
+    (normalized.includes('name') || normalized.includes('ชื่อ'))
+  ) {
+    return 'coordinator_name';
+  }
+  if (
+    normalized.includes('phone') ||
+    normalized.includes('tel') ||
+    normalized.includes('mobile') ||
+    normalized.includes('เบอร์') ||
+    normalized.includes('โทร')
+  ) {
+    return 'phone';
+  }
+  if (normalized.includes('hotel') || normalized.includes('โรงแรม') || normalized.includes('ที่พัก')) {
+    return 'hotel_name';
+  }
+  if (
+    normalized.includes('organization') ||
+    normalized.includes('org') ||
+    normalized.includes('หน่วยงาน') ||
+    normalized.includes('องค์กร') ||
+    normalized.includes('ต้นสังกัด')
+  ) {
+    return 'organization';
+  }
+  if (normalized.includes('position') || normalized.includes('ตำแหน่ง') || normalized.includes('หน้าที่')) {
+    return 'job_position';
+  }
+  if (normalized.includes('province') || normalized.includes('จังหวัด')) return 'province';
+  if (normalized.includes('region') || normalized.includes('ภาค')) return 'region';
+  if (normalized.includes('food') || normalized.includes('อาหาร')) return 'food_type';
+
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -95,6 +281,7 @@ export async function POST(req: NextRequest) {
       console.log('[IMPORT] reading sheet:', sheetName);
 
       const headers: string[] = [];
+      const headerKeys: Array<keyof PreparedRow | null> = [];
 
       // header row (แถวที่ 1 ของชีตนั้น)
       const headerRow = worksheet.getRow(1);
@@ -104,7 +291,9 @@ export async function POST(req: NextRequest) {
       }
 
       headerRow.eachCell((cell, colNum) => {
-        headers[colNum - 1] = String(cell.value || '').trim();
+        const rawHeader = String(cell.value || '').trim();
+        headers[colNum - 1] = rawHeader;
+        headerKeys[colNum - 1] = mapHeaderToKey(rawHeader);
       });
 
       let sheetRowCount = 0;
@@ -114,10 +303,13 @@ export async function POST(req: NextRequest) {
 
         const obj: RawExcelRow = {};
         row.eachCell((cell, colNum) => {
-          const header = headers[colNum - 1];
-          if (header) {
-            obj[header] = cell.value ?? null;
+          const mappedKey = headerKeys[colNum - 1];
+          if (mappedKey) {
+            obj[mappedKey] = cell.value ?? null;
+            return;
           }
+          const header = headers[colNum - 1];
+          if (header) obj[header] = cell.value ?? null;
         });
 
         if (Object.keys(obj).length > 0) {
