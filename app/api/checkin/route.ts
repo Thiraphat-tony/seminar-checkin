@@ -34,12 +34,6 @@ function json(data: JsonResponse, status = 200) {
 }
 
 // เหลือไว้เผื่ออนาคตกลับมาใช้ตรวจเวลา
-function safeParseDate(value: unknown): Date | null {
-  if (!value || typeof value !== 'string') return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
 export async function GET(req: NextRequest) {
   const ticketToken = req.nextUrl.searchParams.get('ticket_token')?.trim();
   if (!ticketToken) {
@@ -71,7 +65,7 @@ export async function GET(req: NextRequest) {
 
   const { data: event, error: eventError } = await supabase
     .from('events')
-    .select('id, start_checkin, end_checkin, checkin_open')
+    .select('id, checkin_open')
     .eq('id', attendee.event_id)
     .maybeSingle();
 
@@ -79,14 +73,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
   }
 
-  const now = new Date();
-  const start = safeParseDate(event.start_checkin);
-  const end = safeParseDate(event.end_checkin);
-  const withinWindow = (!start || now >= start) && (!end || now <= end);
   const checkinOpen = event.checkin_open !== false;
-  const allowed = checkinOpen && withinWindow;
+  const allowed = checkinOpen;
 
-  return NextResponse.json({ ok: true, checkinOpen, withinWindow, allowed });
+  return NextResponse.json({ ok: true, checkinOpen, withinWindow: true, allowed });
 }
 
 export async function POST(req: NextRequest) {
@@ -214,7 +204,7 @@ export async function POST(req: NextRequest) {
     // ดึง event แค่เพื่อ debug/อนาคต (ไม่ได้ใช้บล็อกเวลาแล้ว)
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, name, start_checkin, end_checkin, checkin_open')
+      .select('id, name, checkin_open')
       .eq('id', attendee.event_id)
       .maybeSingle();
 
@@ -230,13 +220,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (event) {
-      const now = new Date(nowIso);
-      const start = safeParseDate(event.start_checkin);
-      const end = safeParseDate(event.end_checkin);
-      const withinWindow = (!start || now >= start) && (!end || now <= end);
       const checkinOpen = event.checkin_open !== false;
 
-      if (!checkinOpen || !withinWindow) {
+      if (!checkinOpen) {
         return json(
           {
             success: false,
