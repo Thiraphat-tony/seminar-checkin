@@ -602,6 +602,55 @@ a:hover {
     color: #5bc0de;
 }
 
+.admin-table__slip-cell,
+.admin-table__checkin,
+.admin-table__checkin-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.admin-table__checkin-time {
+    font-size: 13px;
+    color: var(--text-soft);
+    line-height: 1.3;
+}
+
+.admin-table__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.admin-table__actions .admin-link-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    border: 2px solid rgba(92, 184, 92, 0.7);
+    background: rgba(92, 184, 92, 0.12);
+    color: #3d8b3d;
+    font-weight: 600;
+    font-size: 16px;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.admin-table__actions .admin-link-edit:hover {
+    color: #2f6f2f;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+    filter: brightness(1.02);
+}
+
 /* -------------------------------------------------- Admin Form -------------------------------------------------- */
 .admin-form__section {
     margin-top: 24px;
@@ -1049,7 +1098,49 @@ a:hover {
     }
 }
 
-.admin-link-edit:hover {
+a.admin-link-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    border: 2px solid rgba(92, 184, 92, 0.7);
+    background: linear-gradient(135deg, rgba(92, 184, 92, 0.18), rgba(92, 184, 92, 0.32));
+    color: #2f7a2f;
+    font-weight: 600;
+    font-size: 16px;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: var(--shadow-soft);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease,
+        background 0.12s ease, border-color 0.12s ease;
+}
+
+a.admin-link-edit[target="_blank"] {
+    border-color: rgba(91, 192, 222, 0.9);
+    background: linear-gradient(135deg, rgba(91, 192, 222, 0.18), rgba(91, 192, 222, 0.32));
+    color: #2f7e92;
+}
+
+a.admin-link-edit:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+    filter: brightness(1.04);
+}
+
+a.admin-link-edit:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-soft);
+}
+
+summary.admin-link-edit {
+    cursor: pointer;
+}
+
+summary.admin-link-edit:hover {
     color: #46b8da;
 }
 
