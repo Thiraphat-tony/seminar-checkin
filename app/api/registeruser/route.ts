@@ -21,6 +21,29 @@ function makeSafeFilename(value: string) {
   return cleaned || 'unknown';
 }
 
+export async function GET() {
+  const EVENT_ID = process.env.EVENT_ID;
+  if (!EVENT_ID) {
+    return NextResponse.json({ ok: false, message: 'MISSING_EVENT_ID' }, { status: 500 });
+  }
+
+  const supabase = createServerClient();
+  const { data: event, error } = await supabase
+    .from('events')
+    .select('id, registration_open')
+    .eq('id', EVENT_ID)
+    .maybeSingle();
+
+  if (error || !event) {
+    return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    registrationOpen: event.registration_open !== false,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -139,6 +162,19 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient();
 
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('id, registration_open')
+      .eq('id', EVENT_ID)
+      .maybeSingle();
+
+    if (eventError || !event) {
+      return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
+    }
+
+    if (event.registration_open === false) {
+      return NextResponse.json({ ok: false, message: 'REGISTRATION_CLOSED' }, { status: 403 });
+    }
     let slipUrl: string | null = null;
 
     // ---------- อัปโหลดไฟล์สลิป (ถ้ามี) ----------

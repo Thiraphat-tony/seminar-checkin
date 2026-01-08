@@ -230,6 +230,50 @@ html, body {
   color: #1f4a1f;
 }
 
+/* ===== REGISTRATION CLOSED ===== */
+.registeruser-page--closed {
+  align-items: center;
+}
+
+.registeruser-closed-card {
+  width: min(92vw, 680px);
+  background: var(--bg-primary);
+  border: 2px solid rgba(240, 173, 78, 0.5);
+  border-radius: 20px;
+  box-shadow: var(--shadow-medium);
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.registeruser-closed__code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px dashed rgba(240, 173, 78, 0.55);
+  background: rgba(240, 173, 78, 0.14);
+  color: #6a3f0f;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+  margin-bottom: 14px;
+}
+
+.registeruser-closed__title {
+  margin: 0 0 8px;
+  font-size: clamp(1.5rem, 3.2vw, 2.2rem);
+  font-weight: 900;
+  color: #6a3f0f;
+}
+
+.registeruser-closed__subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 1.02rem;
+}
+
 /* =========================================================
    ✅ PARTICIPANTS (เดสก์ท็อปแถวเดียว)
 ========================================================= */

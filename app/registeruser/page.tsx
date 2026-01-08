@@ -190,6 +190,7 @@ export default function RegisterUserPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [registrationClosed, setRegistrationClosed] = useState(false);
 
   const currentOrganizations = useMemo(() => REGION_ORGANIZATIONS[region] ?? [], [region]);
 
@@ -216,6 +217,29 @@ export default function RegisterUserPage() {
     } catch {
       // ignore
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const checkRegistrationStatus = async () => {
+      try {
+        const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data && data.registrationOpen === false) {
+          setRegistrationClosed(true);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    checkRegistrationStatus();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   function saveState(nextCount: number, nextCompleted: boolean) {
@@ -390,6 +414,10 @@ export default function RegisterUserPage() {
         const msg =
           (data && typeof data === 'object' && 'message' in data && (data as any).message) ||
           'ไม่สามารถบันทึกข้อมูลได้';
+        if (msg === 'REGISTRATION_CLOSED') {
+          setRegistrationClosed(true);
+          return;
+        }
         throw new Error(String(msg));
       }
 
@@ -411,6 +439,20 @@ export default function RegisterUserPage() {
     if (!organization.trim()) return '';
     return currentOrganizations.includes(organization) ? organization : '__custom';
   }, [region, organization, currentOrganizations]);
+
+  if (registrationClosed) {
+    return (
+      <main className="registeruser-page registeruser-page--closed">
+        <div className="registeruser-closed-card">
+          <div className="registeruser-closed__code">REGISTRATION_CLOSED</div>
+          <h1 className="registeruser-closed__title">ระบบปิดการลงทะเบียน</h1>
+          <p className="registeruser-closed__subtitle">
+            ขณะนี้ปิดรับลงทะเบียนแล้ว หากต้องการข้อมูลเพิ่มเติมโปรดติดต่อผู้ดูแลระบบ
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="registeruser-page">

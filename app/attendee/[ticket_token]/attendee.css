@@ -286,6 +286,103 @@ a {
   margin-top: 4px;
 }
 
+.attendee-page--closed {
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+
+.attendee-closed-card {
+	width: min(92vw, 560px);
+	background: #ffffff;
+	border: 2px solid rgba(240, 173, 78, 0.55);
+	border-radius: 20px;
+	box-shadow: 0 10px 28px rgba(139, 92, 56, 0.18);
+	padding: 26px 22px;
+}
+
+.attendee-closed__code {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 8px 14px;
+	border-radius: 999px;
+	border: 2px dashed rgba(240, 173, 78, 0.6);
+	background: rgba(240, 173, 78, 0.16);
+	color: #6a3f0f;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	font-size: 0.95rem;
+	margin-bottom: 12px;
+}
+
+.attendee-closed__title {
+	margin: 0 0 8px;
+	font-size: clamp(1.4rem, 3.2vw, 2rem);
+	font-weight: 800;
+	color: #6a3f0f;
+}
+
+.attendee-closed__subtitle {
+	margin: 0;
+	color: #6b5d54;
+	line-height: 1.6;
+	font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+	.attendee-page-container {
+		padding: 14px 12px 24px;
+	}
+
+	.attendee-page-header h1 {
+		font-size: 1.15rem;
+	}
+
+	.attendee-card,
+	.form-section {
+		padding: 14px 12px;
+		border-radius: 16px;
+	}
+
+	.attendee-card-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.attendee-avatar {
+		width: 52px;
+		height: 52px;
+		font-size: 1.3rem;
+	}
+
+	.attendee-details {
+		font-size: 0.9rem;
+	}
+
+	.btn {
+		width: 100%;
+	}
+
+	.attendee-closed-card {
+		width: 100%;
+		padding: 20px 16px;
+		border-radius: 16px;
+	}
+
+	.attendee-closed__title {
+		font-size: 1.5rem;
+	}
+
+	.attendee-closed__subtitle {
+		font-size: 0.95rem;
+	}
+
+	code {
+		font-size: 0.95rem;
+	}
+}
+
 @media (min-width: 640px) {
 	.attendee-page-container {
 		max-width: 480px;

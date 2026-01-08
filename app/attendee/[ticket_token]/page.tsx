@@ -53,6 +53,8 @@ export default function Page() {
   const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
   const [checkinMessage, setCheckinMessage] = useState<string | null>(null);
   const [checkinError, setCheckinError] = useState<string | null>(null);
+  const [checkinClosed, setCheckinClosed] = useState(false);
+  const [checkinStatusChecked, setCheckinStatusChecked] = useState(false);
 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isPending] = useTransition();
@@ -135,6 +137,43 @@ export default function Page() {
     };
   }, [ticketToken]);
 
+  useEffect(() => {
+    if (!ticketToken) return;
+
+    let cancelled = false;
+
+    const loadCheckinStatus = async () => {
+      try {
+        const res = await fetch(`/api/checkin?ticket_token=${encodeURIComponent(ticketToken)}`, {
+          cache: 'no-store',
+        });
+
+        if (!res.ok) {
+          if (!cancelled) setCheckinStatusChecked(true);
+          return;
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setCheckinStatusChecked(true);
+        if (data && typeof data.allowed === 'boolean') {
+          setCheckinClosed(!data.allowed);
+        }
+      } catch {
+        if (!cancelled) {
+          setCheckinStatusChecked(true);
+        }
+      }
+    };
+
+    loadCheckinStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketToken]);
+
   const handleCheckin = async () => {
     setCheckinMessage(null);
     setCheckinError(null);
@@ -169,6 +208,11 @@ export default function Page() {
             ? 'ระบบไม่สามารถเช็กอินได้ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่หน้างาน'
             : 'เช็กอินไม่สำเร็จ');
 
+        if (msg === 'CHECKIN_CLOSED') {
+          setCheckinClosed(true);
+          setCheckinStatusChecked(true);
+          return;
+        }
         setCheckinError(msg);
 
         if (data?.alreadyCheckedIn && data.checked_in_at) {
@@ -242,6 +286,21 @@ export default function Page() {
 
   const avatarInitial = getAvatarInitial(attendee.full_name);
   const isCheckedIn = !!checkedInAt;
+  const showCheckinClosed = checkinStatusChecked && checkinClosed && !isCheckedIn;
+
+  if (showCheckinClosed) {
+    return (
+      <main className="attendee-page-container attendee-page--closed">
+        <div className="attendee-closed-card">
+          <div className="attendee-closed__code">CHECKIN_CLOSED</div>
+          <h1 className="attendee-closed__title">ระบบปิดการเช็คอิน</h1>
+          <p className="attendee-closed__subtitle">
+            ขณะนี้ปิดการเช็คอินหน้างานแล้ว โปรดติดต่อเจ้าหน้าที่สำหรับข้อมูลเพิ่มเติม
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="attendee-page-container">

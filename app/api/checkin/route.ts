@@ -40,6 +40,55 @@ function safeParseDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+export async function GET(req: NextRequest) {
+  const ticketToken = req.nextUrl.searchParams.get('ticket_token')?.trim();
+  if (!ticketToken) {
+    return NextResponse.json({ ok: false, message: 'MISSING_TICKET_TOKEN' }, { status: 400 });
+  }
+
+  const supabase = createServerClient();
+  const { data: attendee, error: attendeeError } = await supabase
+    .from('attendees')
+    .select('id, event_id, checked_in_at')
+    .eq('ticket_token', ticketToken)
+    .maybeSingle();
+
+  if (attendeeError) {
+    return NextResponse.json({ ok: false, message: 'ATTENDEE_QUERY_FAILED' }, { status: 500 });
+  }
+
+  if (!attendee) {
+    return NextResponse.json({ ok: false, message: 'ATTENDEE_NOT_FOUND' }, { status: 404 });
+  }
+
+  if (attendee.checked_in_at) {
+    return NextResponse.json({ ok: true, allowed: true, alreadyCheckedIn: true });
+  }
+
+  if (!attendee.event_id) {
+    return NextResponse.json({ ok: true, allowed: true, checkinOpen: true, withinWindow: true });
+  }
+
+  const { data: event, error: eventError } = await supabase
+    .from('events')
+    .select('id, start_checkin, end_checkin, checkin_open')
+    .eq('id', attendee.event_id)
+    .maybeSingle();
+
+  if (eventError || !event) {
+    return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
+  }
+
+  const now = new Date();
+  const start = safeParseDate(event.start_checkin);
+  const end = safeParseDate(event.end_checkin);
+  const withinWindow = (!start || now >= start) && (!end || now <= end);
+  const checkinOpen = event.checkin_open !== false;
+  const allowed = checkinOpen && withinWindow;
+
+  return NextResponse.json({ ok: true, checkinOpen, withinWindow, allowed });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);
@@ -165,13 +214,12 @@ export async function POST(req: NextRequest) {
     // ดึง event แค่เพื่อ debug/อนาคต (ไม่ได้ใช้บล็อกเวลาแล้ว)
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, name, start_checkin, end_checkin')
+      .select('id, name, start_checkin, end_checkin, checkin_open')
       .eq('id', attendee.event_id)
       .maybeSingle();
 
     if (eventError) {
       console.error('checkin: event query error', eventError);
-      // ยังอนุญาตให้เช็กอินต่อ แต่ใส่ debug ไว้
     }
 
     if (!event) {
@@ -179,12 +227,25 @@ export async function POST(req: NextRequest) {
         attendeeId: attendee.id,
         eventId: attendee.event_id,
       });
-      // ก็ยังให้เช็กอินต่อได้เหมือนกัน
     }
 
-    // ❗ ตรงนี้ไม่เช็ก start_checkin / end_checkin แล้ว
-    // ถ้าอยากเปิดกลับมาใช้ทีหลัง ค่อยเอาบล็อกตรวจเวลามาใส่ใหม่
+    if (event) {
+      const now = new Date(nowIso);
+      const start = safeParseDate(event.start_checkin);
+      const end = safeParseDate(event.end_checkin);
+      const withinWindow = (!start || now >= start) && (!end || now <= end);
+      const checkinOpen = event.checkin_open !== false;
 
+      if (!checkinOpen || !withinWindow) {
+        return json(
+          {
+            success: false,
+            message: 'CHECKIN_CLOSED',
+          },
+          403
+        );
+      }
+    }
     const { data: updated, error: updateError } = await supabase
       .from('attendees')
       .update({

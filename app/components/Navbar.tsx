@@ -18,6 +18,10 @@ const navLinks = [
   { href: '/admin/hotel-summary', label: 'ตัวสรุปยอด', icon: '🧾' },
 ];
 
+const suratLinks = [
+  { href: '/admin/settings', label: 'ปิด/เปิดลงทะเบียน-เช็คอิน', icon: '🛑' },
+];
+
 function safeDecodeURIComponent(value: string) {
   try {
     return decodeURIComponent(value);
@@ -45,12 +49,26 @@ function getDisplayNameFromEmail(email?: string | null) {
   return localPart || 'User';
 }
 
+function isSuratStaffEmail(email?: string | null) {
+  if (!email || !email.endsWith('@staff.local')) return false;
+
+  const localPart = (email.split('@')[0] ?? '').trim();
+  const fromKey = getProvinceNameFromKey(localPart);
+  if (fromKey === 'สุราษฎร์ธานี') return true;
+
+  const decoded = safeDecodeURIComponent(localPart).trim();
+  if (decoded === 'สุราษฎร์ธานี') return true;
+
+  return localPart.toUpperCase() === 'SRT';
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const [canManageEvent, setCanManageEvent] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const supabase = useMemo<SupabaseClient | null>(() => {
@@ -72,9 +90,11 @@ export default function Navbar() {
       if (user) {
         setIsLoggedIn(true);
         setUserName(getDisplayNameFromEmail(user.email));
+        setCanManageEvent(isSuratStaffEmail(user.email));
       } else {
         setIsLoggedIn(false);
         setUserName(null);
+        setCanManageEvent(false);
       }
     };
 
@@ -112,7 +132,7 @@ export default function Navbar() {
 
   // ✅ ถ้ายังไม่ล็อกอิน: โชว์เมนูแค่ /registeruser เท่านั้น
   const visibleLinks = isLoggedIn
-    ? navLinks
+    ? (canManageEvent ? [...navLinks, ...suratLinks] : navLinks)
     : navLinks.filter((l) => l.href === '/registeruser');
 
   return (
