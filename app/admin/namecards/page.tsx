@@ -3,13 +3,14 @@ import { createServerClient } from '@/lib/supabaseServer';
 import AdminNav from '../AdminNav';
 import '../admin-page.css';
 import { maskPhone } from '@/lib/maskPhone';
-import DownloadNamecardsPdfButton from './DownloadNamecardsPdfButton';
+import NamecardsFilters from './NamecardsFilters';
 
 export const dynamic = 'force-dynamic';
 
 type PageProps = {
   searchParams: Promise<{
     q?: string;
+    region?: string;
   }>;
 };
 
@@ -64,10 +65,13 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const keywordRaw = (sp.q ?? '').trim();
   const keyword = keywordRaw.toLowerCase();
+  const regionParam = sp.region;
+  const regionFilter = typeof regionParam === 'string' ? regionParam.trim() : '';
+  const regionValue = regionParam == null ? '0' : regionFilter;
 
   const supabase = await createServerClient();
 
-  const { data, error } = await supabase
+  let dataQuery = supabase
     .from('attendees')
     .select(
       `
@@ -86,6 +90,12 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
     `
     )
     .order('full_name', { ascending: true });
+
+  if (regionValue) {
+    dataQuery = dataQuery.eq('region', regionValue);
+  }
+
+  const { data, error } = await dataQuery;
 
   if (error || !data) {
     return (
@@ -152,43 +162,7 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
 
           <AdminNav />
 
-          {/* ฟอร์มค้นหาเล็ก ๆ ด้านบน */}
-          <section className="admin-filters">
-            <form className="admin-filters__form" method="get">
-              <div className="admin-filters__field admin-filters__field--full">
-                <label className="admin-filters__label">
-                  ค้นหาชื่อ / หน่วยงาน / ตำแหน่ง / จังหวัด / Token
-                </label>
-                <input
-                  type="text"
-                  name="q"
-                  defaultValue={keywordRaw}
-                  placeholder="พิมพ์คำค้นหา เช่น ชื่อ หน่วยงาน ตำแหน่ง จังหวัด หรือ Token"
-                  className="admin-filters__input"
-                />
-              </div>
-
-              <div className="admin-filters__actions">
-                <button type="submit" className="admin-filters__button">
-                  ใช้ตัวกรอง
-                </button>
-                <a href="/admin/namecards" className="admin-filters__link-reset">
-                  ล้างตัวกรอง
-                </a>
-
-                {/* ✅ ปุ่มดาวน์โหลดนามบัตร (PDF) -> เด้งเลือกภาคก่อน แล้วดาวน์โหลดเลย */}
-                <DownloadNamecardsPdfButton />
-
-                <a
-                  href="/admin"
-                  className="admin-filters__link-reset"
-                  style={{ marginLeft: 'auto' }}
-                >
-                  ← กลับไปหน้า Admin
-                </a>
-              </div>
-            </form>
-          </section>
+          <NamecardsFilters keywordRaw={keywordRaw} regionValue={regionValue} />
         </header>
 
         {/* ---------- Namecard List ---------- */}

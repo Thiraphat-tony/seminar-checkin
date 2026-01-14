@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useTransition } from 'react';
 import AdminImportButton from './AdminImportButton';
 import AdminExportExcelButton from './AdminExportExcelButton';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -25,29 +26,74 @@ export default function AdminFilters({
 }: AdminFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [keywordValue, setKeywordValue] = useState(keyword);
+  const [statusValue, setStatusValue] = useState(status);
+  const [regionValue, setRegionValue] = useState(regionFilter);
+  const [organizationValueState, setOrganizationValueState] = useState(organizationValue);
+  const [provinceValueState, setProvinceValueState] = useState(provinceValue);
+  const [isPending, startTransition] = useTransition();
 
-  const handleSelectChange = (name: string, value: string) => {
+  useEffect(() => {
+    setKeywordValue(keyword);
+    setStatusValue(status);
+    setRegionValue(regionFilter);
+    setOrganizationValueState(organizationValue);
+    setProvinceValueState(provinceValue);
+  }, [keyword, status, regionFilter, organizationValue, provinceValue]);
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     const params = new URLSearchParams(searchParams.toString());
-    if (value) {
-      params.set(name, value);
+    const trimmedKeyword = keywordValue.trim();
+
+    if (trimmedKeyword) {
+      params.set('q', trimmedKeyword);
     } else {
-      params.delete(name);
+      params.delete('q');
     }
-    router.push(`/admin?${params.toString()}`);
+
+    if (statusValue) {
+      params.set('status', statusValue);
+    } else {
+      params.delete('status');
+    }
+
+    if (regionValue) {
+      params.set('region', regionValue);
+    } else {
+      params.delete('region');
+    }
+
+    if (provinceValueState) {
+      params.set('province', provinceValueState);
+    } else {
+      params.delete('province');
+    }
+
+    if (organizationValueState) {
+      params.set('organization', organizationValueState);
+    } else {
+      params.delete('organization');
+    }
+
+    startTransition(() => {
+      router.push(`/admin?${params.toString()}`);
+    });
   };
 
   return (
-    <form className="admin-filters__form" method="get">
+    <form className="admin-filters__form" method="get" onSubmit={handleSubmit}>
       <div className="admin-filters__field">
         <label className="admin-filters__label">
-          ค้นหาชื่อ / หน่วยงาน / ตำแหน่ง / จังหวัด / Token
+          ชื่อ / เบอร์โทร / หน่วยงาน / จังหวัด / Token
         </label>
         <input
           type="text"
           name="q"
-          defaultValue={keyword}
-          placeholder="พิมพ์คำค้นหา เช่น ชื่อ หน่วยงาน ตำแหน่ง หรือจังหวัด"
+          value={keywordValue}
+          placeholder="ค้นหาชื่อ เบอร์โทร หน่วยงาน จังหวัด Token"
           className="admin-filters__input"
+          onChange={(e) => setKeywordValue(e.target.value)}
         />
       </div>
 
@@ -56,12 +102,12 @@ export default function AdminFilters({
           <label className="admin-filters__label">ภาค</label>
           <select
             name="region"
-            value={regionFilter}
+            value={regionValue}
             className="admin-filters__select"
-            onChange={(e) => handleSelectChange('region', e.target.value)}
+            onChange={(e) => setRegionValue(e.target.value)}
           >
-            <option value="">ทุกภาค</option>
-            <option value="0">ศาลกลาง</option>
+            <option value="">เลือกภาค</option>
+            <option value="0">ส่วนกลาง</option>
             <option value="1">ภาค 1</option>
             <option value="2">ภาค 2</option>
             <option value="3">ภาค 3</option>
@@ -78,9 +124,9 @@ export default function AdminFilters({
           <label className="admin-filters__label">จังหวัด</label>
           <select
             name="province"
-            value={provinceValue}
+            value={provinceValueState}
             className="admin-filters__select"
-            onChange={(e) => handleSelectChange('province', e.target.value)}
+            onChange={(e) => setProvinceValueState(e.target.value)}
           >
             <option value="">ทุกจังหวัด</option>
             {provinceOptions.map((p) => (
@@ -95,9 +141,9 @@ export default function AdminFilters({
           <label className="admin-filters__label">ศาล / หน่วยงาน</label>
           <select
             name="organization"
-            value={organizationValue}
+            value={organizationValueState}
             className="admin-filters__select"
-            onChange={(e) => handleSelectChange('organization', e.target.value)}
+            onChange={(e) => setOrganizationValueState(e.target.value)}
           >
             <option value="">ทุกศาล / หน่วยงาน</option>
             {organizationOptions.map((org) => (
@@ -114,9 +160,9 @@ export default function AdminFilters({
           <label className="admin-filters__label">สถานะเช็กอิน</label>
           <select
             name="status"
-            value={status}
+            value={statusValue}
             className="admin-filters__select"
-            onChange={(e) => handleSelectChange('status', e.target.value)}
+            onChange={(e) => setStatusValue(e.target.value)}
           >
             <option value="all">ทั้งหมด</option>
             <option value="checked">เช็กอินแล้ว</option>
@@ -125,8 +171,8 @@ export default function AdminFilters({
         </div>
 
         <div className="admin-filters__actions">
-          <button type="submit" className="admin-filters__button">
-            ใช้ตัวกรอง
+          <button type="submit" className="admin-filters__button" disabled={isPending}>
+            ค้นหา
           </button>
           <a href="/admin" className="admin-filters__link-reset">
             ล้างตัวกรอง
@@ -137,11 +183,10 @@ export default function AdminFilters({
           <AdminImportButton />
           <AdminExportExcelButton />
           <a href="/admin/namecards" className="admin-export-btn">
-            🎫 หน้านามบัตร (QR)
+            ส่งออกนามบัตร (QR)
           </a>
         </div>
       </div>
     </form>
   );
 }
-

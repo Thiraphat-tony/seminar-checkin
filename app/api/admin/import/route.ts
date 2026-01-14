@@ -4,9 +4,6 @@ import ExcelJS from 'exceljs';
 import { createServerClient } from '@/lib/supabaseServer';
 import { phoneForStorage } from '@/lib/phone';
 
-// raw row จาก Excel
-type RawExcelRow = { [key: string]: any };
-
 // ให้ตรง constraint ใน DB (เหลือ 3 แบบ)
 type FoodType = 'normal' | 'vegetarian' | 'halal';
 
@@ -26,6 +23,9 @@ type PreparedRow = {
   coordinator_phone: string | null;
   hotel_name: string | null;
 };
+
+// raw row จาก Excel
+type RawMappedRow = Partial<Record<keyof PreparedRow, any>>;
 
 // แปลงค่าจาก Excel → food_type ที่ใช้ใน DB (3 ค่า)
 function normalizeFoodType(value: any): FoodType | null {
@@ -249,6 +249,73 @@ function mapHeaderToKey(header: string): keyof PreparedRow | null {
   return null;
 }
 
+function prepareRow(row: RawMappedRow): PreparedRow | null {
+  const full_name = row.full_name ?? null;
+  const ticket_token = row.ticket_token ?? null;
+  const phone = row.phone ?? null;
+  const organization = row.organization ?? null;
+  const job_position = row.job_position ?? null;
+  const province = row.province ?? null;
+  const region_raw = row.region ?? null;
+  const qr_image_url = row.qr_image_url ?? null;
+  const food_type_raw = row.food_type ?? null;
+  const coordinator_name = row.coordinator_name ?? null;
+  const coordinator_phone = row.coordinator_phone ?? null;
+  const hotel_name = row.hotel_name ?? null;
+  const event_id = row.event_id ?? null;
+
+  // ถ้าไม่มีชื่อหรือไม่มี token → ข้าม
+  if (!full_name || !ticket_token) return null;
+
+  // ✅ แปลง region เป็นตัวเลข 0–9
+  let regionNum: number | null = null;
+  if (region_raw != null) {
+    const rawStr = String(region_raw).trim();
+
+    if (
+      rawStr === 'ศาลกลาง' ||
+      rawStr === 'ศาลเยาวชนและครอบครัวกลาง' ||
+      rawStr === '0'
+    ) {
+      regionNum = 0;
+    } else {
+      const parsed = parseInt(rawStr, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 9) {
+        regionNum = parsed;
+      }
+    }
+  }
+
+  const normalizedPhone = phone ? phoneForStorage(String(phone).trim()) : null;
+  const normalizedCoordinatorPhone = coordinator_phone
+    ? phoneForStorage(String(coordinator_phone).trim())
+    : null;
+  if (phone && !normalizedPhone) {
+    console.warn('[IMPORT] invalid phone, setting null', { phone });
+  }
+  if (coordinator_phone && !normalizedCoordinatorPhone) {
+    console.warn('[IMPORT] invalid coordinator phone, setting null', { coordinator_phone });
+  }
+
+  return {
+    event_id: event_id ? String(event_id).trim() : null,
+    full_name: String(full_name).trim(),
+    ticket_token: String(ticket_token).trim(),
+    phone: normalizedPhone,
+    organization: organization ? String(organization).trim() : null,
+    job_position: job_position ? String(job_position).trim() : null,
+    province: province ? String(province).trim() : null,
+    region: regionNum,
+    qr_image_url: qr_image_url ? String(qr_image_url).trim() : null,
+    food_type: normalizeFoodType(food_type_raw),
+    coordinator_name: coordinator_name ? String(coordinator_name).trim() : null,
+    coordinator_phone: normalizedCoordinatorPhone,
+    hotel_name: hotel_name ? String(hotel_name).trim() : null,
+  };
+}
+
+const UPSERT_BATCH_SIZE = 500;
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -273,14 +340,14 @@ export async function POST(req: NextRequest) {
     await workbook.xlsx.load(arrayBuffer);
 
     // 🔹 อ่านทุกชีตในไฟล์ ไม่ใช่แค่ชีตที่ 1
-    const rows: RawExcelRow[] = [];
+    const prepared: PreparedRow[] = [];
+    let totalDataRows = 0;
 
     for (const worksheet of workbook.worksheets) {
       if (!worksheet) continue;
       const sheetName = worksheet.name;
       console.log('[IMPORT] reading sheet:', sheetName);
 
-      const headers: string[] = [];
       const headerKeys: Array<keyof PreparedRow | null> = [];
 
       // header row (แถวที่ 1 ของชีตนั้น)
@@ -292,7 +359,6 @@ export async function POST(req: NextRequest) {
 
       headerRow.eachCell((cell, colNum) => {
         const rawHeader = String(cell.value || '').trim();
-        headers[colNum - 1] = rawHeader;
         headerKeys[colNum - 1] = mapHeaderToKey(rawHeader);
       });
 
@@ -301,20 +367,19 @@ export async function POST(req: NextRequest) {
       worksheet.eachRow((row, rowNum) => {
         if (rowNum === 1) return; // ข้าม header ในชีตนั้น
 
-        const obj: RawExcelRow = {};
+        const obj: RawMappedRow = {};
         row.eachCell((cell, colNum) => {
           const mappedKey = headerKeys[colNum - 1];
           if (mappedKey) {
             obj[mappedKey] = cell.value ?? null;
-            return;
           }
-          const header = headers[colNum - 1];
-          if (header) obj[header] = cell.value ?? null;
         });
 
         if (Object.keys(obj).length > 0) {
-          rows.push(obj);
+          totalDataRows += 1;
           sheetRowCount += 1;
+          const preparedRow = prepareRow(obj);
+          if (preparedRow) prepared.push(preparedRow);
         }
       });
 
@@ -324,7 +389,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ถ้าทุกชีตว่างจริง ๆ
-    if (rows.length === 0) {
+    if (totalDataRows === 0) {
       return NextResponse.json(
         {
           ok: false,
@@ -334,143 +399,6 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-
-    // 3) map จาก Excel → โครงสร้าง attendees (ตาม schema ใหม่)
-    const prepared: PreparedRow[] = rows
-      .map((row) => {
-        const full_name =
-          row.full_name ??
-          row['full_name'] ??
-          row['ชื่อ-นามสกุล'] ??
-          row['ชื่อ-สกุล'] ??
-          row['ชื่อ'] ??
-          null;
-
-        const ticket_token =
-          row.ticket_token ??
-          row['ticket_token'] ??
-          row['Token'] ??
-          row['token'] ??
-          row['รหัสบัตร'] ??
-          row['โทเคน'] ??
-          null;
-
-        const phone =
-          row.phone ??
-          row['เบอร์โทร'] ??
-          row['โทรศัพท์'] ??
-          row['phone_number'] ??
-          null;
-
-        const organization =
-          row.organization ??
-          row['หน่วยงาน'] ??
-          row['หน่วยงาน/สังกัด'] ??
-          row['องค์กร'] ??
-          null;
-
-        const job_position =
-          row.job_position ??
-          row['job_position'] ??
-          row['ตำแหน่ง'] ??
-          row['ตำแหน่งงาน'] ??
-          null;
-
-        const province =
-          row.province ?? row['province'] ?? row['จังหวัด'] ?? null;
-
-        const region_raw =
-          row.region ?? row['ภาค'] ?? row['สังกัดภาค'] ?? null;
-
-        const qr_image_url =
-          row.qr_image_url ??
-          row['qr_image_url'] ??
-          row['QR URL'] ??
-          row['qr_url'] ??
-          null;
-
-        const food_type_raw =
-          row.food_type ??
-          row['food_type'] ??
-          row['ประเภทอาหาร'] ??
-          null;
-
-        const coordinator_name =
-          row.coordinator_name ??
-          row['coordinator_name'] ??
-          row['ชื่อผู้ประสานงาน'] ??
-          row['ผู้ประสานงาน'] ??
-          null;
-
-        const coordinator_phone =
-          row.coordinator_phone ??
-          row['coordinator_phone'] ??
-          row['เบอร์โทรผู้ประสานงาน'] ??
-          row['เบอร์ผู้ประสานงาน'] ??
-          row['โทรผู้ประสานงาน'] ??
-          null;
-
-        const hotel_name =
-          row.hotel_name ??
-          row['โรงแรม'] ??
-          row['โรงแรมที่พัก'] ??
-          row['ที่พัก'] ??
-          null;
-
-        const event_id = row.event_id ?? row['event_id'] ?? null;
-
-        // ถ้าไม่มีชื่อหรือไม่มี token → ข้าม
-        if (!full_name || !ticket_token) return null;
-
-        // ✅ แปลง region เป็นตัวเลข 0–9
-        let regionNum: number | null = null;
-        if (region_raw != null) {
-          const rawStr = String(region_raw).trim();
-
-          if (
-            rawStr === 'ศาลกลาง' ||
-            rawStr === 'ศาลเยาวชนและครอบครัวกลาง' ||
-            rawStr === '0'
-          ) {
-            regionNum = 0;
-          } else {
-            const parsed = parseInt(rawStr, 10);
-            if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 9) {
-              regionNum = parsed;
-            }
-          }
-        }
-
-        const normalizedPhone = phone ? phoneForStorage(String(phone).trim()) : null;
-        const normalizedCoordinatorPhone = coordinator_phone
-          ? phoneForStorage(String(coordinator_phone).trim())
-          : null;
-        if (phone && !normalizedPhone) {
-          console.warn('[IMPORT] invalid phone, setting null', { phone });
-        }
-        if (coordinator_phone && !normalizedCoordinatorPhone) {
-          console.warn('[IMPORT] invalid coordinator phone, setting null', { coordinator_phone });
-        }
-
-        return {
-          event_id: event_id ? String(event_id).trim() : null,
-          full_name: String(full_name).trim(),
-          ticket_token: String(ticket_token).trim(),
-          phone: normalizedPhone,
-          organization: organization ? String(organization).trim() : null,
-          job_position: job_position ? String(job_position).trim() : null,
-          province: province ? String(province).trim() : null,
-          region: regionNum,
-          qr_image_url: qr_image_url ? String(qr_image_url).trim() : null,
-          food_type: normalizeFoodType(food_type_raw),
-          coordinator_name: coordinator_name
-            ? String(coordinator_name).trim()
-            : null,
-          coordinator_phone: normalizedCoordinatorPhone,
-          hotel_name: hotel_name ? String(hotel_name).trim() : null,
-        };
-      })
-      .filter(Boolean) as PreparedRow[];
 
     // 4) เช็กกรณีไม่พบข้อมูลที่พร้อมนำเข้า (หลังจาก filter null ออก)
     if (prepared.length === 0) {
@@ -504,46 +432,52 @@ export async function POST(req: NextRequest) {
     const eventId = events[0].id as string;
 
     // 6) upsert ลง attendees ตาม schema ใหม่
-    const { data: inserted, error: insertError } = await supabase
-      .from('attendees')
-      .upsert(
-        prepared.map((row) => ({
-          event_id: eventId,
-          full_name: row.full_name,
-          phone: row.phone,
-          organization: row.organization,
-          job_position: row.job_position,
-          province: row.province,
-          region: row.region,
-          qr_image_url: row.qr_image_url,
-          food_type: row.food_type,
-          coordinator_name: row.coordinator_name,
-          coordinator_phone: row.coordinator_phone,
-          hotel_name: row.hotel_name,
-          ticket_token: row.ticket_token,
-        })),
-        { onConflict: 'ticket_token' },
-      )
-      .select('id');
+    let importedCount = 0;
 
-    if (insertError) {
-      console.error('IMPORT INSERT ERROR', insertError);
-      return NextResponse.json(
-        {
-          ok: false,
-          message:
-            'เกิดข้อผิดพลาดระหว่างการบันทึกข้อมูลเข้าฐานข้อมูล (เช่น ticket_token ซ้ำ หรือข้อมูลไม่ตรง constraint)',
-          detail: insertError.message,
-        },
-        { status: 500 },
-      );
+    for (let i = 0; i < prepared.length; i += UPSERT_BATCH_SIZE) {
+      const slice = prepared.slice(i, i + UPSERT_BATCH_SIZE);
+      const { error: insertError } = await supabase
+        .from('attendees')
+        .upsert(
+          slice.map((row) => ({
+            event_id: eventId,
+            full_name: row.full_name,
+            phone: row.phone,
+            organization: row.organization,
+            job_position: row.job_position,
+            province: row.province,
+            region: row.region,
+            qr_image_url: row.qr_image_url,
+            food_type: row.food_type,
+            coordinator_name: row.coordinator_name,
+            coordinator_phone: row.coordinator_phone,
+            hotel_name: row.hotel_name,
+            ticket_token: row.ticket_token,
+          })),
+          { onConflict: 'ticket_token' },
+        );
+
+      if (insertError) {
+        console.error('IMPORT INSERT ERROR', insertError);
+        return NextResponse.json(
+          {
+            ok: false,
+            message:
+              'เกิดข้อผิดพลาดระหว่างการบันทึกข้อมูลเข้าฐานข้อมูล (เช่น ticket_token ซ้ำ หรือข้อมูลไม่ตรง constraint)',
+            detail: insertError.message,
+          },
+          { status: 500 },
+        );
+      }
+
+      importedCount += slice.length;
     }
 
     // 7) ตอบกลับสำเร็จ
     return NextResponse.json({
       ok: true,
-      imported: inserted?.length ?? 0,
-      message: `นำเข้าข้อมูลสำเร็จ ${inserted?.length ?? 0} รายการ`,
+      imported: importedCount,
+      message: `นำเข้าข้อมูลสำเร็จ ${importedCount} รายการ`,
     });
   } catch (err) {
     console.error('IMPORT ROUTE ERROR', err);
