@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 type Row = {
   region: number | null;
+  province: string | null;
   hotel_name: string | null;
   food_type: string | null;
 };
@@ -25,9 +26,16 @@ const REGION_LABELS: Record<number, string> = {
   9: "ภาค 9",
 };
 
+const UNKNOWN_PROVINCE_LABEL = "ไม่ระบุจังหวัด";
+
 function normalizeHotelName(name: string | null): string {
   const v = (name ?? "").trim();
   return v.length ? v : "ไม่ระบุโรงแรม";
+}
+
+function normalizeProvince(name: string | null): string {
+  const v = (name ?? "").trim();
+  return v.length ? v : UNKNOWN_PROVINCE_LABEL;
 }
 
 const FOOD_KEYS = ["normal", "vegetarian", "halal", "unknown"] as const;
@@ -44,6 +52,10 @@ function normalizeFoodType(v: string | null): FoodKey {
   const t = (v ?? "").trim().toLowerCase();
   if (t === "normal" || t === "vegetarian" || t === "halal") return t;
   return "unknown";
+}
+
+function isValidRegion(region: number | null): region is number {
+  return typeof region === "number" && region >= 0 && region <= 9;
 }
 
 function styleHeaderRow(row: ExcelJS.Row) {
@@ -93,7 +105,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("attendees")
-    .select("region, hotel_name, food_type")
+    .select("region, province, hotel_name, food_type")
     .order("region", { ascending: true });
 
   if (error) {
@@ -105,28 +117,38 @@ export async function GET() {
 
   // ====== Hotels list ======
   const hotelSet = new Set<string>();
-  for (const r of rows) hotelSet.add(normalizeHotelName(r.hotel_name));
+  const provinceSet = new Set<string>();
+  for (const r of rows) {
+    if (!isValidRegion(r.region)) continue;
+    hotelSet.add(normalizeHotelName(r.hotel_name));
+    provinceSet.add(normalizeProvince(r.province));
+  }
   const hotels = Array.from(hotelSet).sort((a, b) => a.localeCompare(b, "th"));
+  const provinces = Array.from(provinceSet).sort((a, b) => {
+    if (a === UNKNOWN_PROVINCE_LABEL && b === UNKNOWN_PROVINCE_LABEL) return 0;
+    if (a === UNKNOWN_PROVINCE_LABEL) return 1;
+    if (b === UNKNOWN_PROVINCE_LABEL) return -1;
+    return a.localeCompare(b, "th");
+  });
 
   // ====== Pivot: hotel counts ======
-  const hotelCount: Record<number, Record<string, number>> = {};
-  const hotelRowTotals: Record<number, number> = {};
+  const hotelCount: Record<string, Record<string, number>> = {};
+  const hotelRowTotals: Record<string, number> = {};
   const hotelColTotals: Record<string, number> = {};
   let grandTotal = 0;
 
-  for (const region of regions) {
-    hotelCount[region] = {};
-    hotelRowTotals[region] = 0;
+  for (const province of provinces) {
+    hotelCount[province] = {};
+    hotelRowTotals[province] = 0;
   }
   for (const h of hotels) hotelColTotals[h] = 0;
 
   for (const r of rows) {
-    const region = typeof r.region === "number" ? r.region : -1;
-    if (region < 0 || region > 9) continue;
-
+    if (!isValidRegion(r.region)) continue;
+    const province = normalizeProvince(r.province);
     const h = normalizeHotelName(r.hotel_name);
-    hotelCount[region][h] = (hotelCount[region][h] ?? 0) + 1;
-    hotelRowTotals[region] += 1;
+    hotelCount[province][h] = (hotelCount[province][h] ?? 0) + 1;
+    hotelRowTotals[province] += 1;
     hotelColTotals[h] = (hotelColTotals[h] ?? 0) + 1;
     grandTotal += 1;
   }
@@ -147,8 +169,8 @@ export async function GET() {
   }
 
   for (const r of rows) {
-    const region = typeof r.region === "number" ? r.region : -1;
-    if (region < 0 || region > 9) continue;
+    if (!isValidRegion(r.region)) continue;
+    const region = r.region;
 
     const key = normalizeFoodType(r.food_type);
     foodCount[region][key] += 1;
@@ -164,20 +186,19 @@ export async function GET() {
   // Sheet 1: Hotels
   const wsHotel = wb.addWorksheet("Hotel Summary", { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
 
-  wsHotel.addRow(["ภาค", ...hotels, "รวม"]);
+  wsHotel.addRow(["จังหวัด", ...hotels, "รวม"]);
   styleHeaderRow(wsHotel.getRow(1));
 
-  for (const region of regions) {
-    const label = REGION_LABELS[region] ?? `ภาค ${region}`;
+  for (const province of provinces) {
     const line = [
-      label,
-      ...hotels.map((h) => hotelCount[region][h] ?? 0),
-      hotelRowTotals[region] ?? 0,
+      province,
+      ...hotels.map((h) => hotelCount[province][h] ?? 0),
+      hotelRowTotals[province] ?? 0,
     ];
     wsHotel.addRow(line);
   }
 
-  wsHotel.addRow(["รวมทุกภาค", ...hotels.map((h) => hotelColTotals[h] ?? 0), grandTotal]);
+  wsHotel.addRow(["รวมทุกจังหวัด", ...hotels.map((h) => hotelColTotals[h] ?? 0), grandTotal]);
   wsHotel.getRow(wsHotel.rowCount).font = { bold: true };
 
   // Align numbers
