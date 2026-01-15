@@ -329,7 +329,14 @@ export default function Page() {
           <div className="attendee-details">
             <div>โทรศัพท์: {maskPhone(attendee.phone, 'ไม่ระบุ')}</div>
             <div>ตำแหน่ง: {attendee.job_position || 'ไม่ระบุตำแหน่ง'}</div>
-            <div>ภาค: {attendee.region ? `ภาค ${attendee.region}` : 'ไม่ระบุภาค'}</div>
+            <div>
+              ภาค:{' '}
+              {attendee.region === 0
+                ? 'ศาลเยาวชนและครอบครัวกลาง (กรุงเทพมหานคร)'
+                : typeof attendee.region === 'number'
+                ? `ภาค ${attendee.region}`
+                : 'ไม่ระบุภาค'}
+            </div>
             {attendee.region && (
               <div className="attendee-region-note">
                 {attendee.region === 1 && 'ภาค 1: กรุงเทพมหานครและจังหวัดในภาคกลาง'}

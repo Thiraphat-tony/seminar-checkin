@@ -127,13 +127,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (provinceFilter) q = q.eq('province', provinceFilter);
     if (organizationFilter) q = q.eq('organization', organizationFilter);
 
-    // If the logged-in staff is not super_admin, restrict to their province only
-    // Exception: staff from …,¦…,,…,ś…,ý…,c…,Z…,ś…1O…,~…,ý…,T…,ć can view all provinces
-    if (staff && staff.role !== 'super_admin') {
+    // Only Surat (SRT) admin can view all provinces; others are restricted to their province.
+    if (staff) {
       const prov = (staff.province_name ?? '').trim();
-      const isSurat = prov.includes('…,¦…,,…,ś…,ý…,c…,Z…,ś…1O');
+      const provinceKey = (staff.province_key ?? '').trim().toUpperCase();
+      const isSurat = provinceKey === 'SRT';
       if (prov && !isSurat) {
-        q = q.ilike('province', `%${prov}%`);
+        q = q.eq('province', prov);
       }
     }
 
