@@ -106,36 +106,42 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const keyword = (sp.q ?? '').trim().toLowerCase();
   const status = sp.status ?? 'all';
   const regionFilter = (sp.region ?? '').trim();
-  const organizationFilter = (sp.organization ?? '').trim().toLowerCase();
-  const provinceFilter = (sp.province ?? '').trim().toLowerCase();
+  const regionFilterNum =
+    regionFilter && !Number.isNaN(Number(regionFilter)) ? Number(regionFilter) : null;
+  const organizationFilter = (sp.organization ?? '').trim();
+  const provinceFilter = (sp.province ?? '').trim();
 
   const { supabase, staff } = await requireStaffForPage({ redirectTo: '/login' });
 
-  // --- Count all filtered rows (for pagination) ---
-  let countQuery = supabase.from('attendees').select('*', { count: 'exact', head: true });
+  const applyFilters = (query: any) => {
+    let q = query;
 
-  if (keyword) {
-    countQuery = countQuery.or(
-      `full_name.ilike.%${keyword}%,organization.ilike.%${keyword}%,job_position.ilike.%${keyword}%,province.ilike.%${keyword}%,ticket_token.ilike.%${keyword}%,coordinator_name.ilike.%${keyword}%,coordinator_phone.ilike.%${keyword}%`,
-    );
-  }
-  if (status === 'checked') countQuery = countQuery.filter('checked_in_at', 'not.is', null);
-  else if (status === 'unchecked') countQuery = countQuery.filter('checked_in_at', 'is', null);
-  if (regionFilter) countQuery = countQuery.eq('region', regionFilter);
-  if (provinceFilter) countQuery = countQuery.ilike('province', `%${provinceFilter}%`);
-  if (organizationFilter) countQuery = countQuery.ilike('organization', `%${organizationFilter}%`);
-
-  // If the logged-in staff is not super_admin, restrict to their province only
-  // Exception: staff from สุราษฎร์ธานี can view all provinces
-  if (staff && staff.role !== 'super_admin') {
-    const prov = (staff.province_name ?? '').trim();
-    const isSurat = prov.includes('สุราษฎร์');
-    if (prov && !isSurat) {
-      countQuery = countQuery.ilike('province', `%${prov}%`);
+    if (keyword) {
+      q = q.or(
+        `full_name.ilike.%${keyword}%,organization.ilike.%${keyword}%,job_position.ilike.%${keyword}%,province.ilike.%${keyword}%,ticket_token.ilike.%${keyword}%,coordinator_name.ilike.%${keyword}%,coordinator_phone.ilike.%${keyword}%`,
+      );
     }
-  }
+    if (status === 'checked') q = q.filter('checked_in_at', 'not.is', null);
+    else if (status === 'unchecked') q = q.filter('checked_in_at', 'is', null);
+    if (regionFilterNum !== null) q = q.eq('region', regionFilterNum);
+    if (provinceFilter) q = q.eq('province', provinceFilter);
+    if (organizationFilter) q = q.eq('organization', organizationFilter);
 
-  const { count: totalFiltered = 0 } = await countQuery;
+    // If the logged-in staff is not super_admin, restrict to their province only
+    // Exception: staff from …,¦…,,…,ś…,ý…,c…,Z…,ś…1O…,~…,ý…,T…,ć can view all provinces
+    if (staff && staff.role !== 'super_admin') {
+      const prov = (staff.province_name ?? '').trim();
+      const isSurat = prov.includes('…,¦…,,…,ś…,ý…,c…,Z…,ś…1O');
+      if (prov && !isSurat) {
+        q = q.ilike('province', `%${prov}%`);
+      }
+    }
+
+    return q;
+  };
+
+  // --- Count all filtered rows (for pagination) ---
+  let countQuery = supabase.from('attendees').select('id', { count: 'exact', head: true });
 
   // --- Query paged data ---
   let dataQuery = supabase
@@ -164,26 +170,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .order('full_name', { ascending: true })
     .range(from, to);
 
-  if (keyword) {
-    dataQuery = dataQuery.or(
-      `full_name.ilike.%${keyword}%,organization.ilike.%${keyword}%,job_position.ilike.%${keyword}%,province.ilike.%${keyword}%,ticket_token.ilike.%${keyword}%,coordinator_name.ilike.%${keyword}%,coordinator_phone.ilike.%${keyword}%`,
-    );
-  }
-  if (status === 'checked') dataQuery = dataQuery.filter('checked_in_at', 'not.is', null);
-  else if (status === 'unchecked') dataQuery = dataQuery.filter('checked_in_at', 'is', null);
-  if (regionFilter) dataQuery = dataQuery.eq('region', regionFilter);
-  if (provinceFilter) dataQuery = dataQuery.ilike('province', `%${provinceFilter}%`);
-  if (organizationFilter) dataQuery = dataQuery.ilike('organization', `%${organizationFilter}%`);
+  countQuery = applyFilters(countQuery);
+  dataQuery = applyFilters(dataQuery);
 
-  if (staff && staff.role !== 'super_admin') {
-    const prov = (staff.province_name ?? '').trim();
-    const isSurat = prov.includes('สุราษฎร์');
-    if (prov && !isSurat) {
-      dataQuery = dataQuery.ilike('province', `%${prov}%`);
-    }
+  const [
+    { count: totalFilteredRaw, error: countError },
+    { data, error },
+  ] = await Promise.all([countQuery, dataQuery]);
+
+  if (countError) {
+    console.error('Admin count query error:', countError);
   }
 
-  const { data, error } = await dataQuery;
+  const totalFiltered = totalFilteredRaw ?? 0;
 
   if (error || !data) {
     return (

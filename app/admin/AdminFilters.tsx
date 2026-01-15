@@ -41,10 +41,24 @@ export default function AdminFilters({
     setProvinceValueState(provinceValue);
   }, [keyword, status, regionFilter, organizationValue, provinceValue]);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const pushWithFilters = (next?: Partial<{
+    keyword: string;
+    status: string;
+    region: string;
+    province: string;
+    organization: string;
+  }>) => {
+    const merged = {
+      keyword: keywordValue,
+      status: statusValue,
+      region: regionValue,
+      province: provinceValueState,
+      organization: organizationValueState,
+      ...next,
+    };
+
     const params = new URLSearchParams(searchParams.toString());
-    const trimmedKeyword = keywordValue.trim();
+    const trimmedKeyword = merged.keyword.trim();
 
     if (trimmedKeyword) {
       params.set('q', trimmedKeyword);
@@ -52,26 +66,26 @@ export default function AdminFilters({
       params.delete('q');
     }
 
-    if (statusValue) {
-      params.set('status', statusValue);
+    if (merged.status) {
+      params.set('status', merged.status);
     } else {
       params.delete('status');
     }
 
-    if (regionValue) {
-      params.set('region', regionValue);
+    if (merged.region) {
+      params.set('region', merged.region);
     } else {
       params.delete('region');
     }
 
-    if (provinceValueState) {
-      params.set('province', provinceValueState);
+    if (merged.province) {
+      params.set('province', merged.province);
     } else {
       params.delete('province');
     }
 
-    if (organizationValueState) {
-      params.set('organization', organizationValueState);
+    if (merged.organization) {
+      params.set('organization', merged.organization);
     } else {
       params.delete('organization');
     }
@@ -79,6 +93,23 @@ export default function AdminFilters({
     startTransition(() => {
       router.push(`/admin?${params.toString()}`);
     });
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    pushWithFilters();
+  };
+
+  const handleRegionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setRegionValue(value);
+    pushWithFilters({ region: value });
+  };
+
+  const handleProvinceChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setProvinceValueState(value);
+    pushWithFilters({ province: value });
   };
 
   return (
@@ -104,7 +135,7 @@ export default function AdminFilters({
             name="region"
             value={regionValue}
             className="admin-filters__select"
-            onChange={(e) => setRegionValue(e.target.value)}
+            onChange={handleRegionChange}
           >
             <option value="">เลือกภาค</option>
             <option value="0">ส่วนกลาง</option>
@@ -126,7 +157,7 @@ export default function AdminFilters({
             name="province"
             value={provinceValueState}
             className="admin-filters__select"
-            onChange={(e) => setProvinceValueState(e.target.value)}
+            onChange={handleProvinceChange}
           >
             <option value="">ทุกจังหวัด</option>
             {provinceOptions.map((p) => (
