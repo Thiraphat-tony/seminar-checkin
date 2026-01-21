@@ -5,16 +5,14 @@ type Body = {
   eventId?: string;
   registrationOpen?: boolean;
   checkinOpen?: boolean;
+  checkinRoundOpen?: number;
 };
 
 export async function POST(req: Request) {
   const auth = await requireStaffForApi(req);
   if (!auth.ok) return auth.response;
-  const provinceKey = (auth.staff.province_key ?? '').trim().toUpperCase();
-  const isSurat =
-    provinceKey === 'SRT' || (auth.staff.province_name ?? '').includes('สุราษฎร์ธานี');
-
-  if (!isSurat) {
+  const isSuperAdmin = auth.staff.role === 'super_admin';
+  if (!isSuperAdmin) {
     return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
   }
 
@@ -28,12 +26,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'MISSING_EVENT_ID' }, { status: 400 });
   }
 
-  const updateData: Record<string, boolean> = {};
+  const updateData: Record<string, boolean | number> = {};
   if (typeof body.registrationOpen === 'boolean') {
     updateData.registration_open = body.registrationOpen;
   }
   if (typeof body.checkinOpen === 'boolean') {
     updateData.checkin_open = body.checkinOpen;
+  }
+  if (typeof body.checkinRoundOpen === 'number') {
+    if (!Number.isFinite(body.checkinRoundOpen)) {
+      return NextResponse.json({ ok: false, error: 'INVALID_CHECKIN_ROUND' }, { status: 400 });
+    }
+    const normalizedRound = Math.max(0, Math.min(3, Math.trunc(body.checkinRoundOpen)));
+    updateData.checkin_round_open = normalizedRound;
+  }
+
+  if (typeof body.checkinOpen === 'boolean' && body.checkinOpen === false) {
+    updateData.checkin_round_open = 0;
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -44,7 +53,7 @@ export async function POST(req: Request) {
     .from('events')
     .update(updateData)
     .eq('id', eventId)
-    .select('id, registration_open, checkin_open')
+    .select('id, registration_open, checkin_open, checkin_round_open')
     .maybeSingle();
 
   if (error || !data) {

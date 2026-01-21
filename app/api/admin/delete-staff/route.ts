@@ -45,10 +45,8 @@ export async function POST(request: Request) {
     const auth = await requireStaffForApi(request);
     if (!auth.ok) return auth.response;
 
-    const provinceKey = (auth.staff.province_key ?? '').trim().toUpperCase();
-    const isSurat =
-      provinceKey === 'SRT' || (auth.staff.province_name ?? '').includes('สุราษฎร์ธานี');
-    if (!isSurat) {
+    const isSuperAdmin = auth.staff.role === 'super_admin';
+    if (!isSuperAdmin) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
 
@@ -63,7 +61,7 @@ export async function POST(request: Request) {
 
     const { data: staffProfile, error: staffProfileError } = await auth.supabase
       .from('staff_profiles')
-      .select('user_id, role, province_name')
+      .select('user_id, role, court_id')
       .eq('user_id', userId)
       .maybeSingle();
 

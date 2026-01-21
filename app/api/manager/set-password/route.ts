@@ -1,6 +1,5 @@
 ﻿import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
-import { makeProvinceKey } from '@/lib/provinceKeys';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +8,7 @@ type Body = {
   passphrase?: string;
   newPassword?: string;
   email?: string;
-  provinceName?: string;
+  courtId?: string;
 };
 
 function normalizeEmail(email: string) {
@@ -118,7 +117,7 @@ export async function POST(req: Request) {
     const passphrase = (body.passphrase ?? '').trim();
     const newPassword = (body.newPassword ?? '').trim();
     const emailFromBody = (body.email ?? '').trim();
-    const provinceName = (body.provinceName ?? '').trim();
+    const courtId = (body.courtId ?? '').trim();
 
     if (!passphrase) {
       return NextResponse.json({ ok: false, error: 'MISSING_PASSPHRASE' }, { status: 400 });
@@ -131,8 +130,8 @@ export async function POST(req: Request) {
     }
 
     let targetEmail = '';
-    if (provinceName) {
-      targetEmail = normalizeEmail(`${makeProvinceKey(provinceName)}@staff.local`);
+    if (courtId) {
+      targetEmail = normalizeEmail(`${courtId}@staff.local`);
     } else {
       const defaultEmail = process.env.MANAGER_ADMIN_EMAIL ?? '';
       targetEmail = normalizeEmail(emailFromBody || defaultEmail);

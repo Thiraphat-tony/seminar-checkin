@@ -19,6 +19,7 @@
   justify-content: space-between;
   height: 64px;
   gap: 24px;
+  position: relative;
 }
 
 .navbar__brand {
@@ -50,7 +51,7 @@
   transform: scale(1.05);
 }
 
-.navbar__menu {         /* เริ่มบรรทัด 53 */
+.navbar__menu {
   display: flex;
   list-style: none;
   gap: 8px;
@@ -58,15 +59,38 @@
   padding: 0;
   flex: 1;
   justify-content: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
 
-  flex-wrap: nowrap;    /* ✅ แนะนำให้เป็นบรรทัดเดียว */
-  overflow: visible;    /* ✅ ไม่ให้มีแถบเลื่อน */
-        /* ✅ แก้บรรทัด 61 */
+.navbar__toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(91, 192, 222, 0.3);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
 
-  overflow-x: auto;           /* ✅ เพิ่ม */
-  overflow-y: hidden;         /* ✅ เพิ่ม */
-  -webkit-overflow-scrolling: touch; /* ✅ เพิ่ม */
-  min-width: 0;               /* ✅ เพิ่ม */
+.navbar__toggle-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.navbar__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 
@@ -206,6 +230,37 @@
   }
 }
 
+@media (max-width: 1024px) {
+  .navbar__toggle {
+    display: inline-flex;
+  }
+
+  .navbar__menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    background: #ffffff;
+    border-top: 1px solid rgba(91, 192, 222, 0.2);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
+    padding: 12px 16px;
+    gap: 8px;
+    display: none;
+    z-index: 110;
+  }
+
+  .navbar__menu.navbar__menu--open {
+    display: flex;
+  }
+
+  .navbar__link {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 640px) {
   .navbar__container {
     height: 56px;
@@ -239,5 +294,9 @@
   .navbar__login-btn {
     padding: 6px 10px;
     font-size: 0.8rem;
+  }
+
+  .navbar__profile-btn {
+    display: none;
   }
 }

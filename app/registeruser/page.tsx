@@ -7,35 +7,49 @@ import { useRouter } from 'next/navigation';
 
 // ✅ ประเภทอาหาร (ตัด other ออก เหลือ 3 แบบ)
 type FoodType = 'normal' | 'vegetarian' | 'halal';
-type PositionType = 'chief_judge' | 'associate_judge';
+type PositionType = 'chief_judge' | 'associate_judge' | 'other';
+type TravelMode = 'car' | 'van' | 'bus' | 'train' | 'plane' | 'motorcycle' | 'other';
 
 type Participant = {
+  namePrefix: string;
   fullName: string;
   position: PositionType;
+  positionOther: string;
   phone: string;
   foodType: FoodType;
+  hotelName: string;
+  travelMode: TravelMode | '';
+  travelOther: string;
 };
 
-// ✅ รายชื่อโรงแรมในตัวเมืองสุราษฎร์ธานี
-const SURAT_CITY_HOTELS: string[] = [
-  'โรงแรม ไดมอนด์พลาซ่า',
-  'โรงแรม ร้อยเกาะ',
-  'โรงแรม เอสธาราแกรนด์',
-  'โรงแรม เอสอาร์',
-  'โรงแรม บรรโฮเตล',
-  'โรงแรม บ้านไมตรีจิต',
-  'โรงแรม สยามธานี',
-  'โรงแรม วังใต้',
-  'โรงแรม บรรจงบุรี',
-  'โรงแรม นิภาการ์เด้น',
-  'โรงแรม เดอะรัช',
-  'โรงแรม เพ็ชรพะงัน',
-  'โรงแรม แก้วสมุยรีสอร์ท',
-  'โรงแรม ลีโฮเต็ล',
-  'โรงแรม เอสทาราแกรนด์',
-  'โรงแรม บีทูพรีเมียร',
-  'โรงแรม สุขสมบูรณ์',
-];
+type CourtOption = {
+  id: string;
+  court_name: string;
+  max_staff: number | null;
+};
+
+const PREFIX_OPTIONS = ['นาย', 'นาง', 'นางสาว', 'ดร.', 'ศ.', 'รศ.', 'ผศ.'];
+const OTHER_PREFIX_VALUE = '__other__';
+
+const TRAVEL_MODE_VALUES = [
+  'car',
+  'van',
+  'bus',
+  'train',
+  'plane',
+  'motorcycle',
+  'other',
+] as const;
+
+const TRAVEL_MODE_LABELS: Record<(typeof TRAVEL_MODE_VALUES)[number], string> = {
+  car: 'รถยนต์ส่วนตัว',
+  van: 'รถตู้',
+  bus: 'รถโดยสาร/รถบัส',
+  train: 'รถไฟ',
+  plane: 'เครื่องบิน',
+  motorcycle: 'รถจักรยานยนต์',
+  other: 'อื่น ๆ',
+};
 
 // ✅ mapping ภาค/ศาลกลาง → รายชื่อศาล
 const REGION_ORGANIZATIONS: Record<string, string[]> = {
@@ -50,8 +64,7 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
     'ศาลเยาวชนและครอบครัวจังหวัดสระบุรี',
     'ศาลเยาวชนและครอบครัวจังหวัดสิงห์บุรี',
     'ศาลเยาวชนและครอบครัวจังหวัดอ่างทอง',
-    'ศาลแพ่งมีนบุรีแผนกคดีเยาวชนและครอบครัว',
-    'ศาลอาญามีนบุรีแผนกคดีเยาวชนและครอบครัว',
+    'ศาลแพ่งมีนบุรีและศาลอาญามีนบุรี แผนกคดีเยาวชนและครอบครัว',
   ],
   '2': [
     'ศาลเยาวชนและครอบครัวจังหวัดจันทบุรี',
@@ -147,10 +160,11 @@ type SavedState = {
   region: string;
   organization: string;
   province: string;
+  courtId: string;
+  coordinatorPrefix: string;
+  coordinatorPrefixOther: string;
   coordinatorName: string;
   coordinatorPhone: string;
-  hotelSelect: string;
-  hotelOther: string;
   count: number;
   completed: boolean;
 };
@@ -158,6 +172,7 @@ type SavedState = {
 const STORAGE_KEY = 'registeruser:state';
 const DRAFT_KEY = 'registeruser:draft';
 const PARTICIPANTS_KEY = 'registeruser:participants';
+const OTHER_HOTEL_VALUE = '__other__';
 
 function clampCount(n: number) {
   if (!Number.isFinite(n)) return 1;
@@ -165,18 +180,35 @@ function clampCount(n: number) {
   return Math.max(1, Math.min(500, int));
 }
 
+function filterFilledParticipants(list: Participant[]) {
+  return list.filter((p) => p.fullName.trim().length > 0);
+}
+
+function resolveCourtId(name: string, list: CourtOption[]) {
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+  const matched = list.find((court) => court.court_name === trimmed);
+  return matched?.id ?? '';
+}
+
+function getPrefixSelectValue(prefix: string) {
+  const trimmed = prefix?.trim() ?? '';
+  if (!trimmed) return '';
+  if (trimmed === OTHER_PREFIX_VALUE) return OTHER_PREFIX_VALUE;
+  return PREFIX_OPTIONS.includes(trimmed) ? trimmed : OTHER_PREFIX_VALUE;
+}
+
 export default function RegisterUserPage() {
   const router = useRouter();
 
   const [organization, setOrganization] = useState('');
   const [province, setProvince] = useState('');
-  const [region, setRegion] = useState(''); // 0–9
+  const [region, setRegion] = useState(''); // 0-9
+
+  const [coordinatorPrefix, setCoordinatorPrefix] = useState('');
+  const [coordinatorPrefixOther, setCoordinatorPrefixOther] = useState('');
   const [coordinatorName, setCoordinatorName] = useState('');
   const [coordinatorPhone, setCoordinatorPhone] = useState('');
-
-  // ✅ โรงแรม
-  const [hotelSelect, setHotelSelect] = useState('');
-  const [hotelOther, setHotelOther] = useState('');
 
   // ✅ แนบสลิปอยู่หน้านี้
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -192,7 +224,41 @@ export default function RegisterUserPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [registrationClosed, setRegistrationClosed] = useState(false);
 
+  const [courts, setCourts] = useState<CourtOption[]>([]);
+  const [courtsLoading, setCourtsLoading] = useState(true);
+  const [courtsError, setCourtsError] = useState('');
+
   const currentOrganizations = useMemo(() => REGION_ORGANIZATIONS[region] ?? [], [region]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourts = async () => {
+      setCourtsLoading(true);
+      setCourtsError('');
+
+      try {
+        const res = await fetch('/api/courts', { cache: 'no-store' });
+        const payload = await res.json().catch(() => null);
+
+        if (!res.ok || !payload?.ok) {
+          throw new Error(payload?.error || 'โหลดรายชื่อศาลไม่สำเร็จ');
+        }
+
+        const list = Array.isArray(payload.courts) ? payload.courts : [];
+        if (active) setCourts(list);
+      } catch (err: any) {
+        if (active) setCourtsError(err?.message || 'โหลดรายชื่อศาลไม่สำเร็จ');
+      } finally {
+        if (active) setCourtsLoading(false);
+      }
+    };
+
+    loadCourts();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // ✅ โหลดสถานะเดิม
   useEffect(() => {
@@ -205,10 +271,22 @@ export default function RegisterUserPage() {
       setRegion(s.region ?? '');
       setOrganization(s.organization ?? '');
       setProvince(s.province ?? '');
+
+      const savedCoordinatorPrefix = s.coordinatorPrefix ?? '';
+      if (
+        savedCoordinatorPrefix &&
+        !PREFIX_OPTIONS.includes(savedCoordinatorPrefix) &&
+        savedCoordinatorPrefix !== OTHER_PREFIX_VALUE
+      ) {
+        setCoordinatorPrefix(OTHER_PREFIX_VALUE);
+        setCoordinatorPrefixOther(savedCoordinatorPrefix);
+      } else {
+        setCoordinatorPrefix(savedCoordinatorPrefix);
+        setCoordinatorPrefixOther(s.coordinatorPrefixOther ?? '');
+      }
+
       setCoordinatorName(s.coordinatorName ?? '');
       setCoordinatorPhone(s.coordinatorPhone ?? '');
-      setHotelSelect(s.hotelSelect ?? '');
-      setHotelOther(s.hotelOther ?? '');
       setTotalInput(String(s.count ?? 1));
       setCompleted(!!s.completed);
 
@@ -227,30 +305,28 @@ export default function RegisterUserPage() {
         const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
-        if (active && data && data.registrationOpen === false) {
-          setRegistrationClosed(true);
-        }
+        if (active && data && data.registrationOpen === false) setRegistrationClosed(true);
       } catch {
         // ignore
       }
     };
 
     checkRegistrationStatus();
-
     return () => {
       active = false;
     };
   }, []);
 
-  function saveState(nextCount: number, nextCompleted: boolean) {
+  function saveState(nextCount: number, nextCompleted: boolean, nextCourtId: string) {
     const s: SavedState = {
       region,
       organization,
       province,
+      courtId: nextCourtId,
+      coordinatorPrefix,
+      coordinatorPrefixOther,
       coordinatorName,
       coordinatorPhone,
-      hotelSelect,
-      hotelOther,
       count: nextCount,
       completed: nextCompleted,
     };
@@ -307,10 +383,10 @@ export default function RegisterUserPage() {
     if (provinceMatch) setProvince(provinceMatch);
   }
 
-  function handleHotelSelectChange(e: ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value;
-    setHotelSelect(value);
-    if (value !== '__other') setHotelOther('');
+  function handleCoordinatorPrefixChange(e: ChangeEvent<HTMLSelectElement>) {
+    const v = e.target.value;
+    setCoordinatorPrefix(v);
+    if (v !== OTHER_PREFIX_VALUE) setCoordinatorPrefixOther('');
   }
 
   // ✅ ปุ่ม “บันทึกจำนวนผู้เข้าร่วม / แก้ไข” -> ไปหน้า /registeruser/form?count=
@@ -321,16 +397,25 @@ export default function RegisterUserPage() {
     if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
     if (!organization.trim()) return setErrorMessage('กรุณากรอกชื่อหน่วยงาน / ศาล');
     if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
+    if (courtsLoading) return setErrorMessage('กำลังโหลดรายชื่อศาล กรุณารอสักครู่');
+    if (courtsError) return setErrorMessage(courtsError);
+
+    const resolvedCourtId = resolveCourtId(organization, courts);
+    if (!resolvedCourtId) return setErrorMessage('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล');
+
+    if (!coordinatorPrefix.trim()) return setErrorMessage('กรุณาเลือกคำนำหน้าผู้ประสานงาน');
+    if (coordinatorPrefix === OTHER_PREFIX_VALUE && !coordinatorPrefixOther.trim())
+      return setErrorMessage('กรุณาระบุคำนำหน้าผู้ประสานงาน');
     if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
     if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
 
-    // validate coordinator phone format (10 digits)
     const { isValidPhone } = await import('@/lib/phone');
-    if (!isValidPhone(coordinatorPhone)) return setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
+    if (!isValidPhone(coordinatorPhone))
+      return setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
 
     const count = clampCount(Number(totalInput));
     setTotalInput(String(count));
-    saveState(count, completed);
+    saveState(count, completed, resolvedCourtId);
 
     router.push(`/registeruser/form?count=${count}`);
   }
@@ -341,15 +426,20 @@ export default function RegisterUserPage() {
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    const actualHotelName = hotelSelect === '__other' ? hotelOther.trim() : hotelSelect.trim();
-
     if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
     if (!organization.trim()) return setErrorMessage('กรุณากรอกชื่อหน่วยงาน / ศาล');
     if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
+    if (courtsLoading) return setErrorMessage('กำลังโหลดรายชื่อศาล กรุณารอสักครู่');
+    if (courtsError) return setErrorMessage(courtsError);
+
+    const resolvedCourtId = resolveCourtId(organization, courts);
+    if (!resolvedCourtId) return setErrorMessage('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล');
+
+    if (!coordinatorPrefix.trim()) return setErrorMessage('กรุณาเลือกคำนำหน้าผู้ประสานงาน');
+    if (coordinatorPrefix === OTHER_PREFIX_VALUE && !coordinatorPrefixOther.trim())
+      return setErrorMessage('กรุณาระบุคำนำหน้าผู้ประสานงาน');
     if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
     if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
-    if (!actualHotelName) return setErrorMessage('กรุณาเลือกหรือระบุโรงแรมที่พัก');
-    if (!slipFile) return setErrorMessage('กรุณาแนบไฟล์หลักฐานค่าลงทะเบียน');
 
     // ✅ ดึงผู้เข้าร่วมจากหน้า /registeruser/form
     let participants: Participant[] = [];
@@ -360,11 +450,64 @@ export default function RegisterUserPage() {
       // ignore
     }
 
-    if (!Array.isArray(participants) || participants.length === 0) {
+    const filledParticipants = filterFilledParticipants(Array.isArray(participants) ? participants : []);
+
+    if (filledParticipants.length === 0) {
       return setErrorMessage('กรุณากด “บันทึกจำนวนผู้เข้าร่วม” แล้วกรอกข้อมูลผู้เข้าร่วมให้ครบถ้วน');
     }
     if (!participants[0]?.fullName?.trim()) {
       return setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
+    }
+
+    const missingPrefixIndex = filledParticipants.findIndex((p) => {
+      const prefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
+      return !prefix || prefix === OTHER_PREFIX_VALUE;
+    });
+    if (missingPrefixIndex >= 0) {
+      return setErrorMessage(`กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`);
+    }
+
+    const missingHotelIndex = filledParticipants.findIndex((p) => {
+      const name = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
+      return !name || name === OTHER_HOTEL_VALUE;
+    });
+    if (missingHotelIndex >= 0) {
+      return setErrorMessage(`กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`);
+    }
+
+    // ✅ แก้ข้อความ error ที่เป็น ????? ให้เป็นไทยชัด ๆ
+    const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
+      const position = typeof p.position === 'string' ? p.position.trim() : '';
+      if (position !== 'other') return false;
+      return !(p.positionOther ?? '').trim();
+    });
+    if (missingPositionOtherIndex >= 0) {
+      return setErrorMessage(`กรุณาระบุตำแหน่ง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`);
+    }
+
+    const missingTravelModeIndex = filledParticipants.findIndex((p) => {
+      const mode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      return !mode;
+    });
+    if (missingTravelModeIndex >= 0) {
+      return setErrorMessage(`กรุณาเลือกวิธีการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`);
+    }
+
+    const invalidTravelModeIndex = filledParticipants.findIndex((p) => {
+      const mode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      return !!mode && !TRAVEL_MODE_VALUES.includes(mode as (typeof TRAVEL_MODE_VALUES)[number]);
+    });
+    if (invalidTravelModeIndex >= 0) {
+      return setErrorMessage(`วิธีการเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`);
+    }
+
+    const missingTravelOtherIndex = filledParticipants.findIndex((p) => {
+      const mode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      const other = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
+      return mode === 'other' && !other;
+    });
+    if (missingTravelOtherIndex >= 0) {
+      return setErrorMessage(`กรุณาระบุวิธีการเดินทาง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`);
     }
 
     try {
@@ -379,30 +522,50 @@ export default function RegisterUserPage() {
         return;
       }
 
-      // normalize participant phones and validate
-      const normalizedParticipants = participants.map((p) => {
-        const n = phoneForStorage(p.phone);
-        return { ...p, phone: n };
+      const normalizedParticipants = filledParticipants.map((p) => {
+        const { phoneForStorage: pPhoneForStorage } = require('@/lib/phone') as typeof import('@/lib/phone');
+        const n = pPhoneForStorage(p.phone);
+
+        const rawHotelName = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
+        const hotelName = rawHotelName === OTHER_HOTEL_VALUE ? '' : rawHotelName;
+
+        const rawPrefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
+        const namePrefix = rawPrefix === OTHER_PREFIX_VALUE ? '' : rawPrefix;
+
+        const rawPositionOther = typeof p.positionOther === 'string' ? p.positionOther.trim() : '';
+        const positionOther = p.position === 'other' ? rawPositionOther : '';
+
+        const travelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+        const rawTravelOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
+        const travelOther = travelMode === 'other' ? rawTravelOther : '';
+
+        return {
+          ...p,
+          namePrefix,
+          phone: n,
+          hotelName,
+          positionOther,
+          travelMode,
+          travelOther,
+        };
       });
 
-      // If any participant had invalid non-empty phone, phoneForStorage returns null; that's acceptable
-      // but if you want to force participants to have valid phones, add a check here.
+      const coordinatorPrefixPayload =
+        coordinatorPrefix === OTHER_PREFIX_VALUE ? coordinatorPrefixOther.trim() : coordinatorPrefix.trim();
 
       const formData = new FormData();
       formData.append('organization', organization);
       formData.append('province', province);
       formData.append('region', region);
+      formData.append('courtId', resolvedCourtId);
+      formData.append('coordinatorPrefixOther', coordinatorPrefixPayload);
       formData.append('coordinatorName', coordinatorName);
-      formData.append('coordinatorPhone', phoneForStorage(coordinatorPhone) ?? '');
-      formData.append('hotelName', actualHotelName);
-      formData.append('totalAttendees', String(participants.length));
+      formData.append('coordinatorPhone', (await import('@/lib/phone')).phoneForStorage(coordinatorPhone) ?? '');
+      formData.append('totalAttendees', String(filledParticipants.length));
       formData.append('participants', JSON.stringify(normalizedParticipants));
-      formData.append('slip', slipFile);
+      if (slipFile) formData.append('slip', slipFile);
 
-      const res = await fetch('/api/registeruser', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/registeruser', { method: 'POST', body: formData });
 
       if (!res.ok) {
         let data: any = null;
@@ -425,7 +588,7 @@ export default function RegisterUserPage() {
 
       setSuccessMessage('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว');
       setCompleted(true);
-      saveState(clampCount(Number(totalInput)), true);
+      saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
     } catch (err: any) {
       setErrorMessage(err?.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
@@ -433,12 +596,16 @@ export default function RegisterUserPage() {
     }
   }
 
-  // ✅ คำนวณค่า select ให้ “เหมือนเดิม” แต่ถ้าพิมพ์เองจะไปอยู่ option "กำหนดเอง"
   const organizationSelectValue = useMemo(() => {
     if (!region) return '';
     if (!organization.trim()) return '';
     return currentOrganizations.includes(organization) ? organization : '__custom';
   }, [region, organization, currentOrganizations]);
+
+  const coordinatorPrefixSelectValue = useMemo(
+    () => getPrefixSelectValue(coordinatorPrefix),
+    [coordinatorPrefix],
+  );
 
   if (registrationClosed) {
     return (
@@ -473,114 +640,133 @@ export default function RegisterUserPage() {
             <h2 className="registeruser-section__title">1. ข้อมูลหน่วยงาน</h2>
 
             <div className="registeruser-field">
-              <label htmlFor="region" className="registeruser-label">
-                สังกัดภาค / ศาลกลาง *
-              </label>
+              <label className="registeruser-label">สังกัดภาค / ศาลกลาง *</label>
               <select
-                id="region"
-                className="registeruser-select"
+                className="registeruser-input"
                 value={region}
                 onChange={handleRegionChange}
                 required
+                disabled={submitting}
               >
-                <option value="">-- เลือกสังกัดภาค / ศาลกลาง --</option>
-                <option value="0">ศาลเยาวชนและครอบครัวกลาง</option>
-                <option value="1">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 1</option>
-                <option value="2">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 2</option>
-                <option value="3">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 3</option>
-                <option value="4">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 4</option>
-                <option value="5">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 5</option>
-                <option value="6">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 6</option>
-                <option value="7">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 7</option>
-                <option value="8">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 8</option>
-                <option value="9">ศาลในสังกัดสำนักศาลยุติธรรมประจำภาค 9</option>
+                <option value="">— กรุณาเลือก —</option>
+                <option value="0">ศาลกลาง (กรุงเทพมหานคร)</option>
+                <option value="1">ภาค 1</option>
+                <option value="2">ภาค 2</option>
+                <option value="3">ภาค 3</option>
+                <option value="4">ภาค 4</option>
+                <option value="5">ภาค 5</option>
+                <option value="6">ภาค 6</option>
+                <option value="7">ภาค 7</option>
+                <option value="8">ภาค 8</option>
+                <option value="9">ภาค 9</option>
               </select>
             </div>
 
-            {/* ✅ “เหมือนเดิม” (dropdown) + “แก้ไขได้” (input) */}
             <div className="registeruser-field">
-              <label htmlFor="organizationSelect" className="registeruser-label">
-                ชื่อหน่วยงาน / ศาล *
-              </label>
+              <label className="registeruser-label">หน่วยงาน / ศาล *</label>
 
               <select
-                id="organizationSelect"
-                className="registeruser-select"
+                className="registeruser-input"
                 value={organizationSelectValue}
                 onChange={handleOrganizationSelect}
-                required
-                disabled={!region || currentOrganizations.length === 0}
+                disabled={!region || submitting}
               >
-                <option value="">
-                  {region
-                    ? '-- เลือกศาลเยาวชนและครอบครัว / แผนกฯ --'
-                    : 'กรุณาเลือกสังกัดภาค / ศาลกลางก่อน'}
-                </option>
-
-                {currentOrganizations.map((org) => (
-                  <option key={org} value={org}>
-                    {org}
+                <option value="">— เลือกจากรายการ (ถ้ามี) —</option>
+                {currentOrganizations.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
-
-                <option value="__custom">กำหนดเอง (พิมพ์แก้ไขด้านล่าง)</option>
+                <option value="__custom">กำหนดเอง (พิมพ์เอง)</option>
               </select>
 
               <input
-                id="organization"
-                type="text"
                 className="registeruser-input"
                 value={organization}
                 onChange={handleOrganizationInput}
+                placeholder="พิมพ์ชื่อหน่วยงาน / ศาล (ให้ตรงกับรายชื่อศาลในระบบ)"
                 required
-                disabled={!region}
-                placeholder={
-                  region ? 'เลือกจากด้านบนแล้วสามารถแก้ไขข้อความได้ที่ช่องนี้' : 'กรุณาเลือกสังกัดภาค / ศาลกลางก่อน'
-                }
+                disabled={!region || submitting}
               />
+
+              {courtsLoading ? (
+                <p className="registeruser-help">กำลังโหลดรายชื่อศาล…</p>
+              ) : courtsError ? (
+                <p className="registeruser-help">{courtsError}</p>
+              ) : (
+                <p className="registeruser-help">
+                  * ระบบจะจับคู่ “ชื่อหน่วยงาน/ศาล” กับรายชื่อศาลในฐานข้อมูล (ต้องพิมพ์ให้ตรง)
+                </p>
+              )}
             </div>
 
             <div className="registeruser-field">
-              <label htmlFor="province" className="registeruser-label">
-                จังหวัด *
-              </label>
+              <label className="registeruser-label">จังหวัด *</label>
               <input
-                id="province"
-                type="text"
                 className="registeruser-input"
                 value={province}
                 onChange={(e) => setProvince(e.target.value)}
+                placeholder="เช่น สุราษฎร์ธานี"
                 required
+                disabled={!region || region === '0' || submitting}
               />
+              {region === '0' && (
+                <p className="registeruser-help">ศาลกลางกำหนดจังหวัดเป็น “กรุงเทพมหานคร” อัตโนมัติ</p>
+              )}
             </div>
 
             <div className="registeruser-field">
-              <label htmlFor="coordinatorName" className="registeruser-label">
-                ชื่อ-สกุลผู้ประสานงาน *
-              </label>
+              <label className="registeruser-label">คำนำหน้าผู้ประสานงาน *</label>
+              <select
+                className="registeruser-input"
+                value={coordinatorPrefixSelectValue}
+                onChange={handleCoordinatorPrefixChange}
+                required
+                disabled={submitting}
+              >
+                <option value="">— กรุณาเลือก —</option>
+                {PREFIX_OPTIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+                <option value={OTHER_PREFIX_VALUE}>อื่น ๆ (ระบุเอง)</option>
+              </select>
+
+              {coordinatorPrefixSelectValue === OTHER_PREFIX_VALUE && (
+                <input
+                  className="registeruser-input"
+                  value={coordinatorPrefixOther}
+                  onChange={(e) => setCoordinatorPrefixOther(e.target.value)}
+                  placeholder="ระบุคำนำหน้า (เช่น ว่าที่ ร.ต.)"
+                  required
+                  disabled={submitting}
+                />
+              )}
+            </div>
+
+            <div className="registeruser-field">
+              <label className="registeruser-label">ชื่อ-สกุลผู้ประสานงาน *</label>
               <input
-                id="coordinatorName"
-                type="text"
                 className="registeruser-input"
                 value={coordinatorName}
                 onChange={(e) => setCoordinatorName(e.target.value)}
-                placeholder="เช่น นางสาวกานดา ตัวอย่างดี"
+                placeholder="ชื่อ-นามสกุล"
                 required
+                disabled={submitting}
               />
             </div>
 
             <div className="registeruser-field">
-              <label htmlFor="coordinatorPhone" className="registeruser-label">
-                เบอร์โทรศัพท์ผู้ประสานงาน *
-              </label>
+              <label className="registeruser-label">เบอร์โทรผู้ประสานงาน (10 หลัก) *</label>
               <input
-                id="coordinatorPhone"
-                type="tel"
                 className="registeruser-input"
                 value={coordinatorPhone}
                 onChange={(e) => setCoordinatorPhone(e.target.value)}
-                placeholder="เช่น 0812345678"
+                placeholder="0XXXXXXXXX"
+                inputMode="numeric"
                 required
+                disabled={submitting}
               />
             </div>
           </section>
@@ -605,6 +791,7 @@ export default function RegisterUserPage() {
                   }
                 }}
                 required
+                disabled={submitting}
               />
 
               <div className="registeruser-actions">
@@ -617,6 +804,12 @@ export default function RegisterUserPage() {
                   {completed ? 'แก้ไข' : 'บันทึกจำนวนผู้เข้าร่วม'}
                 </button>
               </div>
+
+              <p className="registeruser-help">
+                * หลังบันทึกจำนวนผู้เข้าร่วม ระบบจะพาไปหน้ากรอกข้อมูลรายบุคคล (รวมถึงโรงแรม / วิธีเดินทาง)
+                <br />
+                * วิธีเดินทาง: {TRAVEL_MODE_VALUES.map((m) => TRAVEL_MODE_LABELS[m]).join(', ')}
+              </p>
             </div>
           </section>
 
@@ -634,51 +827,10 @@ export default function RegisterUserPage() {
                 accept="image/*,application/pdf"
                 onChange={handleSlipChange}
                 required
+                disabled={submitting}
               />
               <p className="registeruser-help">รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF</p>
             </div>
-          </section>
-
-          {/* 4. โรงแรมที่พัก */}
-          <section className="registeruser-section">
-            <h2 className="registeruser-section__title">4. ข้อมูลเพิ่มเติม</h2>
-
-            <div className="registeruser-field">
-              <label htmlFor="hotelName" className="registeruser-label">
-                พักโรงแรมไหน *
-              </label>
-              <select
-                id="hotelName"
-                className="registeruser-select"
-                value={hotelSelect}
-                onChange={handleHotelSelectChange}
-                required
-              >
-                <option value="">-- เลือกโรงแรม --</option>
-                {SURAT_CITY_HOTELS.map((hotel) => (
-                  <option key={hotel} value={hotel}>
-                    {hotel}
-                  </option>
-                ))}
-                <option value="__other">อื่น ๆ (ระบุชื่อโรงแรม)</option>
-              </select>
-            </div>
-
-            {hotelSelect === '__other' && (
-              <div className="registeruser-field">
-                <label htmlFor="hotelOther" className="registeruser-label">
-                  ชื่อโรงแรม (กรณีอื่น ๆ)
-                </label>
-                <input
-                  id="hotelOther"
-                  type="text"
-                  className="registeruser-input"
-                  value={hotelOther}
-                  onChange={(e) => setHotelOther(e.target.value)}
-                  placeholder="ระบุชื่อโรงแรมที่พัก"
-                />
-              </div>
-            )}
           </section>
 
           {successMessage && <p className="registeruser-note">{successMessage}</p>}

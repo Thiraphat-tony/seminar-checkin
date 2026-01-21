@@ -6,11 +6,28 @@ import { phoneForStorage } from '@/lib/phone';
 import { makeProvinceKey } from '@/lib/provinceKeys';
 
 type ParticipantPayload = {
+  namePrefix?: string;
   fullName: string;
-  position: 'chief_judge' | 'associate_judge';
+  position: 'chief_judge' | 'associate_judge' | 'other';
+  positionOther?: string;
   phone: string;
   foodType: 'normal' | 'vegetarian' | 'halal';
+  hotelName?: string;
+  travelMode?: string;
+  travelOther?: string;
 };
+
+const OTHER_HOTEL_VALUE = '__other__';
+const OTHER_PREFIX_VALUE = '__other__';
+const TRAVEL_MODE_VALUES = [
+  'car',
+  'van',
+  'bus',
+  'train',
+  'plane',
+  'motorcycle',
+  'other',
+] as const;
 
 function makeSafeFilename(value: string) {
   const cleaned = makeProvinceKey(value)
@@ -19,6 +36,12 @@ function makeSafeFilename(value: string) {
     .replace(/[\\/:"*?<>|]+/g, '')
     .replace(/\.+$/g, '');
   return cleaned || 'unknown';
+}
+
+function filterFilledParticipants(list: ParticipantPayload[]) {
+  return list.filter(
+    (p) => typeof p.fullName === 'string' && p.fullName.trim().length > 0,
+  );
 }
 
 export async function GET() {
@@ -50,8 +73,10 @@ export async function POST(req: NextRequest) {
 
     const organization = (formData.get('organization') || '').toString().trim();
     const province = (formData.get('province') || '').toString().trim();
+    const courtId = (formData.get('courtId') || '').toString().trim();
     const regionStr = (formData.get('region') || '').toString().trim();
-    const hotelName = (formData.get('hotelName') || '').toString().trim();
+    const hotelNameRaw = (formData.get('hotelName') || '').toString().trim();
+    const hotelName = hotelNameRaw === OTHER_HOTEL_VALUE ? '' : hotelNameRaw;
     const totalAttendeesStr = (formData.get('totalAttendees') || '0')
       .toString()
       .trim();
@@ -59,12 +84,20 @@ export async function POST(req: NextRequest) {
       .toString()
       .trim();
     const slip = formData.get('slip') as File | null;
+    const coordinatorPrefix = (formData.get('coordinatorPrefix') || '')
+      .toString()
+      .trim();
+    const coordinatorPrefixOther = (formData.get('coordinatorPrefixOther') || '')
+      .toString()
+      .trim();
     const coordinatorName = (formData.get('coordinatorName') || '')
       .toString()
       .trim();
     const coordinatorPhone = (formData.get('coordinatorPhone') || '')
       .toString()
       .trim();
+    const fallbackTravelMode = (formData.get('travelMode') || '').toString().trim();
+    const fallbackTravelOther = (formData.get('travelOther') || '').toString().trim();
 
     // normalize and validate phones
     const coordinatorPhoneNormalized = phoneForStorage(coordinatorPhone);
@@ -98,10 +131,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ ให้ backend เช็กโรงแรมเหมือนฟอร์ม
-    if (!hotelName) {
+    if (!courtId) {
       return NextResponse.json(
-        { ok: false, message: 'กรุณาเลือกโรงแรมที่พัก' },
+        { ok: false, message: 'กรุณาเลือกศาล' },
+        { status: 400 },
+      );
+    }
+
+    const coordinatorPrefixResolved =
+      coordinatorPrefixOther ||
+      (coordinatorPrefix && coordinatorPrefix !== OTHER_PREFIX_VALUE ? coordinatorPrefix : '');
+
+    if (!coordinatorPrefixResolved) {
+      return NextResponse.json(
+        { ok: false, message: 'กรุณาเลือกคำนำหน้าผู้ประสานงาน' },
         { status: 400 },
       );
     }
@@ -127,10 +170,28 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (fallbackTravelMode) {
+      const isValidFallbackTravelMode = TRAVEL_MODE_VALUES.includes(
+        fallbackTravelMode as (typeof TRAVEL_MODE_VALUES)[number],
+      );
+      if (!isValidFallbackTravelMode) {
+        return NextResponse.json(
+          { ok: false, message: 'รูปแบบวิธีเดินทางไม่ถูกต้อง' },
+          { status: 400 },
+        );
+      }
+      if (fallbackTravelMode === "other" && !fallbackTravelOther) {
+        return NextResponse.json(
+          { ok: false, message: 'กรุณาระบุวิธีเดินทางอื่น ๆ' },
+          { status: 400 },
+        );
+      }
+    }
 
     let participants: ParticipantPayload[] = [];
     try {
-      participants = JSON.parse(participantsJson);
+      const parsed = JSON.parse(participantsJson);
+      participants = Array.isArray(parsed) ? parsed : [];
     } catch {
       return NextResponse.json(
         { ok: false, message: 'รูปแบบข้อมูลผู้เข้าร่วมไม่ถูกต้อง' },
@@ -138,7 +199,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!participants || participants.length === 0) {
+    const filledParticipants = filterFilledParticipants(participants);
+
+    if (filledParticipants.length === 0) {
       return NextResponse.json(
         { ok: false, message: 'ต้องมีผู้เข้าร่วมอย่างน้อย 1 คน' },
         { status: 400 },
@@ -148,6 +211,102 @@ export async function POST(req: NextRequest) {
     if (!participants[0].fullName?.trim()) {
       return NextResponse.json(
         { ok: false, message: 'กรุณากรอกชื่อผู้เข้าร่วมคนที่ 1' },
+        { status: 400 },
+      );
+    }
+
+    const missingPrefixIndex = filledParticipants.findIndex((p) => {
+      const prefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
+      return !prefix || prefix === OTHER_PREFIX_VALUE;
+    });
+    if (missingPrefixIndex >= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`,
+        },
+        { status: 400 },
+      );
+    }
+    if (!hotelName) {
+      const missingHotelIndex = filledParticipants.findIndex(
+        (p) => {
+          const name = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
+          return !name || name === OTHER_HOTEL_VALUE;
+        },
+      );
+      if (missingHotelIndex >= 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
+      const position = typeof p.position === 'string' ? p.position.trim() : '';
+      if (position !== 'other') return false;
+      return !(p.positionOther ?? '').trim();
+    });
+    if (missingPositionOtherIndex >= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `กรุณาระบุตำแหน่งอื่น ๆ ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`
+        },
+        { status: 400 },
+      );
+    }
+
+    const missingTravelModeIndex = filledParticipants.findIndex((p) => {
+      const rawMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      const mode = rawMode || fallbackTravelMode;
+      return !mode;
+    });
+    if (missingTravelModeIndex >= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `กรุณาเลือกวิธีเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`
+        },
+        { status: 400 },
+      );
+    }
+
+    const invalidTravelModeIndex = filledParticipants.findIndex((p) => {
+      const rawMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      const mode = rawMode || fallbackTravelMode;
+      return (
+        !!mode &&
+        !TRAVEL_MODE_VALUES.includes(mode as (typeof TRAVEL_MODE_VALUES)[number])
+      );
+    });
+    if (invalidTravelModeIndex >= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `วิธีเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`
+        },
+        { status: 400 },
+      );
+    }
+
+    const missingTravelOtherIndex = filledParticipants.findIndex((p) => {
+      const rawMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      const mode = rawMode || fallbackTravelMode;
+      const rawOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
+      const other = rawOther || fallbackTravelOther;
+      return mode === 'other' && !other;
+    });
+    if (missingTravelOtherIndex >= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `กรุณาระบุวิธีเดินทางอื่น ๆ ของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`
+        },
         { status: 400 },
       );
     }
@@ -175,6 +334,20 @@ export async function POST(req: NextRequest) {
     if (event.registration_open === false) {
       return NextResponse.json({ ok: false, message: 'REGISTRATION_CLOSED' }, { status: 403 });
     }
+
+    const { data: court, error: courtError } = await supabase
+      .from('courts')
+      .select('id')
+      .eq('id', courtId)
+      .maybeSingle();
+
+    if (courtError || !court) {
+      return NextResponse.json(
+        { ok: false, message: 'ไม่พบศาลที่เลือก' },
+        { status: 400 },
+      );
+    }
+
     let slipUrl: string | null = null;
 
     // ---------- อัปโหลดไฟล์สลิป (ถ้ามี) ----------
@@ -183,7 +356,8 @@ export async function POST(req: NextRequest) {
 
       const ext = slip.name.split('.').pop() || 'bin';
       const safeProvince = makeSafeFilename(province);
-      const filePath = `slips/${safeProvince}.${ext}`;
+      const slipId = randomUUID();
+      const filePath = `slips/${safeProvince}/${slipId}.${ext}`;
 
       const arrayBuffer = await slip.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
@@ -219,31 +393,50 @@ export async function POST(req: NextRequest) {
     }
 
     // ---------- เตรียม data สำหรับ insert ----------
-    const rows = participants.map((p) => {
+    const rows = filledParticipants.map((p) => {
+      const rawPositionOther = typeof p.positionOther === 'string' ? p.positionOther.trim() : '';
       const jobPosition =
-        p.position === 'chief_judge'
-          ? 'ผู้พิพากษาหัวหน้าศาลฯ'
-          : 'ผู้พิพากษาสมทบ';
+        p.position === 'other'
+          ? rawPositionOther
+          : p.position === 'chief_judge'
+            ? 'ผู้พิพากษาหัวหน้าศาล'
+            : 'ผู้พิพากษาสมทบ';
+
+      const rawTravelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+      const travelModeResolved = rawTravelMode || fallbackTravelMode;
+      const rawTravelOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
+      const travelOtherResolved =
+        travelModeResolved === 'other' ? rawTravelOther || fallbackTravelOther || null : null;
 
       const foodType = p.foodType || 'normal';
 
       const normalizedParticipantPhone = phoneForStorage(p.phone);
+      const rawPrefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
+      const normalizedPrefix = rawPrefix === OTHER_PREFIX_VALUE ? '' : rawPrefix;
+      const rawHotelName = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
+      const cleanedHotelName = rawHotelName === OTHER_HOTEL_VALUE ? '' : rawHotelName;
+      const normalizedHotelName = cleanedHotelName || hotelName || null;
 
       return {
         event_id: EVENT_ID,
+        court_id: courtId,
+        name_prefix: normalizedPrefix || null,
         full_name: p.fullName,
         phone: normalizedParticipantPhone || null,
         organization,
-        job_position: jobPosition,
+        job_position: jobPosition || null,
         province,
         region, // 0–9 (0 = ศาลเยาวชนกลาง)
         ticket_token: randomUUID(), // ใช้ uuid เป็น token
         qr_image_url: null,
         slip_url: slipUrl,
         food_type: foodType,
+        travel_mode: travelModeResolved,
+        travel_other: travelOtherResolved,
+        coordinator_prefix_other: coordinatorPrefixResolved || null,
         coordinator_name: coordinatorName || null,
         coordinator_phone: coordinatorPhoneNormalized || null,
-        hotel_name: hotelName || null,
+        hotel_name: normalizedHotelName,
       };
     });
 

@@ -8,9 +8,11 @@ export type StaffRole = 'staff' | 'super_admin';
 
 export type StaffProfile = {
   user_id: string;
-  province_name: string;
-  province_key: string;
   role: StaffRole;
+  court_id: string;
+  is_active: boolean;
+  name_prefix: string | null;
+  phone: string | null;
 };
 
 export async function requireStaffForPage(opts?: { redirectTo?: string }) {
@@ -57,11 +59,12 @@ export async function requireStaffForPage(opts?: { redirectTo?: string }) {
 
   const { data: staff, error: staffErr } = await supabase
     .from('staff_profiles')
-    .select('user_id, province_name, province_key, role')
+    .select('user_id, role, court_id, is_active, name_prefix, phone')
     .eq('user_id', userData.user.id)
     .single();
 
   if (staffErr || !staff) redirect(redirectTo);
+  if (staff.is_active === false) redirect(redirectTo);
 
   return { supabase, user: userData.user, staff: staff as StaffProfile };
 }

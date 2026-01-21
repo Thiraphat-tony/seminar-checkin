@@ -1,136 +1,237 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
 
+type Body = {
+  attendeeId?: string;
+  action?: 'checkin' | 'uncheckin';
+  round?: number | 'all';
+  eventId?: string;
+};
+
+type EventSettings = {
+  id: string;
+  checkin_open: boolean | null;
+  checkin_round_open: number | null;
+};
+
+function normalizeRound(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  if (parsed < 0 || parsed > 3) return 0;
+  return parsed;
+}
+
+function resolveEventId(requestEventId: unknown, attendeeEventId: string | null) {
+  const fromRequest = typeof requestEventId === 'string' ? requestEventId.trim() : '';
+  if (fromRequest) return fromRequest;
+  const fromAttendee = (attendeeEventId ?? '').trim();
+  if (fromAttendee) return fromAttendee;
+  const fromEnv = (process.env.EVENT_ID ?? '').trim();
+  return fromEnv || null;
+}
+
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => null);
+    const body = (await req.json().catch(() => null)) as Body | null;
 
     if (!body || !body.attendeeId || !body.action) {
       return NextResponse.json(
         { success: false, message: 'ไม่พบ attendeeId หรือ action ในคำขอ' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const attendeeId = String(body.attendeeId);
     const action = body.action;
+    const requestedRound =
+      typeof body.round === 'number' ? normalizeRound(body.round) : null;
+    const roundAll = body.round === 'all';
 
     const supabase = createServerClient();
 
-    // ดึงข้อมูลผู้เข้าร่วม
     const { data: attendee, error: attendeeError } = await supabase
       .from('attendees')
-      .select('id, full_name, checked_in_at, slip_url')
+      .select('id, full_name, checked_in_at, event_id')
       .eq('id', attendeeId)
       .single();
 
     if (attendeeError || !attendee) {
       return NextResponse.json(
         { success: false, message: 'ไม่พบผู้เข้าร่วมในระบบ' },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    if (action === 'uncheckin') {
-      // เช็กอินอยู่แล้วและต้องการยกเลิก
-      if (!attendee.checked_in_at) {
+    const eventId = resolveEventId(body.eventId, attendee.event_id);
+    if (!eventId) {
+      return NextResponse.json(
+        { success: false, message: 'EVENT_ID_REQUIRED' },
+        { status: 400 },
+      );
+    }
+
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('id, checkin_open, checkin_round_open')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (eventError || !event) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบข้อมูลการตั้งค่าเช็กอิน' },
+        { status: 404 },
+      );
+    }
+
+    const eventSettings = event as EventSettings;
+    const defaultRound = normalizeRound(eventSettings.checkin_round_open);
+
+    if (action === 'checkin') {
+      const roundToUse = requestedRound || defaultRound;
+
+      if (!roundToUse) {
         return NextResponse.json(
-          { success: false, message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอิน' },
-          { status: 400 }
+          { success: false, message: 'ยังไม่ได้เปิดรอบเช็กอิน' },
+          { status: 400 },
         );
       }
 
-      // ยกเลิกการเช็กอิน (ตั้งค่า checked_in_at เป็น null)
-      const { data: updated, error: updateError } = await supabase
-        .from('attendees')
-        .update({ checked_in_at: null })
-        .eq('id', attendee.id)
-        .select('id, full_name, checked_in_at')
-        .single();
+      const { data: existing, error: existingError } = await supabase
+        .from('attendee_checkins')
+        .select('checked_in_at')
+        .eq('attendee_id', attendee.id)
+        .eq('round', roundToUse)
+        .maybeSingle();
 
-      if (updateError || !updated) {
-        console.error('force uncheckin update error:', updateError);
+      if (existingError) {
         return NextResponse.json(
           {
             success: false,
-            message: 'ยกเลิกเช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+            message: 'ไม่สามารถตรวจสอบสถานะการเช็กอินรอบนี้ได้',
           },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
-      return NextResponse.json(
-        {
-          success: true,
-          message: `ยกเลิกเช็กอินผู้เข้าร่วม “${updated.full_name ?? ''}” เรียบร้อย`,
-          checked_in_at: updated.checked_in_at,
-        },
-        { status: 200 }
-      );
-    }
-
-    // ฟังก์ชันสำหรับการเช็กอิน (กรณีเช็กอิน)
-    if (action === 'checkin') {
-      if (attendee.checked_in_at) {
+      if (existing) {
         return NextResponse.json(
           {
             success: true,
-            message: 'ผู้เข้าร่วมรายนี้เช็กอินไว้แล้ว',
-            checked_in_at: attendee.checked_in_at,
             alreadyCheckedIn: true,
+            round: roundToUse,
+            message: `ผู้เข้าร่วมรายนี้เช็กอินรอบ ${roundToUse} ไว้แล้ว`,
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
 
-      const nowIso = new Date().toISOString();
-
-      // ทำการบังคับเช็กอิน
-      const { data: updated, error: updateError } = await supabase
-        .from('attendees')
-        .update({ checked_in_at: nowIso })
-        .eq('id', attendee.id)
-        .select('id, full_name, checked_in_at')
+      const { data: inserted, error: insertError } = await supabase
+        .from('attendee_checkins')
+        .insert({
+          attendee_id: attendee.id,
+          round: roundToUse,
+          checked_in_by: null,
+        })
+        .select('checked_in_at')
         .single();
 
-      if (updateError || !updated) {
-        console.error('force checkin update error:', updateError);
+      if (insertError) {
+        const isDuplicate = insertError.code === '23505';
+        if (isDuplicate) {
+          return NextResponse.json(
+            {
+              success: true,
+              alreadyCheckedIn: true,
+              round: roundToUse,
+              message: `ผู้เข้าร่วมรายนี้เช็กอินรอบ ${roundToUse} ไว้แล้ว`,
+            },
+            { status: 200 },
+          );
+        }
+
+        console.error('force checkin insert error:', insertError);
         return NextResponse.json(
           {
             success: false,
             message: 'เช็กอินแทนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
           },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
       return NextResponse.json(
         {
           success: true,
-          message: `เช็กอินแทนผู้เข้าร่วม “${updated.full_name ?? ''}” เรียบร้อย`,
-          checked_in_at: updated.checked_in_at,
           alreadyCheckedIn: false,
+          round: roundToUse,
+          checked_in_at: inserted?.checked_in_at ?? null,
+          message: `เช็กอินรอบ ${roundToUse} ให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
         },
-        { status: 200 }
+        { status: 200 },
       );
     }
 
-    // กรณี action ที่ไม่ได้ระบุ
-    return NextResponse.json(
-      { success: false, message: 'Invalid action' },
-      { status: 400 }
-    );
+    if (action === 'uncheckin') {
+      const roundToUse = roundAll ? null : requestedRound || defaultRound;
+
+      if (!roundAll && !roundToUse) {
+        return NextResponse.json(
+          { success: false, message: 'ยังไม่ได้เปิดรอบเช็กอิน' },
+          { status: 400 },
+        );
+      }
+
+      let deleteQuery = supabase.from('attendee_checkins').delete().eq('attendee_id', attendee.id);
+      if (roundToUse) {
+        deleteQuery = deleteQuery.eq('round', roundToUse);
+      }
+
+      const { data: deleted, error: deleteError } = await deleteQuery.select('round');
+
+      if (deleteError) {
+        console.error('force uncheckin delete error:', deleteError);
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'ยกเลิกเช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+          },
+          { status: 500 },
+        );
+      }
+
+      if (!deleted || deleted.length === 0) {
+        return NextResponse.json(
+          {
+            success: true,
+            alreadyUnchecked: true,
+            round: roundToUse ?? 'all',
+            message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอินในรอบที่เลือก',
+          },
+          { status: 200 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          round: roundToUse ?? 'all',
+          message: `ยกเลิกเช็กอินให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
+        },
+        { status: 200 },
+      );
+    }
+
+    return NextResponse.json({ success: false, message: 'Invalid action' }, { status: 400 });
   } catch (err: any) {
     console.error('force checkin error:', err);
     return NextResponse.json(
       {
         success: false,
-        message:
-          'เกิดข้อผิดพลาดในระบบขณะเช็กอินแทน กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+        message: 'เกิดข้อผิดพลาดในระบบขณะเช็กอินแทน กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

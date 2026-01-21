@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/supabaseBrowser';
-import { getProvinceNameFromKey } from '@/lib/provinceKeys';
 import './Navbar.css';
 
 const navLinks = [
@@ -35,31 +34,14 @@ function getDisplayNameFromEmail(email?: string | null) {
 
   const localPart = (email.split('@')[0] ?? '').trim();
 
-  // ✅ staff email (encode จังหวัดไว้)
+  // staff email (court id)
   if (email.endsWith('@staff.local')) {
-    // Prefer the canonical Thai province name when we can map it from the local part
-    const fromKey = getProvinceNameFromKey(localPart);
-    if (fromKey) return fromKey;
-
-    const province = safeDecodeURIComponent(localPart).trim();
-    return province || 'เจ้าหน้าที่';
+    const decoded = safeDecodeURIComponent(localPart).trim();
+    return decoded || 'เจ้าหน้าที่';
   }
 
   // email ปกติ
   return localPart || 'User';
-}
-
-function isSuratStaffEmail(email?: string | null) {
-  if (!email || !email.endsWith('@staff.local')) return false;
-
-  const localPart = (email.split('@')[0] ?? '').trim();
-  const fromKey = getProvinceNameFromKey(localPart);
-  if (fromKey === 'สุราษฎร์ธานี') return true;
-
-  const decoded = safeDecodeURIComponent(localPart).trim();
-  if (decoded === 'สุราษฎร์ธานี') return true;
-
-  return localPart.toUpperCase() === 'SRT';
 }
 
 export default function Navbar() {
@@ -70,6 +52,7 @@ export default function Navbar() {
   const [userName, setUserName] = useState<string | null>(null);
   const [canManageEvent, setCanManageEvent] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const supabase = useMemo<SupabaseClient | null>(() => {
     try {
@@ -85,35 +68,62 @@ export default function Navbar() {
       return;
     }
 
-    const applySession = (session: any) => {
+    let active = true;
+
+    const applySession = async (session: any) => {
       const user = session?.user;
-      if (user) {
-        setIsLoggedIn(true);
-        setUserName(getDisplayNameFromEmail(user.email));
-        setCanManageEvent(isSuratStaffEmail(user.email));
-      } else {
+      if (!user) {
+        if (!active) return;
         setIsLoggedIn(false);
         setUserName(null);
         setCanManageEvent(false);
+        return;
+      }
+
+      if (!active) return;
+      setIsLoggedIn(true);
+      setUserName(getDisplayNameFromEmail(user.email));
+      setCanManageEvent(false);
+
+      try {
+        const { data: staff } = await supabase
+          .from('staff_profiles')
+          .select('role, court_id, is_active, courts(court_name)')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!active) return;
+        if (staff) {
+          const courtName = (staff.courts?.[0]?.court_name ?? '').trim();
+          setUserName(courtName || getDisplayNameFromEmail(user.email));
+          setCanManageEvent(staff.role === 'super_admin');
+        }
+      } catch {
+        // ignore; fallback to email display
       }
     };
 
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
-      applySession(data?.session);
-      setLoading(false);
+      await applySession(data?.session);
+      if (active) setLoading(false);
     };
 
-    checkAuth();
+    void checkAuth();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      applySession(session);
+      void applySession(session);
     });
 
     return () => {
+      active = false;
       authListener?.subscription.unsubscribe();
     };
   }, [supabase]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   const handleLogout = async () => {
     if (!supabase) return;
@@ -144,7 +154,20 @@ export default function Navbar() {
           </Link>
         </div>
 
-        <ul className="navbar__menu">
+        <button
+          type="button"
+          className="navbar__toggle"
+          aria-controls="navbar-menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((prev) => !prev)}
+        >
+          <span className="navbar__toggle-icon" aria-hidden="true">
+            {menuOpen ? '✕' : '☰'}
+          </span>
+          <span className="navbar__sr-only">เปิดเมนู</span>
+        </button>
+
+        <ul id="navbar-menu" className={`navbar__menu ${menuOpen ? 'navbar__menu--open' : ''}`}>
           {visibleLinks.map((link) => (
             <li key={link.href} className="navbar__item">
               <Link

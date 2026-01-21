@@ -1,25 +1,32 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserClient } from "@/lib/supabaseBrowser";
-import { makeProvinceKey } from "@/lib/provinceKeys";
+type CourtOption = {
+  id: string;
+  court_name: string;
+  max_staff: number | null;
+};
 
-function provinceToEmail(provinceName: string) {
-  const localPart = makeProvinceKey(provinceName);
-  return `${localPart}@staff.local`;
+function courtIdToEmail(courtId: string) {
+  return `${courtId}@staff.local`;
 }
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [province, setProvince] = useState("");
-  const [provinceInput, setProvinceInput] = useState("");
-  const [showProvinceList, setShowProvinceList] = useState(false);
-  const provinceInputRef = useRef<HTMLInputElement>(null);
+  const [courtName, setCourtName] = useState("");
+  const [courtInput, setCourtInput] = useState("");
+  const [showCourtList, setShowCourtList] = useState(false);
+  const courtInputRef = useRef<HTMLInputElement>(null);
 
-  const provinces = [
+  const [courts, setCourts] = useState<CourtOption[]>([]);
+  const [courtsLoading, setCourtsLoading] = useState(true);
+  const [courtsError, setCourtsError] = useState("");
+
+  /* const provinces = [
     "กรุงเทพมหานคร",
     "กระบี่",
     "กาญจนบุรี",
@@ -97,11 +104,44 @@ export default function LoginPage() {
     "อุตรดิตถ์",
     "อุทัยธานี",
     "อุบลราชธานี",
-  ];
+  ]; */
 
-  const filteredProvinces = provinceInput
-    ? provinces.filter((p) => p.includes(provinceInput))
-    : provinces;
+  const filteredCourts = courtInput
+    ? courts.filter((c) => c.court_name.includes(courtInput))
+    : courts;
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourts = async () => {
+      setCourtsLoading(true);
+      setCourtsError("");
+
+      try {
+        const res = await fetch("/api/courts", { cache: "no-store" });
+        const payload = await res.json().catch(() => null);
+
+        if (!res.ok || !payload?.ok) {
+          throw new Error(payload?.error || "โหลดรายชื่อศาลไม่สำเร็จ");
+        }
+
+        const list = Array.isArray(payload.courts) ? payload.courts : [];
+        if (active) setCourts(list);
+      } catch (err: any) {
+        if (active) {
+          setCourtsError(err?.message || "โหลดรายชื่อศาลไม่สำเร็จ");
+        }
+      } finally {
+        if (active) setCourtsLoading(false);
+      }
+    };
+
+    loadCourts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -126,12 +166,34 @@ export default function LoginPage() {
       return;
     }
 
-    const typed = (provinceInput || "").trim();
+    /* const typed = (provinceInput || "").trim();
     const chosen = (province || "").trim();
     const selectedProvince = chosen || (provinces.includes(typed) ? typed : "");
 
     if (!selectedProvince) {
       setError("กรุณาเลือกจังหวัด");
+      setLoading(false);
+      return;
+    } */
+
+    if (courtsLoading) {
+      setError("กำลังโหลดรายชื่อศาล กรุณาลองใหม่อีกครั้ง");
+      setLoading(false);
+      return;
+    }
+    if (courtsError) {
+      setError(courtsError);
+      setLoading(false);
+      return;
+    }
+
+    const typed = (courtInput || "").trim();
+    const chosen = (courtName || "").trim();
+    const selectedName = chosen || typed;
+    const selectedCourt = courts.find((c) => c.court_name === selectedName);
+
+    if (!selectedCourt) {
+      setError("กรุณาเลือกศาลจากรายการ");
       setLoading(false);
       return;
     }
@@ -143,7 +205,7 @@ export default function LoginPage() {
     }
 
     try {
-      const email = provinceToEmail(selectedProvince);
+      const email = courtIdToEmail(selectedCourt.id);
 
       const { data, error: signInErr } = await supabase.auth.signInWithPassword({
         email,
@@ -176,26 +238,26 @@ export default function LoginPage() {
       <form className="login-form" onSubmit={handleSubmit}>
         <h2>เข้าสู่ระบบ</h2>
 
-        <label htmlFor="province">จังหวัด</label>
+        <label htmlFor="court">ศาล</label>
         <div style={{ position: "relative" }}>
           <input
-            id="province"
+            id="court"
             type="text"
-            value={provinceInput || province}
+            value={courtInput || courtName}
             onChange={(e) => {
-              setProvinceInput(e.target.value);
-              setShowProvinceList(true);
-              setProvince("");
+              setCourtInput(e.target.value);
+              setShowCourtList(true);
+              setCourtName("");
             }}
-            onFocus={() => setShowProvinceList(true)}
-            onBlur={() => setTimeout(() => setShowProvinceList(false), 150)}
-            placeholder="พิมพ์เพื่อค้นหา..."
+            onFocus={() => setShowCourtList(true)}
+            onBlur={() => setTimeout(() => setShowCourtList(false), 150)}
+            placeholder="พิมพ์ชื่อศาล..."
             autoComplete="off"
-            ref={provinceInputRef}
+            ref={courtInputRef}
             required
           />
 
-          {showProvinceList && (
+          {showCourtList && (
             <ul
               style={{
                 position: "absolute",
@@ -212,20 +274,20 @@ export default function LoginPage() {
                 boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)",
               }}
             >
-              {filteredProvinces.length === 0 && (
+              {filteredCourts.length === 0 && (
                 <li style={{ padding: "8px 12px", color: "#64748b" }}>ไม่พบจังหวัด</li>
               )}
-              {filteredProvinces.map((p) => (
+              {filteredCourts.map((court) => (
                 <li
-                  key={p}
+                  key={court.id}
                   style={{ padding: "8px 12px", cursor: "pointer" }}
                   onMouseDown={() => {
-                    setProvince(p);
-                    setProvinceInput(p);
-                    setShowProvinceList(false);
+                    setCourtName(court.court_name);
+                    setCourtInput(court.court_name);
+                    setShowCourtList(false);
                   }}
                 >
-                  {p}
+                  {court.court_name}
                 </li>
               ))}
             </ul>

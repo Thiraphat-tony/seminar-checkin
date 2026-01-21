@@ -49,11 +49,14 @@ export async function requireStaffForApi(request?: Request) {
 
   const { data: staff, error: staffErr } = await supabase
     .from('staff_profiles')
-    .select('user_id, province_name, province_key, role')
+    .select('user_id, role, court_id, is_active, name_prefix, phone')
     .eq('user_id', userData.user.id)
     .single();
 
   if (staffErr || !staff) {
+    return { ok: false as const, response: NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 }) };
+  }
+  if (staff.is_active === false) {
     return { ok: false as const, response: NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 }) };
   }
 

@@ -33,7 +33,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Kanit', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-kanit), system-ui, -apple-system, sans-serif;
   color: var(--text-primary);
 }
 
@@ -49,12 +49,12 @@ html, body {
 
 .registeruser-card {
   width: 100%;
-  max-width: 1100px;
+  max-width: 100%;
   background: var(--bg-primary);
   border: 2px solid var(--border-light);
   border-radius: 18px;
   box-shadow: var(--shadow-soft);
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* ===== HEADER ===== */
@@ -256,8 +256,8 @@ html, body {
   align-items: center;
   gap: 10px;
 
-  flex-wrap: nowrap;        /* ✅ บรรทัดเดียว */
-  overflow: hidden;         /* กันล้น */
+  flex-wrap: wrap;        /* ✅ บรรทัดเดียว */
+  overflow: visible;         /* กันล้น */
   padding: 12px;
 
   background: linear-gradient(180deg, #fff 0%, rgba(245, 243, 238, 0.55) 100%);
@@ -314,13 +314,16 @@ html, body {
 }
 
 /* ✅ สัดส่วนเหมือนภาพ: ชื่อกว้างสุด / ตำแหน่งกลาง / เบอร์กลาง / อาหารแคบ */
-.participant-input.name { flex: 1 1 320px; }
-.participant-select.position { flex: 0 1 240px; }
-.participant-input.phone { flex: 0 1 240px; }
+.participant-select.prefix { flex: 0 0 110px; }
+.participant-input.name { flex: 1 1 260px; }
+.participant-select.position { flex: 0 1 210px; }
+.participant-input.phone { flex: 0 1 200px; }
+.participant-select.travel { flex: 0 1 220px; }
+.participant-select.hotel { flex: 0 1 220px; }
 .participant-select.food { flex: 0 0 120px; }
 
 /* ===== Responsive: ถ้าจอเริ่มแคบ ให้ค่อย ๆ อนุญาต wrap ===== */
-@media (max-width: 980px) {
+@media (max-width: 1200px) {
   .participant-row { flex-wrap: wrap; }
   .participant-left { width: 100%; text-align: center; }
   .participant-input,
@@ -342,4 +345,47 @@ html, body {
     flex: 1 1 100%;
     min-width: 0;
   }
+}
+
+.participant-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.participant-block:last-child { margin-bottom: 0; }
+
+.participant-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.participant-input.hotel-other { flex: 1 1 320px; }
+.participant-input.prefix-other { flex: 0 0 180px; }
+.participant-input.position-other { flex: 0 1 220px; }
+.participant-input.travel-other { flex: 1 1 320px; }
+
+.participant-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.participant-nav__button {
+  border: 2px solid var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .12s ease;
+}
+
+.participant-nav__button:hover {
+  border-color: rgba(91, 192, 222, 0.75);
+  box-shadow: var(--ring);
+  transform: translateY(-1px);
 }

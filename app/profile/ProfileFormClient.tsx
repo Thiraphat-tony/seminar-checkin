@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { getBrowserClient } from '@/lib/supabaseBrowser';
 
 type Props = {
-  initialProvince: string;
+  initialCourtName: string;
 };
 
-export default function ProfileFormClient({ initialProvince }: Props) {
-  const [province] = useState(initialProvince ?? '');
+export default function ProfileFormClient({ initialCourtName }: Props) {
+  const [courtName] = useState(initialCourtName ?? '');
 
   // email (read-only)
   const [email, setEmail] = useState<string>('');
@@ -114,10 +114,10 @@ export default function ProfileFormClient({ initialProvince }: Props) {
 
   return (
     <div>
-      {/* Province: show only (read-only) */}
+      {/* Court: show only (read-only) */}
       <div className="profile-readonly">
-        <label className="profile-label">จังหวัด</label>
-        <div className="profile-value">{province || 'ไม่ระบุ'}</div>
+        <label className="profile-label">ศาล</label>
+        <div className="profile-value">{courtName || 'ไม่ระบุ'}</div>
       </div>
 
       {/* Email: read-only display */}

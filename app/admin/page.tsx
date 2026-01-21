@@ -31,14 +31,12 @@ type AdminPageProps = {
 
 type AttendeeRow = {
   id: string;
-  event_id: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;
   province: string | null;
   region: number | null;
-  qr_image_url: string | null;
   slip_url: string | null;
   checked_in_at: string | null;
   ticket_token: string | null;
@@ -46,6 +44,19 @@ type AttendeeRow = {
   hotel_name: string | null;
   coordinator_name: string | null;
   coordinator_phone: string | null;
+  travel_mode: string | null;
+  travel_other: string | null;
+  checkin_round1_at: string | null;
+  checkin_round2_at: string | null;
+  checkin_round3_at: string | null;
+};
+
+type SummaryCounts = {
+  total: number;
+  round1: number;
+  round2: number;
+  round3: number;
+  slip: number;
 };
 
 function formatDateTime(isoString: string | null) {
@@ -84,6 +95,43 @@ function formatFoodType(foodType: string | null): string {
   }
 }
 
+// Map enum values and legacy "????" strings from old registration encoding.
+const JOB_POSITION_LABELS: Record<string, string> = {
+  chief_judge: 'ผู้พิพากษาหัวหน้าศาล',
+  associate_judge: 'ผู้พิพากษาสมทบ',
+  '????????????????????': 'ผู้พิพากษาหัวหน้าศาล',
+  '??????????????': 'ผู้พิพากษาสมทบ',
+};
+
+function formatJobPosition(jobPosition: string | null): string {
+  if (!jobPosition) return '-';
+  const trimmed = jobPosition.trim();
+  if (!trimmed) return '-';
+  return JOB_POSITION_LABELS[trimmed] ?? trimmed;
+}
+
+const TRAVEL_MODE_LABELS: Record<string, string> = {
+  car: 'รถยนต์ส่วนตัว',
+  van: 'รถตู้',
+  bus: 'รถบัส',
+  train: 'รถไฟ',
+  plane: 'เครื่องบิน',
+  motorcycle: 'มอเตอร์ไซค์',
+  other: 'อื่น ๆ',
+};
+
+function formatTravelMode(mode: string | null, other: string | null): string {
+  if (!mode) return '-';
+  const trimmed = mode.trim();
+  if (!trimmed) return '-';
+  const label = TRAVEL_MODE_LABELS[trimmed] ?? trimmed;
+  if (trimmed === 'other') {
+    const extra = (other ?? '').trim();
+    return extra ? `${label}: ${extra}` : label;
+  }
+  return label;
+}
+
 function formatRegion(region: number | null): string {
   if (region === null || Number.isNaN(region as any)) return '-';
   if (region === 0) return 'ศาลเยาวชนและครอบครัวกลาง';
@@ -112,9 +160,28 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const provinceFilter = (sp.province ?? '').trim();
 
   const { supabase, staff } = await requireStaffForPage({ redirectTo: '/login' });
+  const eventId = (process.env.EVENT_ID ?? '').trim();
+
+  if (!eventId) {
+    return (
+      <div className="page-wrap page-wrap--center">
+        <div className="card">
+          <div className="card__icon-badge card__icon-badge--error">
+            <span>!</span>
+          </div>
+          <h1 className="card__title">ยังไม่ได้ตั้งค่า EVENT_ID</h1>
+          <p className="card__subtitle">
+            กรุณาตั้งค่า EVENT_ID ในระบบก่อนใช้งานหน้าแอดมิน
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const applyFilters = (query: any) => {
     let q = query;
+
+    q = q.eq('event_id', eventId);
 
     if (keyword) {
       q = q.or(
@@ -127,62 +194,85 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     if (provinceFilter) q = q.eq('province', provinceFilter);
     if (organizationFilter) q = q.eq('organization', organizationFilter);
 
-    // Only Surat (SRT) admin can view all provinces; others are restricted to their province.
-    if (staff) {
-      const prov = (staff.province_name ?? '').trim();
-      const provinceKey = (staff.province_key ?? '').trim().toUpperCase();
-      const isSurat = provinceKey === 'SRT';
-      if (prov && !isSurat) {
-        q = q.eq('province', prov);
+    // Staff are scoped to their own court_id unless super_admin
+    if (staff && staff.role !== 'super_admin') {
+      const staffCourtId = staff.court_id;
+      if (staffCourtId) {
+        q = q.eq('court_id', staffCourtId);
       }
     }
 
     return q;
   };
 
-  // --- Count all filtered rows (for pagination) ---
-  let countQuery = supabase.from('attendees').select('id', { count: 'exact', head: true });
+  const staffCourtId =
+    staff && staff.role !== 'super_admin' ? (staff.court_id ?? null) : null;
 
   // --- Query paged data ---
   let dataQuery = supabase
-    .from('attendees')
+    .from('v_attendees_checkin_rounds')
     .select(
       `
       id,
-      event_id,
       full_name,
       phone,
       organization,
       job_position,
       province,
       region,
-      qr_image_url,
       slip_url,
       checked_in_at,
       ticket_token,
       food_type,
       hotel_name,
       coordinator_name,
-      coordinator_phone
+      coordinator_phone,
+      travel_mode,
+      travel_other,
+      checkin_round1_at,
+      checkin_round2_at,
+      checkin_round3_at
     `,
     )
     .order('region', { ascending: true, nullsFirst: false })
     .order('full_name', { ascending: true })
     .range(from, to);
 
-  countQuery = applyFilters(countQuery);
   dataQuery = applyFilters(dataQuery);
 
-  const [
-    { count: totalFilteredRaw, error: countError },
-    { data, error },
-  ] = await Promise.all([countQuery, dataQuery]);
+  const summaryParams = {
+    p_event_id: eventId,
+    p_keyword: keyword || null,
+    p_status: status,
+    p_region: regionFilterNum,
+    p_province: provinceFilter || null,
+    p_organization: organizationFilter || null,
+    p_court_id: staffCourtId || null,
+  };
 
-  if (countError) {
-    console.error('Admin count query error:', countError);
+  const [{ data: summaryDataRaw, error: summaryError }, { data, error }] = await Promise.all([
+    supabase.rpc('attendee_summary_counts', summaryParams).single(),
+    dataQuery,
+  ]);
+  const summaryData = summaryDataRaw as SummaryCounts | null;
+
+  if (summaryError) {
+    console.error('Admin summary query error:', summaryError);
   }
 
-  const totalFiltered = totalFilteredRaw ?? 0;
+  let totalFiltered = summaryData?.total ?? 0;
+  if (!summaryData) {
+    const { count: fallbackCount, error: fallbackError } = await applyFilters(
+      supabase
+        .from('v_attendees_checkin_rounds')
+        .select('id', { count: 'exact', head: true }),
+    );
+    if (fallbackError) {
+      console.error('Admin count query error:', fallbackError);
+    } else {
+      totalFiltered = fallbackCount ?? 0;
+    }
+  }
 
   if (error || !data) {
     return (
@@ -214,8 +304,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     new Set(attendees.map((a) => a.province ?? '').filter((p) => p.trim().length > 0)),
   ).sort((a, b) => a.localeCompare(b, 'th-TH'));
 
-  const totalChecked = attendees.filter((a) => a.checked_in_at).length;
-  const totalWithSlip = attendees.filter((a) => a.slip_url).length;
+  const totalCheckedRound1 = summaryData?.round1 ?? 0;
+  const totalCheckedRound2 = summaryData?.round2 ?? 0;
+  const totalCheckedRound3 = summaryData?.round3 ?? 0;
+  const totalWithSlip = summaryData?.slip ?? 0;
 
   const safeTotalFiltered = totalFiltered ?? 0;
   const totalPages = Math.ceil(safeTotalFiltered / PAGE_SIZE);
@@ -377,12 +469,28 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="admin-summary__value">{totalFiltered}</div>
             </div>
             <div className="admin-summary__item">
-              <div className="admin-summary__label">เช็กอินแล้ว</div>
-              <div className="admin-summary__value admin-summary__value--green">{totalChecked}</div>
+              <div className="admin-summary__label">เช็กอินรอบ 1</div>
+              <div className="admin-summary__value admin-summary__value--green">
+                {totalCheckedRound1}
+              </div>
+            </div>
+            <div className="admin-summary__item">
+              <div className="admin-summary__label">เช็กอินรอบ 2</div>
+              <div className="admin-summary__value admin-summary__value--green">
+                {totalCheckedRound2}
+              </div>
+            </div>
+            <div className="admin-summary__item">
+              <div className="admin-summary__label">เช็กอินรอบ 3</div>
+              <div className="admin-summary__value admin-summary__value--green">
+                {totalCheckedRound3}
+              </div>
             </div>
             <div className="admin-summary__item">
               <div className="admin-summary__label">มีสลิปแนบแล้ว</div>
-              <div className="admin-summary__value admin-summary__value--blue">{totalWithSlip}</div>
+              <div className="admin-summary__value admin-summary__value--blue">
+                {totalWithSlip}
+              </div>
             </div>
           </section>
 
@@ -411,6 +519,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <th>ตำแหน่ง</th>
                   <th>ผู้ประสานงาน</th>
                   <th>โรงแรม</th>
+                  <th>การเดินทาง</th>
                   <th>สลิป</th>
                   <th>เช็กอิน</th>
                   <th>ประเภทอาหาร</th>
@@ -421,7 +530,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <tbody>
                 {attendees.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="admin-table__empty">
+                    <td colSpan={12} className="admin-table__empty">
                       ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา
                     </td>
                   </tr>
@@ -450,7 +559,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </td>
 
                         <td>{formatRegion(a.region)}</td>
-                        <td>{a.job_position || '-'}</td>
+                        <td>{formatJobPosition(a.job_position)}</td>
 
                         <td>
                           <div>{a.coordinator_name || '-'}</div>
@@ -460,6 +569,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </td>
 
                         <td>{a.hotel_name || '-'}</td>
+                        <td>{formatTravelMode(a.travel_mode, a.travel_other)}</td>
 
                         <td>
                           <div className="admin-table__slip-cell">

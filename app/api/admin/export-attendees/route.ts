@@ -1,14 +1,16 @@
 ﻿// app/api/admin/export-attendees/route.ts
-import { NextResponse, NextRequest } from 'next/server';
-import { createServerClient } from '@/lib/supabaseServer';
+import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import { Buffer } from 'buffer';
+
+import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // ---- Types จากฐานข้อมูล ----
 type DbAttendee = {
   event_id: string | null;
+  name_prefix: string | null;
   full_name: string | null;
   organization: string | null;
   province: string | null;
@@ -17,11 +19,17 @@ type DbAttendee = {
   phone: string | null;
   food_type: string | null;
   hotel_name: string | null;
+  travel_mode: string | null;
+  travel_other: string | null;
   checked_in_at: string | null;
+  checkin_round1_at: string | null;
+  checkin_round2_at: string | null;
+  checkin_round3_at: string | null;
   slip_url: string | null;
   qr_image_url: string | null;
   ticket_token: string | null;
   created_at: string | null;
+  coordinator_prefix_other: string | null;
   coordinator_name: string | null;
   coordinator_phone: string | null;
 };
@@ -131,6 +139,8 @@ const REGION_ORGANIZATIONS: Record<string, string[]> = {
   ],
 };
 
+const OTHER_ORGANIZATION_LABEL = 'อื่น ๆ';
+
 function sanitizeSheetName(name: string) {
   const invalid = /[:\\/?*\[\]]/g;
   const cleaned = name.replace(invalid, ' ').trim();
@@ -163,15 +173,72 @@ function formatFoodType(foodType: string | null): string {
   switch (foodType) {
     case 'normal':
       return 'ปกติ';
+    case 'no_pork':
+      return 'ไม่ทานหมู';
     case 'vegetarian':
       return 'มังสวิรัติ';
+    case 'vegan':
+      return 'เจ / วีแกน';
     case 'halal':
       return 'ฮาลาล';
+    case 'seafood_allergy':
+      return 'แพ้อาหารทะเล';
+    case 'other':
+      return 'อื่น ๆ';
     default:
       return '-';
   }
 }
 
+function formatJobPosition(jobPosition: string | null): string {
+  if (!jobPosition) return '';
+  const trimmed = jobPosition.trim();
+  if (!trimmed) return '';
+  if (trimmed === 'chief_judge' || trimmed === '????????????????????') {
+    return 'ผู้พิพากษาหัวหน้าศาล';
+  }
+  if (trimmed === 'associate_judge' || trimmed === '??????????????') {
+    return 'ผู้พิพากษาสมทบ';
+  }
+  return trimmed;
+}
+
+function formatTravelMode(mode: string | null, other: string | null): string {
+  switch (mode) {
+    case 'car':
+      return 'รถยนต์ส่วนตัว';
+    case 'van':
+      return 'รถตู้';
+    case 'bus':
+      return 'รถบัส';
+    case 'train':
+      return 'รถไฟ';
+    case 'plane':
+      return 'เครื่องบิน';
+    case 'motorcycle':
+      return 'มอเตอร์ไซค์';
+    case 'other': {
+      const extra = (other ?? '').trim();
+      return extra ? `อื่น ๆ: ${extra}` : 'อื่น ๆ';
+    }
+    default:
+      return '-';
+  }
+}
+
+function formatCheckinTime(value: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    year: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 function formatCheckinStatus(checkedInAt: string | null) {
   if (!checkedInAt) return 'ยังไม่เช็กอิน';
   const date = new Date(checkedInAt);
@@ -189,6 +256,7 @@ function formatCheckinStatus(checkedInAt: string | null) {
 // ตั้งคอลัมน์และ header ให้ชีตแต่ละภาค
 function setupSheetColumns(sheet: ExcelJS.Worksheet) {
   sheet.columns = [
+    { header: 'คำนำหน้า', key: 'name_prefix', width: 12 },
     { header: 'ชื่อ-สกุล', key: 'full_name', width: 30 },
     { header: 'โทรศัพท์', key: 'phone', width: 16 },
     { header: 'หน่วยงาน', key: 'organization', width: 28 },
@@ -196,10 +264,16 @@ function setupSheetColumns(sheet: ExcelJS.Worksheet) {
     { header: 'จังหวัด', key: 'province', width: 18 },
     { header: 'ภาค', key: 'region', width: 12 },
     { header: 'อาหาร', key: 'food_type', width: 18 },
+    { header: 'คำนำหน้าผู้ประสานงาน', key: 'coordinator_prefix', width: 20 },
     { header: 'ผู้ประสานงาน', key: 'coordinator_name', width: 26 },
     { header: 'เบอร์ผู้ประสานงาน', key: 'coordinator_phone', width: 20 },
     { header: 'โรงแรม', key: 'hotel_name', width: 24 },
+    { header: 'วิธีเดินทาง', key: 'travel_mode', width: 20 },
+    { header: 'วิธีเดินทางอื่น ๆ', key: 'travel_other', width: 24 },
     { header: 'สถานะเช็กอิน', key: 'checkin_status', width: 16 },
+    { header: 'เช็กอินรอบ 1', key: 'checkin_round1_at', width: 18 },
+    { header: 'เช็กอินรอบ 2', key: 'checkin_round2_at', width: 18 },
+    { header: 'เช็กอินรอบ 3', key: 'checkin_round3_at', width: 18 },
     { header: 'สลิป (ลิงก์)', key: 'slip', width: 20 },
     { header: 'รหัสบัตร', key: 'ticket_token', width: 26 },
   ];
@@ -214,7 +288,17 @@ function setupSheetColumns(sheet: ExcelJS.Worksheet) {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServerClient();
+    const auth = await requireStaffForApi(req);
+    if (!auth.ok) return auth.response;
+    const { supabase, staff } = auth;
+    const eventId = (process.env.EVENT_ID ?? '').trim();
+
+    if (!eventId) {
+      return NextResponse.json(
+        { success: false, message: 'EVENT_ID_REQUIRED' },
+        { status: 400 },
+      );
+    }
 
     // ✅ รองรับ region = 0 (ศาลกลาง) + 1–9
     const regionParam = req.nextUrl.searchParams.get('region');
@@ -228,10 +312,11 @@ export async function GET(req: NextRequest) {
     const regionFilter: number | null = hasRegionFilter ? regionNumberRaw : null;
 
     let query = supabase
-      .from('attendees')
+      .from('v_attendees_checkin_rounds')
       .select(
         `
         event_id,
+        name_prefix,
         full_name,
         organization,
         province,
@@ -240,17 +325,38 @@ export async function GET(req: NextRequest) {
         phone,
         food_type,
         hotel_name,
+        travel_mode,
+        travel_other,
         checked_in_at,
+        checkin_round1_at,
+        checkin_round2_at,
+        checkin_round3_at,
         slip_url,
         qr_image_url,
         ticket_token,
         created_at,
+        coordinator_prefix_other,
         coordinator_name,
         coordinator_phone
       `,
       )
       .order('region', { ascending: true, nullsFirst: false })
       .order('full_name', { ascending: true });
+
+    if (eventId) {
+      query = query.eq('event_id', eventId);
+    }
+
+    if (regionFilter !== null) {
+      query = query.eq('region', regionFilter);
+    }
+
+    if (staff.role !== 'super_admin') {
+      const staffCourtId = (staff.court_id ?? '').trim();
+      if (staffCourtId) {
+        query = query.eq('court_id', staffCourtId);
+      }
+    }
 
     const { data, error } = await query;
 
@@ -267,22 +373,29 @@ export async function GET(req: NextRequest) {
     const workbook = new ExcelJS.Workbook();
     if (regionFilter !== null) {
       if (regionFilter === 0) {
-        const sheet = workbook.addWorksheet('????????');
+        const sheet = workbook.addWorksheet('ส่วนกลาง');
         setupSheetColumns(sheet);
 
         for (const a of attendees) {
           const row = sheet.addRow({
+            name_prefix: a.name_prefix ?? '',
             full_name: a.full_name ?? '',
             phone: a.phone ?? '',
             organization: a.organization ?? '',
-            job_position: a.job_position ?? '',
+            job_position: formatJobPosition(a.job_position ?? null),
             province: a.province ?? '',
             region: a.region ?? '',
             food_type: formatFoodType(a.food_type ?? null),
+            coordinator_prefix: a.coordinator_prefix_other ?? '',
             coordinator_name: a.coordinator_name ?? '',
             coordinator_phone: a.coordinator_phone ?? '',
             hotel_name: a.hotel_name ?? '',
+            travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
+            travel_other: a.travel_other ?? '',
             checkin_status: formatCheckinStatus(a.checked_in_at),
+            checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
+            checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
+            checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
             slip: '',
             ticket_token: a.ticket_token ?? '',
           });
@@ -296,6 +409,7 @@ export async function GET(req: NextRequest) {
         );
         const organizationSheets = new Map<string, ExcelJS.Worksheet>();
         const usedSheetNames = new Set<string>();
+        let otherSheet: ExcelJS.Worksheet | null = null;
         const getOrganizationSheet = (organization: string) => {
           let sheet = organizationSheets.get(organization);
           if (!sheet) {
@@ -315,29 +429,59 @@ export async function GET(req: NextRequest) {
           }
           return sheet;
         };
+        const getOtherSheet = () => {
+          if (!otherSheet) {
+            const baseName = sanitizeSheetName(OTHER_ORGANIZATION_LABEL);
+            let sheetName = baseName;
+            let counter = 2;
+            while (usedSheetNames.has(sheetName)) {
+              const suffix = ` (${counter})`;
+              const trimmedBase = baseName.slice(0, 31 - suffix.length).trim();
+              sheetName = `${trimmedBase}${suffix}`;
+              counter += 1;
+            }
+            usedSheetNames.add(sheetName);
+            otherSheet = workbook.addWorksheet(sheetName);
+            setupSheetColumns(otherSheet);
+          }
+          return otherSheet;
+        };
 
         for (const a of attendees) {
           const organization = (a.organization ?? '').trim();
-          if (!allowedSet.has(organization)) continue;
-          const sheet = getOrganizationSheet(organization);
+          const sheet = allowedSet.has(organization)
+            ? getOrganizationSheet(organization)
+            : getOtherSheet();
           const row = sheet.addRow({
+            name_prefix: a.name_prefix ?? '',
             full_name: a.full_name ?? '',
             phone: a.phone ?? '',
             organization: a.organization ?? '',
-            job_position: a.job_position ?? '',
+            job_position: formatJobPosition(a.job_position ?? null),
             province: a.province ?? '',
             region: a.region ?? '',
             food_type: formatFoodType(a.food_type ?? null),
+            coordinator_prefix: a.coordinator_prefix_other ?? '',
             coordinator_name: a.coordinator_name ?? '',
             coordinator_phone: a.coordinator_phone ?? '',
             hotel_name: a.hotel_name ?? '',
+            travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
+            travel_other: a.travel_other ?? '',
             checkin_status: formatCheckinStatus(a.checked_in_at),
+            checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
+            checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
+            checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
             slip: '',
             ticket_token: a.ticket_token ?? '',
           });
 
           setSlipLink(row.getCell('slip'), a.slip_url, a.province);
         }
+      }
+
+      if (workbook.worksheets.length === 0) {
+        const sheet = workbook.addWorksheet('ไม่มีข้อมูล');
+        setupSheetColumns(sheet);
       }
 
       const fileArrayBuffer = await workbook.xlsx.writeBuffer();
@@ -351,6 +495,7 @@ export async function GET(req: NextRequest) {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
         },
       });
     }
@@ -387,17 +532,24 @@ export async function GET(req: NextRequest) {
       }
 
       const row = targetSheet.addRow({
+        name_prefix: a.name_prefix ?? '',
         full_name: a.full_name ?? '',
         phone: a.phone ?? '',
         organization: a.organization ?? '',
-        job_position: a.job_position ?? '',
+        job_position: formatJobPosition(a.job_position ?? null),
         province: a.province ?? '',
         region: a.region ?? '',
         food_type: formatFoodType(a.food_type ?? null),
+        coordinator_prefix: a.coordinator_prefix_other ?? '',
         coordinator_name: a.coordinator_name ?? '',
         coordinator_phone: a.coordinator_phone ?? '',
         hotel_name: a.hotel_name ?? '',
+        travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
+        travel_other: a.travel_other ?? '',
         checkin_status: formatCheckinStatus(a.checked_in_at),
+        checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
+        checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
+        checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
         slip: '',
         ticket_token: a.ticket_token ?? '',
       });
@@ -413,6 +565,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
       },
     });
   } catch (err) {
@@ -424,6 +577,9 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+
+
 
 
 

@@ -8,14 +8,70 @@ import { createServerClient } from '@/lib/supabaseServer';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+type CachedBytes = {
+  bytes: Uint8Array;
+  expiresAt: number;
+};
+
+const FONT_CACHE_TTL_MS = 60 * 60 * 1000;
+const QR_CACHE_TTL_MS = 10 * 60 * 1000;
+
+const globalCache = (() => {
+  const globalAny = globalThis as typeof globalThis & {
+    __namecardFontCache?: {
+      regular?: CachedBytes;
+      bold?: CachedBytes;
+    };
+    __namecardQrCache?: Map<string, CachedBytes>;
+  };
+
+  if (!globalAny.__namecardFontCache) {
+    globalAny.__namecardFontCache = {};
+  }
+  if (!globalAny.__namecardQrCache) {
+    globalAny.__namecardQrCache = new Map();
+  }
+
+  return {
+    fontCache: globalAny.__namecardFontCache,
+    qrCache: globalAny.__namecardQrCache,
+  };
+})();
+
 type AttendeeRow = {
+  name_prefix: string | null;
   full_name: string | null;
   organization: string | null;
   job_position: string | null;
   province: string | null;
   region: number | null;
   qr_image_url: string | null;
+  ticket_token: string | null;
 };
+
+// Map enum values and legacy "????" strings from old registration encoding.
+const JOB_POSITION_LABELS: Record<string, string> = {
+  chief_judge: 'ผู้พิพากษาหัวหน้าศาล',
+  associate_judge: 'ผู้พิพากษาสมทบ',
+  '????????????????????': 'ผู้พิพากษาหัวหน้าศาล',
+  '??????????????': 'ผู้พิพากษาสมทบ',
+};
+
+function formatJobPosition(jobPosition: string | null): string {
+  if (!jobPosition) return '';
+  const trimmed = jobPosition.trim();
+  if (!trimmed) return '';
+  return JOB_POSITION_LABELS[trimmed] ?? trimmed;
+}
+
+function buildQrUrl(qrImageUrl: string | null, ticketToken: string | null) {
+  if (qrImageUrl && qrImageUrl.trim().length > 0) {
+    return qrImageUrl;
+  }
+  if (!ticketToken) return null;
+  const encoded = encodeURIComponent(ticketToken);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encoded}`;
+}
 
 function isValidRegion(n: number) {
   return Number.isInteger(n) && n >= 0 && n <= 9;
@@ -60,11 +116,22 @@ export async function GET(req: Request) {
       );
     }
 
+    const eventId = (process.env.EVENT_ID ?? '').trim();
+    if (!eventId) {
+      return NextResponse.json(
+        { ok: false, message: 'EVENT_ID_REQUIRED' },
+        { status: 400 },
+      );
+    }
+
     const supabase = await createServerClient();
 
     const { data, error } = await supabase
       .from('attendees')
-      .select('full_name, organization, job_position, province, region, qr_image_url')
+      .select(
+        'name_prefix, full_name, organization, job_position, province, region, qr_image_url, ticket_token',
+      )
+      .eq('event_id', eventId)
       .eq('region', region)
       .order('full_name', { ascending: true });
 
@@ -93,26 +160,53 @@ export async function GET(req: Request) {
     const regularFontUrl = new URL('/fonts/Sarabun-Regular.ttf', url.origin).toString();
     const boldFontUrl = new URL('/fonts/Sarabun-Bold.ttf', url.origin).toString();
 
-    const [regularResp, boldResp] = await Promise.all([
-      fetch(regularFontUrl, { cache: 'no-store' }),
-      fetch(boldFontUrl, { cache: 'no-store' }),
-    ]);
+    const now = Date.now();
+    const cachedRegular =
+      globalCache.fontCache.regular && globalCache.fontCache.regular.expiresAt > now
+        ? globalCache.fontCache.regular.bytes
+        : null;
+    const cachedBold =
+      globalCache.fontCache.bold && globalCache.fontCache.bold.expiresAt > now
+        ? globalCache.fontCache.bold.bytes
+        : null;
 
-    if (!regularResp.ok || !boldResp.ok) {
-      const missing = [
-        !regularResp.ok ? 'Sarabun-Regular.ttf' : null,
-        !boldResp.ok ? 'Sarabun-Bold.ttf' : null,
-      ].filter(Boolean);
-      return NextResponse.json(
-        { ok: false, message: `ไม่พบไฟล์ฟอนต์: ${missing.join(', ')}` },
-        { status: 500 }
-      );
+    let regularFontBytes = cachedRegular;
+    let boldFontBytes = cachedBold;
+
+    if (!regularFontBytes || !boldFontBytes) {
+      const [regularResp, boldResp] = await Promise.all([
+        fetch(regularFontUrl, { cache: 'no-store' }),
+        fetch(boldFontUrl, { cache: 'no-store' }),
+      ]);
+
+      if (!regularResp.ok || !boldResp.ok) {
+        const missing = [
+          !regularResp.ok ? 'Sarabun-Regular.ttf' : null,
+          !boldResp.ok ? 'Sarabun-Bold.ttf' : null,
+        ].filter(Boolean);
+        return NextResponse.json(
+          { ok: false, message: `ไม่พบไฟล์ฟอนต์: ${missing.join(', ')}` },
+          { status: 500 }
+        );
+      }
+
+      const [regularBytes, boldBytes] = await Promise.all([
+        regularResp.arrayBuffer().then((ab) => new Uint8Array(ab)),
+        boldResp.arrayBuffer().then((ab) => new Uint8Array(ab)),
+      ]);
+
+      regularFontBytes = regularBytes;
+      boldFontBytes = boldBytes;
+
+      globalCache.fontCache.regular = {
+        bytes: regularBytes,
+        expiresAt: Date.now() + FONT_CACHE_TTL_MS,
+      };
+      globalCache.fontCache.bold = {
+        bytes: boldBytes,
+        expiresAt: Date.now() + FONT_CACHE_TTL_MS,
+      };
     }
-
-    const [regularFontBytes, boldFontBytes] = await Promise.all([
-      regularResp.arrayBuffer().then((ab) => new Uint8Array(ab)),
-      boldResp.arrayBuffer().then((ab) => new Uint8Array(ab)),
-    ]);
 
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
@@ -141,12 +235,28 @@ export async function GET(req: Request) {
 
     // ✅ Pre-fetch QR images แบบจำกัด concurrency (กันช้า/timeout)
     const uniqueQrUrls = Array.from(
-      new Set(attendees.map((a) => a.qr_image_url).filter((u): u is string => !!u))
+      new Set(
+        attendees
+          .map((a) => buildQrUrl(a.qr_image_url, a.ticket_token))
+          .filter((u): u is string => !!u),
+      ),
     );
 
     const qrBytesMap = new Map<string, Uint8Array>();
+    const nowQr = Date.now();
+    const urlsToFetch = uniqueQrUrls.filter((qrUrl) => {
+      const cached = globalCache.qrCache.get(qrUrl);
+      if (cached && cached.expiresAt > nowQr) {
+        qrBytesMap.set(qrUrl, cached.bytes);
+        return false;
+      }
+      if (cached) {
+        globalCache.qrCache.delete(qrUrl);
+      }
+      return true;
+    });
 
-    await mapWithConcurrency(uniqueQrUrls, 8, async (qrUrl) => {
+    await mapWithConcurrency(urlsToFetch, 8, async (qrUrl) => {
       try {
         const res = await fetch(qrUrl, { cache: 'no-store' });
         if (!res.ok) {
@@ -154,7 +264,12 @@ export async function GET(req: Request) {
           return null;
         }
         const ab = await res.arrayBuffer();
-        qrBytesMap.set(qrUrl, new Uint8Array(ab));
+        const bytes = new Uint8Array(ab);
+        qrBytesMap.set(qrUrl, bytes);
+        globalCache.qrCache.set(qrUrl, {
+          bytes,
+          expiresAt: Date.now() + QR_CACHE_TTL_MS,
+        });
       } catch (e) {
         console.warn('[export-namecards-pdf] QR fetch error:', qrUrl, (e as Error).message);
       }
@@ -192,12 +307,16 @@ export async function GET(req: Request) {
       const textAreaYTop = y + cardHeight - marginY;
 
       const attendee = attendees[i];
-      const fullName = attendee.full_name ?? '';
+      const namePrefix = (attendee.name_prefix ?? '').trim();
+      const fullName = (attendee.full_name ?? '').trim();
+      const displayName = fullName
+        ? `${namePrefix ? `${namePrefix} ` : ''}${fullName}`
+        : namePrefix;
       const org = attendee.organization ?? '';
-      const job = attendee.job_position ?? '';
+      const job = formatJobPosition(attendee.job_position ?? null);
       const province = attendee.province ?? '';
       const r = attendee.region;
-      const qrUrl = attendee.qr_image_url ?? '';
+      const qrUrl = buildQrUrl(attendee.qr_image_url ?? null, attendee.ticket_token ?? null) ?? '';
 
       // 🧾 เตรียม QR image (reuse ถ้าเคย embed แล้ว)
       let qrImage: any = null;
@@ -224,8 +343,8 @@ export async function GET(req: Request) {
       }
 
       // 🧍‍♂️ ชื่อ (bold)
-      if (fullName) {
-        page.drawText(fullName, {
+      if (displayName) {
+        page.drawText(displayName, {
           x: textAreaX,
           y: textAreaYTop - fontSizeName,
           size: fontSizeName,

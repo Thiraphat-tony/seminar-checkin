@@ -21,10 +21,9 @@ export async function POST(req: NextRequest) {
     .eq('id', body.attendeeId);
 
   if (staff.role !== 'super_admin') {
-    const prov = (staff.province_name ?? '').trim();
-    const isSurat = prov.includes('สุราษฎร์');
-    if (prov && !isSurat) {
-      updQuery = updQuery.eq('province', prov);
+    const staffCourtId = staff.court_id;
+    if (staffCourtId) {
+      updQuery = updQuery.eq('court_id', staffCourtId);
     }
   }
 

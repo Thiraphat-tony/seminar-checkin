@@ -25,19 +25,23 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { supabase, staff } = auth;
     // Log attempt for debugging
-    console.log('Attempt delete attendee', { attendeeId, staff_user: staff.user_id, staff_province: staff.province_name, staff_role: staff.role });
+    console.log('Attempt delete attendee', {
+      attendeeId,
+      staff_user: staff.user_id,
+      staff_court: staff.court_id,
+      staff_role: staff.role,
+    });
 
     let delQuery = supabase
       .from('attendees')
       .delete()
       .eq('id', attendeeId);
 
-    // If not super_admin, restrict by province — but staff from สุราษฎร์ธานี can operate across provinces (same logic as admin page)
+    // If not super_admin, restrict by court_id
     if (staff.role !== 'super_admin') {
-      const prov = (staff.province_name ?? '').trim();
-      const isSurat = prov.includes('สุราษฎร์');
-      if (prov && !isSurat) {
-        delQuery = delQuery.eq('province', prov);
+      const staffCourtId = staff.court_id;
+      if (staffCourtId) {
+        delQuery = delQuery.eq('court_id', staffCourtId);
       }
     }
 
@@ -58,7 +62,11 @@ export async function POST(request: Request) {
 
     // If nothing was deleted, return 404 so client can show appropriate message
     if (!data || (Array.isArray(data) && data.length === 0)) {
-      console.warn('Delete attendee: no matching row found for delete', { attendeeId, staff_user: staff.user_id, staff_province: staff.province_name });
+      console.warn('Delete attendee: no matching row found for delete', {
+        attendeeId,
+        staff_user: staff.user_id,
+        staff_court: staff.court_id,
+      });
       return NextResponse.json(
         {
           ok: false,

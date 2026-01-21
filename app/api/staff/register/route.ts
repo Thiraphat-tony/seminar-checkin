@@ -1,26 +1,33 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { phoneForStorage } from "@/lib/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const SUPER_ADMIN_COURT_NAME = "ศาลเยาวชนและครอบครัวจังหวัดสุราษฎร์ธานี";
+
 type Body = {
-  provinceName: string;
+  courtId: string;
+  namePrefix?: string;
+  phone: string;
   password: string;
   inviteCode?: string;
 };
-
-import { makeProvinceKey } from '@/lib/provinceKeys';
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Body;
 
-    const provinceName = (body.provinceName ?? "").trim();
+    const courtId = (body.courtId ?? "").trim();
+    const namePrefix = typeof body.namePrefix === "string" ? body.namePrefix.trim() : "";
+    const phone = (body.phone ?? "").trim();
     const password = (body.password ?? "").trim();
     const inviteCode = (body.inviteCode ?? "").trim();
 
-    if (!provinceName || !password) {
+    const normalizedPhone = phoneForStorage(phone);
+
+    if (!courtId || !password || !normalizedPhone) {
       return NextResponse.json({ ok: false, message: "ข้อมูลไม่ครบ" }, { status: 400 });
     }
 
@@ -38,20 +45,50 @@ export async function POST(req: Request) {
 
     const admin = createClient(url, serviceKey);
 
-    const provinceKey = makeProvinceKey(provinceName);
-    const email = `${provinceKey}@staff.local`;
+    const email = `${courtId}@staff.local`;
 
-    // ✅ เช็คว่า “จังหวัดนี้มีเจ้าหน้าที่แล้ว” หรือ “provinceKey ซ้ำ”
+    const { data: court, error: courtErr } = await admin
+      .from("courts")
+      .select("id, court_name, max_staff")
+      .eq("id", courtId)
+      .maybeSingle();
+
+    if (courtErr || !court) {
+      return NextResponse.json({ ok: false, message: "ไม่พบศาลที่เลือก" }, { status: 404 });
+    }
+
+    const maxStaff =
+      typeof court.max_staff === "number" && court.max_staff > 0
+        ? court.max_staff
+        : 1;
+
+    const { count: staffCount, error: countErr } = await admin
+      .from("staff_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("court_id", courtId);
+
+    if (countErr) {
+      return NextResponse.json({ ok: false, message: countErr.message }, { status: 500 });
+    }
+
+    if ((staffCount ?? 0) >= maxStaff) {
+      return NextResponse.json(
+        { ok: false, message: "ศาลนี้มีผู้ดูแลครบตามโควตาแล้ว" },
+        { status: 409 }
+      );
+    }
+
+    // ✅ เช็คว่า “ศาลนี้มีเจ้าหน้าที่แล้ว”
     const { data: existing, error: existErr } = await admin
       .from("staff_profiles")
-      .select("id, province_name, province_key")
-      .or(`province_name.eq.${provinceName},province_key.eq.${provinceKey}`)
+      .select("id, court_id")
+      .eq("court_id", courtId)
       .maybeSingle();
 
     if (existErr) {
       return NextResponse.json({ ok: false, message: existErr.message }, { status: 500 });
     }
-    if (existing) {
+    if (false && existing) {
       return NextResponse.json(
         { ok: false, message: "จังหวัดนี้มีเจ้าหน้าที่แล้ว (1 จังหวัดสมัครได้ 1 คน)" },
         { status: 409 }
@@ -72,12 +109,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ insert staff profile (unique province_name = กันซ้ำ)
+    const role =
+      court.court_name === SUPER_ADMIN_COURT_NAME ? "super_admin" : "staff";
+
+    // ✅ insert staff profile
     const { error: profErr } = await admin.from("staff_profiles").insert({
       user_id: created.user.id,
-      province_name: provinceName,
-      province_key: provinceKey,
-      role: "staff",
+      court_id: courtId,
+      name_prefix: namePrefix || null,
+      phone: normalizedPhone,
+      role,
     });
 
     // ถ้า insert ไม่ผ่าน ลบ user ทิ้งเพื่อไม่ให้ค้าง

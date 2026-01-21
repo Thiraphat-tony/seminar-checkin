@@ -5,9 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const { provinceKey, password } = await req.json();
+  const { courtId, provinceKey, password } = await req.json();
 
-  const key = String(provinceKey ?? "").trim().toLowerCase();
+  const key = String(courtId ?? provinceKey ?? "").trim().toLowerCase();
   const pass = String(password ?? "").trim();
 
   if (!key || !pass) {

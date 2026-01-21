@@ -5,7 +5,14 @@ import './profile.css';
 export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  const { user, staff } = await requireStaffForPage({ redirectTo: '/login' });
+  const { user, staff, supabase } = await requireStaffForPage({ redirectTo: '/login' });
+
+  const { data: court } = await supabase
+    .from('courts')
+    .select('court_name')
+    .eq('id', staff.court_id)
+    .maybeSingle();
+  const courtName = court?.court_name ?? '';
 
   return (
     <div className="profile-page">
@@ -17,7 +24,7 @@ export default async function ProfilePage() {
         </div>
 
         <ProfileFormClient
-          initialProvince={staff?.province_name ?? ''}
+          initialCourtName={courtName}
         />
       </div>
     </div>

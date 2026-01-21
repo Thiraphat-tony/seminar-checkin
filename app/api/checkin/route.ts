@@ -1,15 +1,20 @@
 // app/api/checkin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash, timingSafeEqual } from 'crypto';
+
 import { createServerClient } from '@/lib/supabaseServer';
+import { checkRateLimit } from '@/lib/rateLimit';
+
+export const runtime = 'nodejs';
 
 type FoodType =
-  | 'normal' // อาหารทั่วไป
-  | 'no_pork' // ไม่ทานหมู
-  | 'vegetarian' // มังสวิรัติ
-  | 'vegan' // เจ / วีแกน
-  | 'halal' // ฮาลาล
-  | 'seafood_allergy' // แพ้อาหารทะเล
-  | 'other'; // อื่น ๆ
+  | 'normal'
+  | 'no_pork'
+  | 'vegetarian'
+  | 'vegan'
+  | 'halal'
+  | 'seafood_allergy'
+  | 'other';
 
 const ALLOWED_FOOD_TYPES: FoodType[] = [
   'normal',
@@ -21,62 +26,266 @@ const ALLOWED_FOOD_TYPES: FoodType[] = [
   'other',
 ];
 
-type JsonResponse = {
-  success: boolean;
-  message: string;
-  checked_in_at?: string | null;
-  alreadyCheckedIn?: boolean;
-  debug?: Record<string, unknown>;
+type EventSettings = {
+  id: string;
+  checkin_open: boolean | null;
+  checkin_round_open: number | null;
 };
 
-function json(data: JsonResponse, status = 200) {
-  return NextResponse.json(data, { status });
+type AttendeeCheckinView = {
+  id: string;
+  event_id: string | null;
+  ticket_token?: string | null;
+  checked_in_at: string | null;
+  checkin_round1_at: string | null;
+  checkin_round2_at: string | null;
+  checkin_round3_at: string | null;
+};
+
+type CheckinGetResponse =
+  | {
+      ok: true;
+      success: true;
+      checkinOpen: boolean;
+      checkinRoundOpen: number;
+      allowed: boolean;
+      withinWindow: boolean;
+      alreadyCheckedIn: boolean;
+      checkedInAt: string | null;
+      checked_in_at?: string | null;
+      rounds: {
+        round1At: string | null;
+        round2At: string | null;
+        round3At: string | null;
+      };
+    }
+  | {
+      ok: false;
+      success: false;
+      message: string;
+    };
+
+type CheckinPostResponse =
+  | {
+      ok: true;
+      success: true;
+      status: 'checked_in' | 'already_checked_in';
+      round: number;
+      checked_in_at: string | null;
+      checkedInAt?: string | null;
+      alreadyCheckedIn: boolean;
+      message: string;
+    }
+  | {
+      ok: false;
+      success: false;
+      status: 'closed' | 'round_not_open' | 'invalid';
+      message: string;
+      checkinOpen?: boolean;
+      checkinRoundOpen?: number;
+    };
+
+type RateLimitConfig = {
+  ip: { limit: number; windowSec: number };
+  token: { limit: number; windowSec: number };
+};
+
+const RATE_LIMIT: RateLimitConfig = {
+  ip: { limit: 10, windowSec: 300 },
+  token: { limit: 5, windowSec: 300 },
+};
+
+const GENERIC_NOT_FOUND_MESSAGE = 'ไม่พบข้อมูลผู้เข้าร่วม';
+
+function normalizeFoodType(raw: unknown): FoodType {
+  if (!raw) return 'normal';
+  const value = String(raw).trim();
+  if (!value) return 'normal';
+  return ALLOWED_FOOD_TYPES.includes(value as FoodType) ? (value as FoodType) : 'other';
 }
 
-// เหลือไว้เผื่ออนาคตกลับมาใช้ตรวจเวลา
+function normalizeRound(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  if (parsed < 0) return 0;
+  if (parsed > 3) return 0;
+  return parsed;
+}
+
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get('x-forwarded-for') || '';
+  const first = forwarded.split(',')[0]?.trim();
+  if (first) return first;
+  const realIp = req.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  const cfIp = req.headers.get('cf-connecting-ip')?.trim();
+  if (cfIp) return cfIp;
+  return 'unknown';
+}
+
+function hashTokenHex(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function hashTokenBuffer(token: string): Buffer {
+  return createHash('sha256').update(token).digest();
+}
+
+function timingSafeTokenMatch(token: string, stored: string | null | undefined): boolean {
+  const provided = hashTokenBuffer(token);
+  const storedHash = hashTokenBuffer(stored ?? '');
+  return timingSafeEqual(provided, storedHash);
+}
+
+function resolveEventId(requestEventId: unknown, attendeeEventId: string | null) {
+  const fromRequest = typeof requestEventId === 'string' ? requestEventId.trim() : '';
+  if (fromRequest) return fromRequest;
+
+  const fromAttendee = (attendeeEventId ?? '').trim();
+  if (fromAttendee) return fromAttendee;
+
+  const fromEnv = (process.env.EVENT_ID ?? '').trim();
+  return fromEnv || null;
+}
+
+async function loadEventSettings(
+  supabase: ReturnType<typeof createServerClient>,
+  eventId: string,
+) {
+  return supabase
+    .from('events')
+    .select('id, checkin_open, checkin_round_open')
+    .eq('id', eventId)
+    .maybeSingle();
+}
+
+async function enforceRateLimit(req: NextRequest, ticketToken: string) {
+  const ip = getClientIp(req);
+  const tokenHash = hashTokenHex(ticketToken);
+  const isLocalIp =
+    ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.');
+
+  if (process.env.NODE_ENV !== 'production' || isLocalIp) {
+    return { blocked: false };
+  }
+
+  const [ipLimit, tokenLimit] = await Promise.all([
+    checkRateLimit({
+      key: `checkin:ip:${ip}`,
+      limit: RATE_LIMIT.ip.limit,
+      windowSec: RATE_LIMIT.ip.windowSec,
+    }),
+    checkRateLimit({
+      key: `checkin:token:${tokenHash}`,
+      limit: RATE_LIMIT.token.limit,
+      windowSec: RATE_LIMIT.token.windowSec,
+    }),
+  ]);
+
+  if (!ipLimit.allowed || !tokenLimit.allowed) {
+    console.warn('checkin rate limit blocked', {
+      ip,
+      tokenHash,
+      ipRemaining: ipLimit.remaining,
+      tokenRemaining: tokenLimit.remaining,
+    });
+    const resetAt = Math.max(ipLimit.resetAt, tokenLimit.resetAt);
+    const retryAfterSec = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    return {
+      blocked: true,
+      retryAfterSec,
+      message: 'คำขอมากเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง',
+    };
+  }
+
+  return { blocked: false };
+}
+
 export async function GET(req: NextRequest) {
   const ticketToken = req.nextUrl.searchParams.get('ticket_token')?.trim();
   if (!ticketToken) {
-    return NextResponse.json({ ok: false, message: 'MISSING_TICKET_TOKEN' }, { status: 400 });
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: 'MISSING_TICKET_TOKEN' },
+      { status: 400 },
+    );
+  }
+
+  const rateLimit = await enforceRateLimit(req, ticketToken);
+  if (rateLimit.blocked) {
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: rateLimit.message ?? 'คำขอมากเกินไป กรุณาลองใหม่อีกครั้ง' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSec) } },
+    );
   }
 
   const supabase = createServerClient();
+
   const { data: attendee, error: attendeeError } = await supabase
-    .from('attendees')
-    .select('id, event_id, checked_in_at')
+    .from('v_attendees_checkin_rounds')
+    .select(
+      'id, event_id, ticket_token, checked_in_at, checkin_round1_at, checkin_round2_at, checkin_round3_at',
+    )
     .eq('ticket_token', ticketToken)
     .maybeSingle();
 
   if (attendeeError) {
-    return NextResponse.json({ ok: false, message: 'ATTENDEE_QUERY_FAILED' }, { status: 500 });
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: 'ATTENDEE_QUERY_FAILED' },
+      { status: 500 },
+    );
   }
 
-  if (!attendee) {
-    return NextResponse.json({ ok: false, message: 'ATTENDEE_NOT_FOUND' }, { status: 404 });
+  const tokenMatches = timingSafeTokenMatch(ticketToken, attendee?.ticket_token);
+
+  if (!attendee || !tokenMatches) {
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: GENERIC_NOT_FOUND_MESSAGE },
+      { status: 404 },
+    );
   }
 
-  if (attendee.checked_in_at) {
-    return NextResponse.json({ ok: true, allowed: true, alreadyCheckedIn: true });
+  const eventId = resolveEventId(
+    req.nextUrl.searchParams.get('event_id'),
+    attendee.event_id,
+  );
+  if (!eventId) {
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: GENERIC_NOT_FOUND_MESSAGE },
+      { status: 400 },
+    );
   }
 
-  if (!attendee.event_id) {
-    return NextResponse.json({ ok: true, allowed: true, checkinOpen: true, withinWindow: true });
-  }
-
-  const { data: event, error: eventError } = await supabase
-    .from('events')
-    .select('id, checkin_open')
-    .eq('id', attendee.event_id)
-    .maybeSingle();
+  const { data: event, error: eventError } = await loadEventSettings(supabase, eventId);
 
   if (eventError || !event) {
-    return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
+    return NextResponse.json<CheckinGetResponse>(
+      { ok: false, success: false, message: 'EVENT_NOT_FOUND' },
+      { status: 404 },
+    );
   }
 
   const checkinOpen = event.checkin_open !== false;
-  const allowed = checkinOpen;
+  const checkinRoundOpen = normalizeRound(event.checkin_round_open);
+  const allowed = checkinOpen && checkinRoundOpen > 0;
 
-  return NextResponse.json({ ok: true, checkinOpen, withinWindow: true, allowed });
+  const viewRow = attendee as AttendeeCheckinView;
+
+  return NextResponse.json<CheckinGetResponse>({
+    ok: true,
+    success: true,
+    checkinOpen,
+    checkinRoundOpen,
+    allowed,
+    withinWindow: true,
+    alreadyCheckedIn: !!viewRow.checked_in_at,
+    checkedInAt: viewRow.checked_in_at ?? null,
+    checked_in_at: viewRow.checked_in_at ?? null,
+    rounds: {
+      round1At: viewRow.checkin_round1_at ?? null,
+      round2At: viewRow.checkin_round2_at ?? null,
+      round3At: viewRow.checkin_round3_at ?? null,
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -84,44 +293,49 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null);
 
     if (!body || typeof body.ticket_token !== 'string') {
-      return json(
+      return NextResponse.json<CheckinPostResponse>(
         {
+          ok: false,
           success: false,
+          status: 'invalid',
           message: 'ไม่พบหรือรูปแบบ ticket_token ไม่ถูกต้องในคำขอ',
         },
-        400
+        { status: 400 },
       );
     }
 
     const ticketToken = body.ticket_token.trim();
     if (!ticketToken) {
-      return json(
+      return NextResponse.json<CheckinPostResponse>(
         {
+          ok: false,
           success: false,
+          status: 'invalid',
           message: 'ticket_token ห้ามเป็นค่าว่าง',
         },
-        400
+        { status: 400 },
       );
     }
 
-    // ✅ อ่าน food_type จาก body
-    const rawFoodType = (body.food_type ?? '') as string;
-    let foodType: FoodType = 'normal';
-
-    if (!rawFoodType) {
-      foodType = 'normal';
-    } else if (
-      ALLOWED_FOOD_TYPES.includes(rawFoodType as FoodType)
-    ) {
-      foodType = rawFoodType as FoodType;
-    } else {
-      // ถ้าได้ค่าที่ไม่รู้จัก ให้เก็บเป็น other
-      foodType = 'other';
+    const rateLimit = await enforceRateLimit(req, ticketToken);
+    if (rateLimit.blocked) {
+      return NextResponse.json<CheckinPostResponse>(
+        {
+          ok: false,
+          success: false,
+          status: 'invalid',
+          message: rateLimit.message ?? 'คำขอมากเกินไป กรุณาลองใหม่อีกครั้ง',
+        },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSec) } },
+      );
     }
+
+    const hasFoodType =
+      typeof body.food_type === 'string' && body.food_type.trim().length > 0;
+    const foodType = hasFoodType ? normalizeFoodType(body.food_type) : null;
 
     const supabase = createServerClient();
 
-    // ใช้ maybeSingle กันเคส 0 แถวไม่ให้ error 500
     const { data: attendee, error: attendeeError } = await supabase
       .from('attendees')
       .select('id, event_id, checked_in_at, ticket_token, food_type')
@@ -130,147 +344,178 @@ export async function POST(req: NextRequest) {
 
     if (attendeeError) {
       console.error('checkin: attendee query error', attendeeError);
-      return json(
+      return NextResponse.json<CheckinPostResponse>(
         {
+          ok: false,
           success: false,
+          status: 'invalid',
           message: 'เกิดข้อผิดพลาดในการค้นหาข้อมูลผู้เข้าร่วม',
         },
-        500
+        { status: 500 },
       );
     }
+    const tokenMatches = timingSafeTokenMatch(ticketToken, attendee?.ticket_token);
 
-    if (!attendee) {
-      return json(
+    if (!attendee || !tokenMatches) {
+      return NextResponse.json<CheckinPostResponse>(
         {
+          ok: false,
           success: false,
-          message: 'ไม่พบผู้เข้าร่วมงานจาก ticket_token นี้',
+          status: 'invalid',
+          message: GENERIC_NOT_FOUND_MESSAGE,
         },
-        404
+        { status: 404 },
       );
     }
 
-    // ถ้าเช็กอินไปแล้ว ไม่เขียนทับ (ถ้าอยากให้แก้ไขประเภทอาหารแม้เช็กอินแล้ว ค่อยมาเปลี่ยน logic ตรงนี้)
-    if (attendee.checked_in_at) {
-      return json(
+    const eventId = resolveEventId(body.event_id, attendee.event_id);
+    if (!eventId) {
+      return NextResponse.json<CheckinPostResponse>(
         {
-          success: true,
-          alreadyCheckedIn: true,
-          checked_in_at: attendee.checked_in_at,
-          message: 'ผู้เข้าร่วมรายนี้เช็กอินแล้ว',
+          ok: false,
+          success: false,
+          status: 'invalid',
+          message: 'EVENT_ID_REQUIRED',
         },
-        200
+        { status: 400 },
       );
     }
 
-    // ------------ ข้ามการตรวจช่วงเวลาเช็กอิน (ให้เช็กอินได้ตลอด) ------------
+    const { data: event, error: eventError } = await loadEventSettings(supabase, eventId);
 
-    const nowIso = new Date().toISOString();
-
-    // ถ้าไม่มี event_id ก็เช็กอินให้เลยเหมือนเดิม
-    if (!attendee.event_id) {
-      const { data: updated, error: updateError } = await supabase
-        .from('attendees')
-        .update({
-          checked_in_at: nowIso,
-          food_type: foodType, // ✅ บันทึกประเภทอาหารด้วย
-        })
-        .eq('id', attendee.id)
-        .select('id, checked_in_at, food_type')
-        .single();
-
-      if (updateError || !updated) {
-        console.error('checkin: update without event failed', updateError);
-        return json(
-          {
-            success: false,
-            message: 'เช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
-          },
-          500
-        );
-      }
-
-      return json(
+    if (eventError || !event) {
+      console.error('checkin: event query error', eventError);
+      return NextResponse.json<CheckinPostResponse>(
         {
-          success: true,
-          alreadyCheckedIn: false,
-          checked_in_at: updated.checked_in_at,
-          message: 'เช็กอินสำเร็จ',
-          debug: { noEventId: true, food_type: updated.food_type },
+          ok: false,
+          success: false,
+          status: 'invalid',
+          message: 'ไม่พบข้อมูลการตั้งค่าเช็กอิน',
         },
-        200
+        { status: 404 },
       );
     }
 
-    // ดึง event แค่เพื่อ debug/อนาคต (ไม่ได้ใช้บล็อกเวลาแล้ว)
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select('id, name, checkin_open')
-      .eq('id', attendee.event_id)
+    const checkinOpen = event.checkin_open !== false;
+    const checkinRoundOpen = normalizeRound(event.checkin_round_open);
+    const allowed = checkinOpen && checkinRoundOpen > 0;
+
+    if (!allowed) {
+      return NextResponse.json<CheckinPostResponse>(
+        {
+          ok: false,
+          success: false,
+          status: checkinOpen ? 'round_not_open' : 'closed',
+          message: checkinOpen ? 'ROUND_NOT_OPEN' : 'CHECKIN_CLOSED',
+          checkinOpen,
+          checkinRoundOpen,
+        },
+        { status: 403 },
+      );
+    }
+
+    const { data: existingCheckin, error: existingError } = await supabase
+      .from('attendee_checkins')
+      .select('checked_in_at')
+      .eq('attendee_id', attendee.id)
+      .eq('round', checkinRoundOpen)
       .maybeSingle();
 
-    if (eventError) {
-      console.error('checkin: event query error', eventError);
+    if (existingError) {
+      console.error('checkin: existing checkin query error', existingError);
+      return NextResponse.json<CheckinPostResponse>(
+        {
+          ok: false,
+          success: false,
+          status: 'invalid',
+          message: 'ไม่สามารถตรวจสอบสถานะการเช็กอินรอบนี้ได้',
+        },
+        { status: 500 },
+      );
     }
 
-    if (!event) {
-      console.warn('checkin: event not found for attendee', {
-        attendeeId: attendee.id,
-        eventId: attendee.event_id,
+    if (existingCheckin) {
+      return NextResponse.json<CheckinPostResponse>({
+        ok: true,
+        success: true,
+        status: 'already_checked_in',
+        round: checkinRoundOpen,
+        checked_in_at: existingCheckin.checked_in_at ?? attendee.checked_in_at ?? null,
+        checkedInAt: existingCheckin.checked_in_at ?? attendee.checked_in_at ?? null,
+        alreadyCheckedIn: true,
+        message: 'เช็กอินรอบนี้ไว้แล้ว',
       });
     }
 
-    if (event) {
-      const checkinOpen = event.checkin_open !== false;
-
-      if (!checkinOpen) {
-        return json(
-          {
-            success: false,
-            message: 'CHECKIN_CLOSED',
-          },
-          403
-        );
-      }
-    }
-    const { data: updated, error: updateError } = await supabase
-      .from('attendees')
-      .update({
-        checked_in_at: nowIso,
-        food_type: foodType, // ✅ บันทึกประเภทอาหาร
+    const { data: inserted, error: insertError } = await supabase
+      .from('attendee_checkins')
+      .insert({
+        attendee_id: attendee.id,
+        round: checkinRoundOpen,
+        checked_in_by: null,
       })
-      .eq('id', attendee.id)
-      .select('id, checked_in_at, food_type')
+      .select('checked_in_at')
       .single();
 
-    if (updateError || !updated) {
-      console.error('checkin: update attendee failed', updateError);
-      return json(
+    if (insertError) {
+      const isDuplicate = insertError.code === '23505';
+      if (isDuplicate) {
+        return NextResponse.json<CheckinPostResponse>({
+          ok: true,
+          success: true,
+          status: 'already_checked_in',
+          round: checkinRoundOpen,
+          checked_in_at: attendee.checked_in_at ?? null,
+          checkedInAt: attendee.checked_in_at ?? null,
+          alreadyCheckedIn: true,
+          message: 'เช็กอินรอบนี้ไว้แล้ว',
+        });
+      }
+
+      console.error('checkin: insert attendee_checkins failed', insertError);
+      return NextResponse.json<CheckinPostResponse>(
         {
+          ok: false,
           success: false,
+          status: 'invalid',
           message: 'เช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
         },
-        500
+        { status: 500 },
       );
     }
 
-    return json(
-      {
-        success: true,
-        alreadyCheckedIn: false,
-        checked_in_at: updated.checked_in_at,
-        message: 'เช็กอินสำเร็จ',
-        debug: { eventId: attendee.event_id, food_type: updated.food_type },
-      },
-      200
-    );
+    if (hasFoodType && foodType) {
+      const { error: updateError } = await supabase
+        .from('attendees')
+        .update({ food_type: foodType })
+        .eq('id', attendee.id);
+
+      if (updateError) {
+        console.warn('checkin: food_type update failed', updateError);
+      }
+    }
+
+    return NextResponse.json<CheckinPostResponse>({
+      ok: true,
+      success: true,
+      status: 'checked_in',
+      round: checkinRoundOpen,
+      checked_in_at: inserted?.checked_in_at ?? null,
+      checkedInAt: inserted?.checked_in_at ?? null,
+      alreadyCheckedIn: false,
+      message: `เช็กอินรอบ ${checkinRoundOpen} สำเร็จ`,
+    });
   } catch (err) {
     console.error('checkin: unexpected error', err);
-    return json(
+    return NextResponse.json<CheckinPostResponse>(
       {
+        ok: false,
         success: false,
+        status: 'invalid',
         message: 'เกิดข้อผิดพลาดในระบบเช็กอิน กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
       },
-      500
+      { status: 500 },
     );
   }
 }
+

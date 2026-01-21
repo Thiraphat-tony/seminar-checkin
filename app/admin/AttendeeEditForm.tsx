@@ -19,12 +19,27 @@ type AttendeeEditFormProps = {
   attendee: AttendeeForEdit;
 };
 
+// Map enum values and legacy "????" strings from old registration encoding.
+const JOB_POSITION_LABELS: Record<string, string> = {
+  chief_judge: 'ผู้พิพากษาหัวหน้าศาล',
+  associate_judge: 'ผู้พิพากษาสมทบ',
+  '????????????????????': 'ผู้พิพากษาหัวหน้าศาล',
+  '??????????????': 'ผู้พิพากษาสมทบ',
+};
+
+function formatJobPosition(jobPosition: string | null): string {
+  if (!jobPosition) return '';
+  const trimmed = jobPosition.trim();
+  if (!trimmed) return '';
+  return JOB_POSITION_LABELS[trimmed] ?? trimmed;
+}
+
 export default function AttendeeEditForm({ attendee }: AttendeeEditFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(attendee.full_name ?? '');
   const [phone, setPhone] = useState(attendee.phone ?? '');
   const [organization, setOrganization] = useState(attendee.organization ?? '');
-  const [jobPosition, setJobPosition] = useState(attendee.job_position ?? '');
+  const [jobPosition, setJobPosition] = useState(formatJobPosition(attendee.job_position));
   const [province, setProvince] = useState(attendee.province ?? '');
   const [region, setRegion] = useState(attendee.region?.toString() ?? '');
   const [hotelName, setHotelName] = useState(attendee.hotel_name ?? '');

@@ -14,10 +14,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'INVALID_JSON' }, { status: 400 });
   }
 
-  const province_name = typeof body.province_name === 'string' ? body.province_name.trim() : undefined;
+  const name_prefix = typeof body.name_prefix === 'string' ? body.name_prefix.trim() : undefined;
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : undefined;
 
   const updateObj: Record<string, any> = {};
-  if (province_name !== undefined) updateObj.province_name = province_name;
+  if (name_prefix !== undefined) updateObj.name_prefix = name_prefix || null;
+  if (phone !== undefined) updateObj.phone = phone || null;
 
   if (Object.keys(updateObj).length === 0) {
     return NextResponse.json({ ok: false, error: 'NO_UPDATES' }, { status: 400 });
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
     .from('staff_profiles')
     .update(updateObj)
     .eq('user_id', staff.user_id)
-    .select('user_id, province_name, province_key, role')
+    .select('user_id, role, court_id, is_active, name_prefix, phone')
     .single();
 
   if (error) {

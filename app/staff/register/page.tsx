@@ -1,41 +1,78 @@
-"use client";
+﻿"use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { makeProvinceKey } from '@/lib/provinceKeys';
+import { isValidPhone } from "@/lib/phone";
+
+type CourtOption = {
+  id: string;
+  court_name: string;
+  max_staff: number | null;
+};
+
+function courtIdToEmail(courtId: string) {
+  return `${courtId}@staff.local`;
+}
 
 export default function StaffRegisterPage() {
   const router = useRouter();
 
-  const [province, setProvince] = useState("");
-  const [provinceInput, setProvinceInput] = useState("");
-  const [showProvinceList, setShowProvinceList] = useState(false);
-  const provinceInputRef = useRef<HTMLInputElement>(null);
+  const [courtName, setCourtName] = useState("");
+  const [courtInput, setCourtInput] = useState("");
+  const [showCourtList, setShowCourtList] = useState(false);
+  const courtInputRef = useRef<HTMLInputElement>(null);
 
-  const provinces = [
-    "กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","พะเยา","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"
-  ];
+  const [courts, setCourts] = useState<CourtOption[]>([]);
+  const [courtsLoading, setCourtsLoading] = useState(true);
+  const [courtsError, setCourtsError] = useState("");
 
-  const filteredProvinces = useMemo(() => {
-    const q = provinceInput.trim();
-    return q ? provinces.filter((p) => p.includes(q)) : provinces;
-  }, [provinceInput]);
+  const filteredCourts = useMemo(() => {
+    const q = courtInput.trim();
+    return q ? courts.filter((c) => c.court_name.includes(q)) : courts;
+  }, [courtInput, courts]);
 
-  const selectedProvinceKey = ((): string => {
-    const typed = (provinceInput || '').trim();
-    const chosen = (province || '').trim();
-    const selectedProvince = chosen || (provinces.includes(typed) ? typed : '');
-    if (!selectedProvince) return '';
-    try {
-      return makeProvinceKey(selectedProvince);
-    } catch {
-      return encodeURIComponent(selectedProvince);
-    }
+  const selectedCourt = (() => {
+    const typed = (courtInput || "").trim();
+    const chosen = (courtName || "").trim();
+    const selectedName = chosen || typed;
+    if (!selectedName) return null;
+    return courts.find((c) => c.court_name === selectedName) ?? null;
   })();
 
+  const selectedCourtEmail = selectedCourt ? courtIdToEmail(selectedCourt.id) : "";
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourts = async () => {
+      setCourtsLoading(true);
+      setCourtsError("");
+
+      try {
+        const res = await fetch("/api/courts", { cache: "no-store" });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload?.ok) {
+          throw new Error(payload?.error || "โหลดรายชื่อศาลไม่สำเร็จ");
+        }
+        const list = Array.isArray(payload.courts) ? payload.courts : [];
+        if (active) setCourts(list);
+      } catch (err: any) {
+        if (active) setCourtsError(err?.message || "โหลดรายชื่อศาลไม่สำเร็จ");
+      } finally {
+        if (active) setCourtsLoading(false);
+      }
+    };
+
+    loadCourts();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
+  const [phone, setPhone] = useState("");
+  const [namePrefix, setNamePrefix] = useState("");
 
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -47,12 +84,28 @@ export default function StaffRegisterPage() {
     setOkMsg("");
     setLoading(true);
 
-    const typed = (provinceInput || "").trim();
-    const chosen = (province || "").trim();
-    const selectedProvince = chosen || (provinces.includes(typed) ? typed : "");
-
-    if (!selectedProvince) {
-      setError("กรุณาเลือกจังหวัดจากรายการ");
+    if (courtsLoading) {
+      setError("กำลังโหลดรายชื่อศาล กรุณาลองใหม่อีกครั้ง");
+      setLoading(false);
+      return;
+    }
+    if (courtsError) {
+      setError(courtsError);
+      setLoading(false);
+      return;
+    }
+    if (!selectedCourt) {
+      setError("กรุณาเลือกศาลจากรายการ");
+      setLoading(false);
+      return;
+    }
+    if (!phone.trim()) {
+      setError("กรุณากรอกเบอร์โทรศัพท์");
+      setLoading(false);
+      return;
+    }
+    if (!isValidPhone(phone)) {
+      setError("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
       setLoading(false);
       return;
     }
@@ -72,7 +125,9 @@ export default function StaffRegisterPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          provinceName: selectedProvince,
+          courtId: selectedCourt.id,
+          namePrefix: namePrefix.trim(),
+          phone: phone.trim(),
           password: password.trim(),
         }),
       });
@@ -86,7 +141,6 @@ export default function StaffRegisterPage() {
       }
 
       setOkMsg("สมัครสำเร็จแล้ว สามารถเข้าสู่ระบบได้");
-      // พาไปหน้า login (ปรับ path ตามจริงของโปรเจกต์คุณได้)
       setTimeout(() => router.push("/login"), 600);
     } catch {
       setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
@@ -100,26 +154,26 @@ export default function StaffRegisterPage() {
       <form className="login-form" onSubmit={handleSubmit}>
         <h2>สมัครเจ้าหน้าที่</h2>
 
-        <label htmlFor="province">จังหวัด</label>
+        <label htmlFor="court">ศาล</label>
         <div style={{ position: "relative" }}>
           <input
-            id="province"
+            id="court"
             type="text"
-            value={provinceInput || province}
+            value={courtInput || courtName}
             onChange={(e) => {
-              setProvinceInput(e.target.value);
-              setShowProvinceList(true);
-              setProvince("");
+              setCourtInput(e.target.value);
+              setShowCourtList(true);
+              setCourtName("");
             }}
-            onFocus={() => setShowProvinceList(true)}
-            onBlur={() => setTimeout(() => setShowProvinceList(false), 150)}
-            placeholder="พิมพ์ค้นหาจังหวัด..."
+            onFocus={() => setShowCourtList(true)}
+            onBlur={() => setTimeout(() => setShowCourtList(false), 150)}
+            placeholder="พิมพ์ชื่อศาล..."
             autoComplete="off"
-            ref={provinceInputRef}
+            ref={courtInputRef}
             required
           />
 
-          {showProvinceList && (
+          {showCourtList && (
             <ul
               style={{
                 position: "absolute",
@@ -136,31 +190,47 @@ export default function StaffRegisterPage() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
               }}
             >
-              {filteredProvinces.length === 0 && (
-                <li style={{ padding: "8px", color: "#888" }}>ไม่พบจังหวัด</li>
+              {filteredCourts.length === 0 && (
+                <li style={{ padding: "8px", color: "#888" }}>ไม่พบศาล</li>
               )}
-              {filteredProvinces.map((p) => (
+              {filteredCourts.map((court) => (
                 <li
-                  key={p}
+                  key={court.id}
                   style={{ padding: "8px", cursor: "pointer" }}
                   onMouseDown={() => {
-                    setProvince(p);
-                    setProvinceInput(p);
-                    setShowProvinceList(false);
+                    setCourtName(court.court_name);
+                    setCourtInput(court.court_name);
+                    setShowCourtList(false);
                   }}
                 >
-                  {p}
+                  {court.court_name}
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div style={{ fontSize: 13, color: '#444' }}>
-          ตัวอย่างอีเมลสำหรับล็อกอิน: <code>{selectedProvinceKey ? `${selectedProvinceKey}@staff.local` : '-'}</code>
+        <div style={{ fontSize: 13, color: "#444" }}>
+          ตัวอย่างอีเมลสำหรับล็อกอิน: <code>{selectedCourtEmail || "-"}</code>
         </div>
 
+        <label htmlFor="namePrefix">ชื่อ-นามสกุล</label>
+        <input
+          id="namePrefix"
+          type="text"
+          value={namePrefix}
+          onChange={(e) => setNamePrefix(e.target.value)}
+        />
 
+        <label htmlFor="phone">เบอร์โทรศัพท์</label>
+        <input
+          id="phone"
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="เช่น 0812345678"
+          required
+        />
 
         <label htmlFor="password">ตั้งรหัสผ่าน</label>
         <input
@@ -182,7 +252,15 @@ export default function StaffRegisterPage() {
 
         {error && <div className="login-error">{error}</div>}
         {okMsg && (
-          <div style={{ color: "#166534", background: "#dcfce7", padding: "0.5rem", borderRadius: 6, textAlign: "center" }}>
+          <div
+            style={{
+              color: "#166534",
+              background: "#dcfce7",
+              padding: "0.5rem",
+              borderRadius: 6,
+              textAlign: "center",
+            }}
+          >
             {okMsg}
           </div>
         )}

@@ -17,6 +17,7 @@ type PageProps = {
 type AttendeeCardRow = {
   id: string;
   event_id: string | null;
+  name_prefix: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
@@ -25,30 +26,22 @@ type AttendeeCardRow = {
   region: number | null;
   qr_image_url: string | null;
   ticket_token: string | null;
-  food_type: string | null;
   hotel_name: string | null;
 };
 
-// แปลง code ประเภทอาหารเป็น label ภาษาไทย
-function formatFoodType(foodType: string | null): string {
-  switch (foodType) {
-    case 'normal':
-      return 'ทั่วไป';
-    case 'no_pork':
-      return 'ไม่ทานหมู';
-    case 'vegetarian':
-      return 'มังสวิรัติ';
-    case 'vegan':
-      return 'เจ / วีแกน';
-    case 'halal':
-      return 'ฮาลาล';
-    case 'seafood_allergy':
-      return 'แพ้อาหารทะเล';
-    case 'other':
-      return 'อื่น ๆ';
-    default:
-      return 'ไม่ระบุ';
-  }
+// Map enum values and legacy "????" strings from old registration encoding.
+const JOB_POSITION_LABELS: Record<string, string> = {
+  chief_judge: 'ผู้พิพากษาหัวหน้าศาล',
+  associate_judge: 'ผู้พิพากษาสมทบ',
+  '????????????????????': 'ผู้พิพากษาหัวหน้าศาล',
+  '??????????????': 'ผู้พิพากษาสมทบ',
+};
+
+function formatJobPosition(jobPosition: string | null, fallback = 'ไม่ระบุตำแหน่ง'): string {
+  if (!jobPosition) return fallback;
+  const trimmed = jobPosition.trim();
+  if (!trimmed) return fallback;
+  return JOB_POSITION_LABELS[trimmed] ?? trimmed;
 }
 
 // ถ้าใน DB ยังไม่มี qr_image_url ให้ fallback เป็นลิงก์ QR จาก ticket_token
@@ -68,8 +61,34 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
   const regionParam = sp.region;
   const regionFilter = typeof regionParam === 'string' ? regionParam.trim() : '';
   const regionValue = regionParam == null ? '0' : regionFilter;
+  const jobPositionCodes = keyword
+    ? Array.from(
+        new Set(
+          Object.entries(JOB_POSITION_LABELS)
+            .filter(([, label]) => label.toLowerCase().includes(keyword))
+            .map(([code]) => code),
+        ),
+      )
+    : [];
 
   const supabase = await createServerClient();
+  const eventId = (process.env.EVENT_ID ?? '').trim();
+
+  if (!eventId) {
+    return (
+      <div className="page-wrap page-wrap--center">
+        <div className="card">
+          <div className="card__icon-badge card__icon-badge--error">
+            <span>!</span>
+          </div>
+          <h1 className="card__title">ยังไม่ได้ตั้งค่า EVENT_ID</h1>
+          <p className="card__subtitle">
+            กรุณาตั้งค่า EVENT_ID ในระบบก่อนใช้งานหน้านามบัตร
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   let dataQuery = supabase
     .from('attendees')
@@ -77,6 +96,7 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
       `
       id,
       event_id,
+      name_prefix,
       full_name,
       phone,
       organization,
@@ -85,14 +105,32 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
       region,
       qr_image_url,
       ticket_token,
-      food_type,
       hotel_name
     `
     )
     .order('full_name', { ascending: true });
 
+  dataQuery = dataQuery.eq('event_id', eventId);
+
   if (regionValue) {
     dataQuery = dataQuery.eq('region', regionValue);
+  }
+
+  if (keywordRaw) {
+    const orParts = [
+      `full_name.ilike.%${keywordRaw}%`,
+      `name_prefix.ilike.%${keywordRaw}%`,
+      `organization.ilike.%${keywordRaw}%`,
+      `job_position.ilike.%${keywordRaw}%`,
+      `province.ilike.%${keywordRaw}%`,
+      `ticket_token.ilike.%${keywordRaw}%`,
+    ];
+
+    if (jobPositionCodes.length > 0) {
+      orParts.push(`job_position.in.(${jobPositionCodes.join(',')})`);
+    }
+
+    dataQuery = dataQuery.or(orParts.join(','));
   }
 
   const { data, error } = await dataQuery;
@@ -122,24 +160,6 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
 
   const attendees: AttendeeCardRow[] = data as AttendeeCardRow[];
 
-  // filter ตาม keyword (ชื่อ / หน่วยงาน / ตำแหน่ง / จังหวัด / token)
-  const filtered = keyword
-    ? attendees.filter((a) => {
-        const name = (a.full_name ?? '').toLowerCase();
-        const org = (a.organization ?? '').toLowerCase();
-        const job = (a.job_position ?? '').toLowerCase();
-        const prov = (a.province ?? '').toLowerCase();
-        const token = (a.ticket_token ?? '').toLowerCase();
-        return (
-          name.includes(keyword) ||
-          org.includes(keyword) ||
-          job.includes(keyword) ||
-          prov.includes(keyword) ||
-          token.includes(keyword)
-        );
-      })
-    : attendees;
-
   return (
     <div className="page-wrap">
       <div className="page-gradient" />
@@ -167,25 +187,29 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
 
         {/* ---------- Namecard List ---------- */}
         <section className="namecard-list">
-          {filtered.length === 0 ? (
+          {attendees.length === 0 ? (
             <p className="admin-table__empty">ไม่พบนามบัตรตามเงื่อนไขที่ค้นหา</p>
           ) : (
             <div className="namecard-grid">
-              {filtered.map((a) => {
+              {attendees.map((a) => {
                 const qrUrl = buildQrUrl(a.ticket_token, a.qr_image_url);
-                formatFoodType(a.food_type); // เผื่อใช้ต่อ (ยังไม่แสดงใน UI)
+                const prefix = (a.name_prefix ?? '').trim();
+                const fullName = (a.full_name ?? '').trim();
+                const displayName = fullName
+                  ? `${prefix ? `${prefix} ` : ''}${fullName}`
+                  : prefix || 'ไม่ระบุชื่อ';
 
                 return (
                   <article key={a.id} className="namecard-item">
                     <header className="namecard-item__header">
                       <h2 className="namecard-item__name">
-                        {a.full_name || 'ไม่ระบุชื่อ'}
+                        {displayName}
                       </h2>
                       <p className="namecard-item__org">
                         หน่วยงาน: {a.organization || 'ไม่ระบุหน่วยงาน'}
                       </p>
                       <p className="namecard-item__job">
-                        ตำแหน่ง: {a.job_position || 'ไม่ระบุตำแหน่ง'}
+                        ตำแหน่ง: {formatJobPosition(a.job_position)}
                       </p>
                       <p className="namecard-item__province">
                         จังหวัด: {a.province || 'ไม่ระบุจังหวัด'}

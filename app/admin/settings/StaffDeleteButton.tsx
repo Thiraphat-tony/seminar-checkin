@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 
 type StaffDeleteButtonProps = {
   userId: string;
-  provinceName: string;
+  courtName: string;
   role: string;
   isSelf: boolean;
 };
 
 export default function StaffDeleteButton({
   userId,
-  provinceName,
+  courtName,
   role,
   isSelf,
 }: StaffDeleteButtonProps) {
@@ -31,7 +31,7 @@ export default function StaffDeleteButton({
   const handleDelete = async () => {
     if (isDisabled) return;
 
-    const label = provinceName ? `จังหวัด "${provinceName}"` : 'บัญชีนี้';
+  const label = courtName ? `ศาล "${courtName}"` : 'บัญชีนี้';
     const confirmed = window.confirm(
       `ยืนยันลบบัญชีแอดมิน${label}?\nการลบจะไม่สามารถกู้คืนได้`,
     );

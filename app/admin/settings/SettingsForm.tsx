@@ -7,10 +7,18 @@ type Props = {
   eventName: string | null;
   initialRegistrationOpen: boolean;
   initialCheckinOpen: boolean;
+  initialCheckinRoundOpen: number;
 };
 
 type ApiResponse =
-  | { ok: true; event: { registration_open: boolean | null; checkin_open: boolean | null } }
+  | {
+      ok: true;
+      event: {
+        registration_open: boolean | null;
+        checkin_open: boolean | null;
+        checkin_round_open: number | null;
+      };
+    }
   | { ok: false; error?: string };
 
 export default function SettingsForm({
@@ -18,9 +26,11 @@ export default function SettingsForm({
   eventName,
   initialRegistrationOpen,
   initialCheckinOpen,
+  initialCheckinRoundOpen,
 }: Props) {
   const [registrationOpen, setRegistrationOpen] = useState(initialRegistrationOpen);
   const [checkinOpen, setCheckinOpen] = useState(initialCheckinOpen);
+  const [checkinRoundOpen, setCheckinRoundOpen] = useState(initialCheckinRoundOpen);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +39,7 @@ export default function SettingsForm({
   const updateSettings = async (payload: {
     registrationOpen?: boolean;
     checkinOpen?: boolean;
+    checkinRoundOpen?: number;
   }) => {
     setBusy(true);
     setMessage(null);
@@ -51,9 +62,11 @@ export default function SettingsForm({
 
       const nextRegistrationOpen = data.event.registration_open !== false;
       const nextCheckinOpen = data.event.checkin_open !== false;
+      const nextCheckinRoundOpen = data.event.checkin_round_open ?? 0;
 
       setRegistrationOpen(nextRegistrationOpen);
       setCheckinOpen(nextCheckinOpen);
+      setCheckinRoundOpen(nextCheckinRoundOpen);
       setMessage('บันทึกแล้ว');
     } catch (err: any) {
       setError(err?.message ?? 'บันทึกไม่สำเร็จ');
@@ -123,7 +136,12 @@ export default function SettingsForm({
               <button
                 type="button"
                 className="admin-form__button admin-form__button--primary admin-settings__button"
-                onClick={() => updateSettings({ checkinOpen: !checkinOpen })}
+                onClick={() =>
+                  updateSettings({
+                    checkinOpen: !checkinOpen,
+                    checkinRoundOpen: !checkinOpen ? checkinRoundOpen : 0,
+                  })
+                }
                 disabled={busy}
               >
                 {busy
@@ -132,6 +150,22 @@ export default function SettingsForm({
                   ? 'ปิดการเช็คอิน'
                   : 'เปิดการเช็คอิน'}
               </button>
+              <div>
+                <p className="admin-settings__hint">รอบเช็กอินที่เปิดอยู่</p>
+                <select
+                  className="admin-filters__select"
+                  value={checkinRoundOpen}
+                  onChange={(event) =>
+                    updateSettings({ checkinRoundOpen: Number(event.target.value) })
+                  }
+                  disabled={busy || !checkinOpen}
+                >
+                  <option value={0}>ปิดทุกช่วง</option>
+                  <option value={1}>รอบ 1 (เช้า วันแรก)</option>
+                  <option value={2}>รอบ 2 (บ่าย วันแรก)</option>
+                  <option value={3}>รอบ 3 (เช้า วันที่สอง)</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

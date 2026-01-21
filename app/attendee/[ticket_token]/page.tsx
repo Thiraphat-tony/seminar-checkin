@@ -1,36 +1,70 @@
 "use client";
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-import "./attendee.css";
+import './attendee.css';
 import { maskPhone } from '@/lib/maskPhone';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'กรุณาตรวจสอบ NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ใน .env.local'
-  );
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type Attendee = {
   id: string;
-  event_id: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
   job_position: string | null;   // ✅ ตำแหน่ง
   province: string | null;       // ✅ จังหวัด
   region: number | null;         // ✅ ภาค 1-9
-  qr_image_url: string | null;   // ✅ URL รูป QR
-  slip_url: string | null;
   checked_in_at: string | null;
-  ticket_token: string | null;
-  hotel_name: string | null;     // ✅ โรงแรม
+};
+
+type AttendeeApiResponse =
+  | { ok: true; attendee: Attendee }
+  | { ok: false; message: string };
+
+type CheckinRounds = {
+  round1At: string | null;
+  round2At: string | null;
+  round3At: string | null;
+};
+
+type CheckinStatusResponse =
+  | {
+      ok: true;
+      success: true;
+      checkinOpen: boolean;
+      checkinRoundOpen: number;
+      allowed: boolean;
+      withinWindow: boolean;
+      alreadyCheckedIn: boolean;
+      checkedInAt: string | null;
+      rounds: CheckinRounds;
+    }
+  | { ok: false; success: false; message: string };
+
+type CheckinPostResponse =
+  | {
+      ok: true;
+      success: true;
+      status: 'checked_in' | 'already_checked_in';
+      round: number;
+      checked_in_at: string | null;
+      alreadyCheckedIn: boolean;
+      message: string;
+      checkinOpen?: boolean;
+      checkinRoundOpen?: number;
+    }
+  | {
+      ok: false;
+      success: false;
+      status: 'closed' | 'round_not_open' | 'invalid';
+      message: string;
+      checkinOpen?: boolean;
+      checkinRoundOpen?: number;
+    };
+
+const ROUND_LABELS: Record<number, string> = {
+  1: 'รอบ 1 (เช้า วันแรก)',
+  2: 'รอบ 2 (บ่าย วันแรก)',
+  3: 'รอบ 3 (เช้า วันที่สอง)',
 };
 
 function getAvatarInitial(name: string | null): string {
@@ -40,11 +74,21 @@ function getAvatarInitial(name: string | null): string {
   return trimmed[0];
 }
 
+function formatCheckinTime(value: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('th-TH', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
+
 export default function Page() {
   const params = useParams<{ ticket_token?: string }>();
   const router = useRouter();
   const ticketToken =
-    typeof params?.ticket_token === "string" ? params.ticket_token.trim() : "";
+    typeof params?.ticket_token === 'string' ? params.ticket_token.trim() : '';
 
   const [attendee, setAttendee] = useState<Attendee | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -53,8 +97,16 @@ export default function Page() {
   const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
   const [checkinMessage, setCheckinMessage] = useState<string | null>(null);
   const [checkinError, setCheckinError] = useState<string | null>(null);
-  const [checkinClosed, setCheckinClosed] = useState(false);
+  const [checkinOpen, setCheckinOpen] = useState(false);
+  const [checkinRoundOpen, setCheckinRoundOpen] = useState(0);
+  const [checkinRounds, setCheckinRounds] = useState<CheckinRounds>({
+    round1At: null,
+    round2At: null,
+    round3At: null,
+  });
+  const [checkinStatusError, setCheckinStatusError] = useState<string | null>(null);
   const [checkinStatusChecked, setCheckinStatusChecked] = useState(false);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
 
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isPending] = useTransition();
@@ -75,48 +127,35 @@ export default function Page() {
       setLoadError(null);
 
       try {
-        const { data, error } = await supabase
-          .from('attendees')
-          .select(
-            `
-            id,
-            event_id,
-            full_name,
-            phone,
-            organization,
-            job_position,
-            province,
-            region,
-            qr_image_url,
-            slip_url,
-            checked_in_at,
-            ticket_token,
-            hotel_name
-          `
-          )
-          .eq('ticket_token', ticketToken)
-          .maybeSingle();
+        const res = await fetch(`/api/attendee/${encodeURIComponent(ticketToken)}`, {
+          cache: 'no-store',
+        });
 
-        if (error) {
-          console.error('load attendee error', error);
-          if (!cancelled) {
-            setLoadError('โหลดข้อมูลจากฐานข้อมูลไม่สำเร็จ');
-          }
+        if (!res.ok) {
+          const apiError = (await res.json().catch(() => null)) as AttendeeApiResponse | null;
+          const apiMessage =
+            apiError && 'message' in apiError && typeof apiError.message === 'string'
+              ? apiError.message
+              : null;
+          const msg =
+            res.status === 404
+              ? `ไม่พบข้อมูลสำหรับ token: ${ticketToken}`
+              : apiMessage || 'โหลดข้อมูลจากฐานข้อมูลไม่สำเร็จ';
+          if (!cancelled) setLoadError(msg);
           return;
         }
 
-        if (!data) {
+        const data = (await res.json().catch(() => null)) as AttendeeApiResponse | null;
+        if (!data || !data.ok) {
           if (!cancelled) {
-            setLoadError(`ไม่พบข้อมูลสำหรับ token: ${ticketToken}`);
+            setLoadError(data?.message || 'ไม่สามารถโหลดข้อมูลผู้เข้าร่วมได้');
           }
           return;
         }
 
         if (!cancelled) {
-          const typed = data as Attendee;
-
-          setAttendee(typed);
-          setCheckedInAt(typed.checked_in_at ?? null);
+          setAttendee(data.attendee);
+          setCheckedInAt(data.attendee.checked_in_at ?? null);
         }
       } catch (err) {
         console.error('load attendee unexpected error', err);
@@ -137,42 +176,46 @@ export default function Page() {
     };
   }, [ticketToken]);
 
-  useEffect(() => {
+  const loadCheckinStatus = useCallback(async () => {
     if (!ticketToken) return;
 
-    let cancelled = false;
+    setIsRefreshingStatus(true);
+    setCheckinStatusError(null);
 
-    const loadCheckinStatus = async () => {
-      try {
-        const res = await fetch(`/api/checkin?ticket_token=${encodeURIComponent(ticketToken)}`, {
-          cache: 'no-store',
-        });
+    try {
+      const res = await fetch(`/api/checkin?ticket_token=${encodeURIComponent(ticketToken)}`, {
+        cache: 'no-store',
+      });
 
-        if (!res.ok) {
-          if (!cancelled) setCheckinStatusChecked(true);
-          return;
-        }
-
-        const data = await res.json();
-        if (cancelled) return;
-
-        setCheckinStatusChecked(true);
-        if (data && typeof data.allowed === 'boolean') {
-          setCheckinClosed(!data.allowed);
-        }
-      } catch {
-        if (!cancelled) {
-          setCheckinStatusChecked(true);
-        }
+      if (!res.ok) {
+        setCheckinStatusError('ไม่สามารถตรวจสอบสถานะเช็กอินได้ กรุณาลองใหม่');
+        return;
       }
-    };
 
-    loadCheckinStatus();
+      const data = (await res.json()) as CheckinStatusResponse;
+      if (!data || !data.ok) {
+        setCheckinStatusError('ไม่สามารถตรวจสอบสถานะเช็กอินได้ กรุณาลองใหม่');
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
+      setCheckinOpen(data.checkinOpen);
+      setCheckinRoundOpen(data.checkinRoundOpen);
+      setCheckinRounds(data.rounds);
+      if (data.checkedInAt) {
+        setCheckedInAt(data.checkedInAt);
+      }
+    } catch {
+      setCheckinStatusError('ไม่สามารถตรวจสอบสถานะเช็กอินได้ กรุณาลองใหม่');
+    } finally {
+      setCheckinStatusChecked(true);
+      setIsRefreshingStatus(false);
+    }
   }, [ticketToken]);
+
+  useEffect(() => {
+    if (!ticketToken) return;
+    void loadCheckinStatus();
+  }, [ticketToken, loadCheckinStatus]);
 
   const handleCheckin = async () => {
     setCheckinMessage(null);
@@ -199,39 +242,47 @@ export default function Page() {
         body: JSON.stringify({ ticket_token: ticketToken }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as CheckinPostResponse;
 
-      if (!res.ok || !data?.success) {
-        const msg =
-          data?.message ||
-          (!res.ok
-            ? 'ระบบไม่สามารถเช็กอินได้ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่หน้างาน'
-            : 'เช็กอินไม่สำเร็จ');
+      if (!res.ok || !data || !data.ok) {
+        const rawMessage = data && 'message' in data ? data.message : '';
+        const resolvedMessage =
+          rawMessage === 'CHECKIN_CLOSED'
+            ? 'ระบบปิดการเช็กอิน'
+            : rawMessage === 'ROUND_NOT_OPEN'
+            ? 'ยังไม่เปิดรอบเช็กอิน'
+            : rawMessage ||
+              (!res.ok
+                ? 'ระบบไม่สามารถเช็กอินได้ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่หน้างาน'
+                : 'เช็กอินไม่สำเร็จ');
 
-        if (msg === 'CHECKIN_CLOSED') {
-          setCheckinClosed(true);
-          setCheckinStatusChecked(true);
-          return;
+        setCheckinError(resolvedMessage);
+        if (data && 'checkinOpen' in data && typeof data.checkinOpen === 'boolean') {
+          setCheckinOpen(data.checkinOpen);
         }
-        setCheckinError(msg);
-
-        if (data?.alreadyCheckedIn && data.checked_in_at) {
-          setCheckedInAt(data.checked_in_at);
-          setCheckinMessage('ผู้เข้าร่วมรายนี้เช็กอินไว้แล้ว');
+        if (data && 'checkinRoundOpen' in data && typeof data.checkinRoundOpen === 'number') {
+          setCheckinRoundOpen(data.checkinRoundOpen);
         }
-
         return;
       }
 
-      setCheckedInAt(data.checked_in_at || new Date().toISOString());
-      setCheckinMessage(data.message || 'เช็กอินสำเร็จแล้ว');
+      if (data.status === 'already_checked_in') {
+        setCheckinMessage('ผู้เข้าร่วมรายนี้เช็กอินรอบนี้ไว้แล้ว');
+      } else {
+        setCheckinMessage(data.message || 'เช็กอินสำเร็จแล้ว');
+        router.push(`/attendee/${encodeURIComponent(ticketToken)}/welcome`);
+      }
 
-      router.push(`/attendee/${encodeURIComponent(ticketToken)}/welcome`);
+      if (data.checked_in_at) {
+        setCheckedInAt(data.checked_in_at);
+      }
+
+      await loadCheckinStatus();
     } catch (err: any) {
       console.error('checkin error', err);
       setCheckinError(
         err?.message ||
-          'เกิดข้อผิดพลาดขณะเช็กอิน กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่'
+          'เกิดข้อผิดพลาดขณะเช็กอิน กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
       );
     } finally {
       setIsCheckingIn(false);
@@ -285,22 +336,38 @@ export default function Page() {
       : 'ไม่ระบุชื่อ';
 
   const avatarInitial = getAvatarInitial(attendee.full_name);
-  const isCheckedIn = !!checkedInAt;
-  const showCheckinClosed = checkinStatusChecked && checkinClosed && !isCheckedIn;
-
-  if (showCheckinClosed) {
-    return (
-      <main className="attendee-page-container attendee-page--closed">
-        <div className="attendee-closed-card">
-          <div className="attendee-closed__code">CHECKIN_CLOSED</div>
-          <h1 className="attendee-closed__title">ระบบปิดการเช็คอิน</h1>
-          <p className="attendee-closed__subtitle">
-            ขณะนี้ปิดการเช็คอินหน้างานแล้ว โปรดติดต่อเจ้าหน้าที่สำหรับข้อมูลเพิ่มเติม
-          </p>
-        </div>
-      </main>
-    );
-  }
+  const hasAnyCheckin =
+    !!checkedInAt ||
+    !!checkinRounds.round1At ||
+    !!checkinRounds.round2At ||
+    !!checkinRounds.round3At;
+  const isCheckedIn = hasAnyCheckin;
+  const openRoundLabel = ROUND_LABELS[checkinRoundOpen] ?? 'ยังไม่เปิดรอบเช็กอิน';
+  const checkedInForOpenRound =
+    checkinRoundOpen === 1
+      ? !!checkinRounds.round1At
+      : checkinRoundOpen === 2
+      ? !!checkinRounds.round2At
+      : checkinRoundOpen === 3
+      ? !!checkinRounds.round3At
+      : false;
+  const canCheckin =
+    !checkinStatusError &&
+    checkinStatusChecked &&
+    checkinOpen &&
+    checkinRoundOpen > 0 &&
+    !checkedInForOpenRound;
+  const checkinDisabledReason = checkinStatusError
+    ? checkinStatusError
+    : !checkinStatusChecked
+    ? 'กำลังตรวจสอบสถานะเช็กอิน...'
+    : !checkinOpen
+    ? 'ระบบปิดการเช็กอิน'
+    : checkinRoundOpen === 0
+    ? 'ยังไม่เปิดรอบเช็กอิน'
+    : checkedInForOpenRound
+    ? 'เช็กอินรอบนี้แล้ว'
+    : null;
 
   return (
     <main className="attendee-page-container">
@@ -336,6 +403,24 @@ export default function Page() {
                 : typeof attendee.region === 'number'
                 ? `ภาค ${attendee.region}`
                 : 'ไม่ระบุภาค'}
+            </div>
+            <div>
+              รอบเช็กอิน 1:{' '}
+              {checkinRounds.round1At
+                ? `เช็กอินแล้ว (${formatCheckinTime(checkinRounds.round1At)})`
+                : 'ยังไม่เช็กอิน'}
+            </div>
+            <div>
+              รอบเช็กอิน 2:{' '}
+              {checkinRounds.round2At
+                ? `เช็กอินแล้ว (${formatCheckinTime(checkinRounds.round2At)})`
+                : 'ยังไม่เช็กอิน'}
+            </div>
+            <div>
+              รอบเช็กอิน 3:{' '}
+              {checkinRounds.round3At
+                ? `เช็กอินแล้ว (${formatCheckinTime(checkinRounds.round3At)})`
+                : 'ยังไม่เช็กอิน'}
             </div>
             {attendee.region && (
               <div className="attendee-region-note">
@@ -380,18 +465,34 @@ export default function Page() {
           <p className="form-description">
             ตรวจสอบข้อมูลด้านบนให้ถูกต้อง แล้วกดปุ่มด้านล่างเพื่อเช็กอินเข้าร่วมงาน
           </p>
+          <p className="form-description">รอบที่เปิดอยู่: {openRoundLabel}</p>
+          {checkinDisabledReason && (
+            <p className="message error">{checkinDisabledReason}</p>
+          )}
+          {checkinStatusError && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={loadCheckinStatus}
+              disabled={isRefreshingStatus}
+            >
+              {isRefreshingStatus ? 'กำลังตรวจสอบ…' : 'ลองใหม่'}
+            </button>
+          )}
 
           <button
             type="button"
-            className={`btn ${isCheckedIn ? "btn-secondary" : "btn-success"}`}
+            className={`btn ${checkedInForOpenRound ? 'btn-secondary' : 'btn-success'}`}
             onClick={handleCheckin}
-            disabled={isBusy || isCheckedIn}
+            disabled={isBusy || !canCheckin}
           >
             {isCheckingIn
-              ? "กำลังเช็กอิน…"
-              : isCheckedIn
-              ? "เช็กอินเรียบร้อยแล้ว"
-              : "เช็กอินเข้าร่วมงาน"}
+              ? 'กำลังเช็กอิน…'
+              : checkedInForOpenRound
+              ? 'เช็กอินรอบนี้แล้ว'
+              : checkinRoundOpen > 0
+              ? `เช็กอิน (${openRoundLabel})`
+              : 'เช็กอินเข้าร่วมงาน'}
           </button>
 
           {checkinMessage && <p className="message success">{checkinMessage}</p>}

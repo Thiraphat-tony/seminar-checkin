@@ -1,14 +1,23 @@
 ﻿'use client';
 
-import { useState } from 'react';
-import { makeProvinceKey } from '@/lib/provinceKeys';
+import { useEffect, useState } from 'react';
 
 type SetPasswordResponse =
   | { ok: true }
   | { ok: false; error?: string };
 
+type CourtOption = {
+  id: string;
+  court_name: string;
+  max_staff: number | null;
+};
+
+function courtIdToEmail(courtId: string) {
+  return `${courtId}@staff.local`;
+}
+
 export default function ManagerForm() {
-  const provinces = [
+  /* const provinces = [
     'กรุงเทพมหานคร',
     'กระบี่',
     'กาญจนบุรี',
@@ -86,14 +95,48 @@ export default function ManagerForm() {
     'อุตรดิตถ์',
     'อุทัยธานี',
     'อุบลราชธานี',
-  ];
+  ]; */
 
   const [passphrase, setPassphrase] = useState('');
-  const [provinceName, setProvinceName] = useState('');
+  const [courtName, setCourtName] = useState('');
+  const [courts, setCourts] = useState<CourtOption[]>([]);
+  const [courtsLoading, setCourtsLoading] = useState(true);
+  const [courtsError, setCourtsError] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourts = async () => {
+      setCourtsLoading(true);
+      setCourtsError('');
+
+      try {
+        const res = await fetch('/api/courts', { cache: 'no-store' });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload?.ok) {
+          throw new Error(payload?.error || 'โหลดรายชื่อศาลไม่สำเร็จ');
+        }
+        const list = Array.isArray(payload.courts) ? payload.courts : [];
+        if (active) setCourts(list);
+      } catch (err: any) {
+        if (active) {
+          setCourtsError(err?.message || 'โหลดรายชื่อศาลไม่สำเร็จ');
+        }
+      } finally {
+        if (active) setCourtsLoading(false);
+      }
+    };
+
+    loadCourts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,15 +158,33 @@ export default function ManagerForm() {
       return;
     }
 
-    const trimmedProvince = provinceName.trim();
-    if (!trimmedProvince) {
+    if (courtsLoading) {
+      setError('กำลังโหลดรายชื่อศาล กรุณาลองใหม่อีกครั้ง');
+      setBusy(false);
+      return;
+    }
+    if (courtsError) {
+      setError(courtsError);
+      setBusy(false);
+      return;
+    }
+
+    const trimmedCourt = courtName.trim();
+    if (!trimmedCourt) {
       setError('กรุณาเลือกจังหวัด');
       setBusy(false);
       return;
     }
 
+    const selectedCourt = courts.find((court) => court.court_name === trimmedCourt);
+    if (!selectedCourt) {
+      setError('กรุณาเลือกศาลจากรายการ');
+      setBusy(false);
+      return;
+    }
+
     try {
-      const email = `${makeProvinceKey(trimmedProvince)}@staff.local`;
+      const email = courtIdToEmail(selectedCourt.id);
       const res = await fetch('/api/manager/set-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,7 +192,7 @@ export default function ManagerForm() {
           passphrase: trimmedPassphrase,
           newPassword: trimmedPassword,
           email,
-          provinceName: trimmedProvince,
+          courtId: selectedCourt.id,
         }),
       });
       const json = (await res.json().catch(() => null)) as SetPasswordResponse | null;
@@ -143,7 +204,7 @@ export default function ManagerForm() {
       }
 
       setPassword('');
-      setProvinceName('');
+      setCourtName('');
       setPassphrase('');
       setSuccess('ตั้งรหัสผ่านใหม่สำเร็จ');
     } catch (e: any) {
@@ -171,19 +232,19 @@ export default function ManagerForm() {
           required
         />
 
-        <label htmlFor="provinceName">จังหวัด</label>
+        <label htmlFor="courtName">ศาล</label>
         <input
-          id="provinceName"
+          id="courtName"
           type="text"
-          value={provinceName}
-          onChange={(e) => setProvinceName(e.target.value)}
-          list="province-list"
+          value={courtName}
+          onChange={(e) => setCourtName(e.target.value)}
+          list="court-list"
           placeholder="พิมพ์เพื่อค้นหา"
           required
         />
-        <datalist id="province-list">
-          {provinces.map((province) => (
-            <option key={province} value={province} />
+        <datalist id="court-list">
+          {courts.map((court) => (
+            <option key={court.id} value={court.court_name} />
           ))}
         </datalist>
 
