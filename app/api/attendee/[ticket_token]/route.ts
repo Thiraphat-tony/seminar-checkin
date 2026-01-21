@@ -42,9 +42,10 @@ function hashToken(token: string): string {
 
 export async function GET(
   req: NextRequest,
-  context: { params: { ticket_token?: string } },
+  context: { params: Promise<{ ticket_token: string }> },
 ) {
-  const token = context.params.ticket_token?.trim() ?? '';
+  const { ticket_token } = await context.params;
+  const token = ticket_token.trim();
   if (!token) {
     return NextResponse.json<AttendeeResponse>(
       { ok: false, message: 'MISSING_TICKET_TOKEN' },
