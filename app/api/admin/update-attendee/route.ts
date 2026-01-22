@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as {
     id?: string;
     event_id?: string | null;
+    name_prefix?: string | null;
     full_name?: string | null;
     phone?: string | null;
     organization?: string | null;
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
     food_type?: string | null;
     coordinator_name?: string | null;
     hotel_name?: string | null;
+    travel_mode?: string | null;
+    travel_other?: string | null;
     checked_in_at?: string | null; // ISO timestamp expected, or null
   } | null;
 
@@ -35,6 +38,7 @@ export async function POST(req: NextRequest) {
   const updateData: Record<string, any> = {};
   const allowed = [
     'event_id',
+    'name_prefix',
     'full_name',
     'phone',
     'organization',
@@ -47,6 +51,8 @@ export async function POST(req: NextRequest) {
     'food_type',
     'coordinator_name',
     'hotel_name',
+    'travel_mode',
+    'travel_other',
     'checked_in_at',
   ];
   for (const key of allowed) {
@@ -55,11 +61,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Validate region if present (must be 1-9)
+  if (Object.prototype.hasOwnProperty.call(body, 'name_prefix') && updateData.name_prefix != null) {
+    const trimmed = String(updateData.name_prefix).trim();
+    updateData.name_prefix = trimmed || null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'travel_other') && updateData.travel_other != null) {
+    const trimmed = String(updateData.travel_other).trim();
+    updateData.travel_other = trimmed || null;
+  }
+
+  // Validate region if present (must be 0-9)
   if (Object.prototype.hasOwnProperty.call(body, 'region') && updateData.region != null) {
     const regionNum = Number(updateData.region);
-    if (!Number.isInteger(regionNum) || regionNum < 1 || regionNum > 9) {
-      return NextResponse.json({ error: 'invalid region (must be 1-9)' }, { status: 400 });
+    if (!Number.isInteger(regionNum) || regionNum < 0 || regionNum > 9) {
+      return NextResponse.json({ error: 'invalid region (must be 0-9)' }, { status: 400 });
     }
     updateData.region = regionNum;
   }
@@ -86,6 +102,25 @@ export async function POST(req: NextRequest) {
     ]);
     if (!allowedFood.has(String(updateData.food_type))) {
       return NextResponse.json({ error: 'invalid food_type' }, { status: 400 });
+    }
+  }
+
+  // Validate travel_mode if present
+  if (Object.prototype.hasOwnProperty.call(body, 'travel_mode') && updateData.travel_mode != null) {
+    const allowedTravel = new Set([
+      'car',
+      'van',
+      'bus',
+      'train',
+      'plane',
+      'motorcycle',
+      'other',
+    ]);
+    if (!allowedTravel.has(String(updateData.travel_mode))) {
+      return NextResponse.json({ error: 'invalid travel_mode' }, { status: 400 });
+    }
+    if (String(updateData.travel_mode) !== 'other') {
+      updateData.travel_other = null;
     }
   }
 

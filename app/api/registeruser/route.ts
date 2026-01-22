@@ -8,7 +8,7 @@ import { makeProvinceKey } from '@/lib/provinceKeys';
 type ParticipantPayload = {
   namePrefix?: string;
   fullName: string;
-  position: 'chief_judge' | 'associate_judge' | 'other';
+  position: 'chief_judge' | 'associate_judge' | 'director' | 'other';
   positionOther?: string;
   phone: string;
   foodType: 'normal' | 'vegetarian' | 'halal';
@@ -400,7 +400,9 @@ export async function POST(req: NextRequest) {
           ? rawPositionOther
           : p.position === 'chief_judge'
             ? 'ผู้พิพากษาหัวหน้าศาล'
-            : 'ผู้พิพากษาสมทบ';
+            : p.position === 'director'
+              ? 'ผู้อำนวยการ'
+              : 'ผู้พิพากษาสมทบ';
 
       const rawTravelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
       const travelModeResolved = rawTravelMode || fallbackTravelMode;

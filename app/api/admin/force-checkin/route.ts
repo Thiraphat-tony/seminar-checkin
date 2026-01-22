@@ -89,13 +89,38 @@ export async function POST(req: NextRequest) {
     const defaultRound = normalizeRound(eventSettings.checkin_round_open);
 
     if (action === 'checkin') {
-      const roundToUse = requestedRound || defaultRound;
+      let roundToUse = requestedRound || defaultRound;
 
       if (!roundToUse) {
-        return NextResponse.json(
-          { success: false, message: 'ยังไม่ได้เปิดรอบเช็กอิน' },
-          { status: 400 },
-        );
+        const { data: existingRounds, error: roundsError } = await supabase
+          .from('attendee_checkins')
+          .select('round')
+          .eq('attendee_id', attendee.id);
+
+        if (roundsError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'ไม่สามารถตรวจสอบรอบเช็กอินของผู้เข้าร่วมได้',
+            },
+            { status: 500 },
+          );
+        }
+
+        const taken = new Set((existingRounds ?? []).map((r: any) => r.round));
+        const nextRound = [1, 2, 3].find((r) => !taken.has(r));
+        if (!nextRound) {
+          return NextResponse.json(
+            {
+              success: true,
+              alreadyCheckedIn: true,
+              round: 3,
+              message: 'ผู้เข้าร่วมรายนี้เช็กอินครบทุกรอบแล้ว',
+            },
+            { status: 200 },
+          );
+        }
+        roundToUse = nextRound;
       }
 
       const { data: existing, error: existingError } = await supabase
@@ -174,13 +199,37 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'uncheckin') {
-      const roundToUse = roundAll ? null : requestedRound || defaultRound;
+      let roundToUse = roundAll ? null : requestedRound || defaultRound;
 
       if (!roundAll && !roundToUse) {
-        return NextResponse.json(
-          { success: false, message: 'ยังไม่ได้เปิดรอบเช็กอิน' },
-          { status: 400 },
-        );
+        const { data: existingRounds, error: roundsError } = await supabase
+          .from('attendee_checkins')
+          .select('round')
+          .eq('attendee_id', attendee.id);
+
+        if (roundsError) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'ไม่สามารถตรวจสอบรอบเช็กอินของผู้เข้าร่วมได้',
+            },
+            { status: 500 },
+          );
+        }
+
+        const rounds = (existingRounds ?? []).map((r: any) => r.round);
+        if (rounds.length === 0) {
+          return NextResponse.json(
+            {
+              success: true,
+              alreadyUnchecked: true,
+              round: 'all',
+              message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอินในระบบ',
+            },
+            { status: 200 },
+          );
+        }
+        roundToUse = Math.max(...rounds);
       }
 
       let deleteQuery = supabase.from('attendee_checkins').delete().eq('attendee_id', attendee.id);

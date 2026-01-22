@@ -11,6 +11,7 @@ type AttendeeResponse =
       ok: true;
       attendee: {
         id: string;
+        name_prefix: string | null;
         full_name: string | null;
         phone: string | null;
         organization: string | null;
@@ -83,6 +84,7 @@ export async function GET(
     .select(
       `
       id,
+      name_prefix,
       full_name,
       phone,
       organization,

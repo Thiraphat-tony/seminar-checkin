@@ -11,6 +11,10 @@ type Row = {
   province: string | null;
   hotel_name: string | null;
   food_type: string | null;
+  slip_url: string | null;
+  checkin_round1_at: string | null;
+  checkin_round2_at: string | null;
+  checkin_round3_at: string | null;
 };
 
 const REGION_LABELS: Record<number, string> = {
@@ -38,19 +42,48 @@ function normalizeProvince(name: string | null): string {
   return v.length ? v : UNKNOWN_PROVINCE_LABEL;
 }
 
-const FOOD_KEYS = ["normal", "vegetarian", "halal", "unknown"] as const;
+const FOOD_KEYS = [
+  "normal",
+  "no_pork",
+  "vegetarian",
+  "vegan",
+  "halal",
+  "seafood_allergy",
+  "other",
+  "unknown",
+] as const;
 type FoodKey = (typeof FOOD_KEYS)[number];
 
 const FOOD_LABELS: Record<FoodKey, string> = {
   normal: "ปกติ",
+  no_pork: "ไม่ทานหมู",
   vegetarian: "มังสวิรัติ",
+  vegan: "เจ / วีแกน",
   halal: "ฮาลาล",
-  unknown: "ไม่ระบุ/อื่น ๆ",
+  seafood_allergy: "แพ้อาหารทะเล",
+  other: "อื่น ๆ",
+  unknown: "ไม่ระบุ",
 };
 
 function normalizeFoodType(v: string | null): FoodKey {
   const t = (v ?? "").trim().toLowerCase();
-  if (t === "normal" || t === "vegetarian" || t === "halal") return t;
+  if (
+    t === "normal" ||
+    t === "no_pork" ||
+    t === "vegetarian" ||
+    t === "vegan" ||
+    t === "halal" ||
+    t === "seafood_allergy" ||
+    t === "other"
+  ) {
+    return t as FoodKey;
+  }
+  if (t === "ไม่ทานหมู" || t === "งดหมู" || t === "ไม่กินหมู") return "no_pork";
+  if (t === "มังสวิรัติ" || t === "มังฯ") return "vegetarian";
+  if (t === "เจ" || t === "อาหารเจ" || t === "วีแกน") return "vegan";
+  if (t === "ฮาลาล" || t === "อิสลาม") return "halal";
+  if (t === "แพ้อาหารทะเล" || t === "แพ้ซีฟู้ด") return "seafood_allergy";
+  if (t === "อื่น" || t === "อื่นๆ" || t === "อื่น ๆ") return "other";
   return "unknown";
 }
 
@@ -103,9 +136,15 @@ function autosizeColumns(ws: ExcelJS.Worksheet, maxWidth = 50) {
 export async function GET() {
   const supabase = await createServerClient();
 
+  const eventId = (process.env.EVENT_ID ?? "").trim();
+  if (!eventId) {
+    return NextResponse.json({ ok: false, message: "MISSING_EVENT_ID" }, { status: 500 });
+  }
+
   const { data, error } = await supabase
-    .from("attendees")
-    .select("region, province, hotel_name, food_type")
+    .from("v_attendees_checkin_rounds")
+    .select("region, province, hotel_name, food_type, slip_url, checkin_round1_at, checkin_round2_at, checkin_round3_at")
+    .eq("event_id", eventId)
     .order("region", { ascending: true });
 
   if (error) {
@@ -158,13 +197,26 @@ export async function GET() {
   const foodRowTotals: Record<number, number> = {};
   const foodColTotals: Record<FoodKey, number> = {
     normal: 0,
+    no_pork: 0,
     vegetarian: 0,
+    vegan: 0,
     halal: 0,
+    seafood_allergy: 0,
+    other: 0,
     unknown: 0,
   };
 
   for (const region of regions) {
-    foodCount[region] = { normal: 0, vegetarian: 0, halal: 0, unknown: 0 };
+    foodCount[region] = {
+      normal: 0,
+      no_pork: 0,
+      vegetarian: 0,
+      vegan: 0,
+      halal: 0,
+      seafood_allergy: 0,
+      other: 0,
+      unknown: 0,
+    };
     foodRowTotals[region] = 0;
   }
 
@@ -176,6 +228,29 @@ export async function GET() {
     foodCount[region][key] += 1;
     foodRowTotals[region] += 1;
     foodColTotals[key] += 1;
+  }
+
+  // ====== Summary: participants vs check-in per region ======
+  const regionTotals: Record<number, { total: number; checked: number }> = {};
+  let regionTotalAll = 0;
+  let regionCheckedAll = 0;
+
+  for (const region of regions) {
+    regionTotals[region] = { total: 0, checked: 0 };
+  }
+
+  for (const r of rows) {
+    if (!isValidRegion(r.region)) continue;
+    const region = r.region;
+    regionTotals[region].total += 1;
+    regionTotalAll += 1;
+
+    const hasCheckin =
+      !!r.checkin_round1_at || !!r.checkin_round2_at || !!r.checkin_round3_at;
+    if (hasCheckin) {
+      regionTotals[region].checked += 1;
+      regionCheckedAll += 1;
+    }
   }
 
   // ====== Build workbook ======
@@ -243,13 +318,60 @@ export async function GET() {
 
   // (Optional) Sheet 3: Raw
   const wsRaw = wb.addWorksheet("Raw (Attendees)");
-  wsRaw.addRow(["region", "hotel_name", "food_type"]);
+  wsRaw.addRow([
+    "region",
+    "province",
+    "hotel_name",
+    "food_type",
+    "slip_url",
+    "checkin_round1_at",
+    "checkin_round2_at",
+    "checkin_round3_at",
+  ]);
   styleHeaderRow(wsRaw.getRow(1));
   for (const r of rows) {
-    wsRaw.addRow([r.region ?? "", normalizeHotelName(r.hotel_name), normalizeFoodType(r.food_type)]);
+    wsRaw.addRow([
+      r.region ?? "",
+      normalizeProvince(r.province),
+      normalizeHotelName(r.hotel_name),
+      normalizeFoodType(r.food_type),
+      r.slip_url ?? "",
+      r.checkin_round1_at ?? "",
+      r.checkin_round2_at ?? "",
+      r.checkin_round3_at ?? "",
+    ]);
   }
-  applyBorders(wsRaw, 1, wsRaw.rowCount, 1, 3);
+  applyBorders(wsRaw, 1, wsRaw.rowCount, 1, 8);
   autosizeColumns(wsRaw, 40);
+
+  // Sheet 4: Check-in summary by region
+  const wsCheckin = wb.addWorksheet("Checkin Summary", {
+    views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
+  });
+  wsCheckin.addRow(["ภาค", "ผู้เข้าร่วมทั้งหมด", "เช็กอินแล้ว"]);
+  styleHeaderRow(wsCheckin.getRow(1));
+
+  for (const region of regions) {
+    const label = REGION_LABELS[region] ?? `ภาค ${region}`;
+    wsCheckin.addRow([
+      label,
+      regionTotals[region]?.total ?? 0,
+      regionTotals[region]?.checked ?? 0,
+    ]);
+  }
+
+  wsCheckin.addRow(["รวมทุกภาค", regionTotalAll, regionCheckedAll]);
+  wsCheckin.getRow(wsCheckin.rowCount).font = { bold: true };
+
+  for (let r = 2; r <= wsCheckin.rowCount; r++) {
+    for (let c = 2; c <= 3; c++) {
+      wsCheckin.getCell(r, c).alignment = { horizontal: "center", vertical: "middle" };
+    }
+    wsCheckin.getCell(r, 1).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+  }
+
+  applyBorders(wsCheckin, 1, wsCheckin.rowCount, 1, 3);
+  autosizeColumns(wsCheckin);
 
   const buf = await wb.xlsx.writeBuffer();
 

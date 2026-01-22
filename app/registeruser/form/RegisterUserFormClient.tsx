@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type FoodType = 'normal' | 'vegetarian' | 'halal';
-type PositionType = 'chief_judge' | 'associate_judge' | 'other';
+type PositionType = 'chief_judge' | 'associate_judge' | 'director' | 'other';
 type TravelMode = 'car' | 'van' | 'bus' | 'train' | 'plane' | 'motorcycle' | 'other';
 type Lang = 'th' | 'en';
 
@@ -67,6 +67,7 @@ const TRAVEL_MODE_LABELS_EN: Record<TravelMode, string> = {
 const POSITION_LABELS_EN: Record<PositionType, string> = {
   chief_judge: 'Chief Judge',
   associate_judge: 'Associate Judge',
+  director: 'Director',
   other: 'Other (specify position)',
 };
 
@@ -527,6 +528,9 @@ export default function RegisterUserFormClient() {
                       <option value="associate_judge">
                         {lang === 'en' ? POSITION_LABELS_EN.associate_judge : 'ผู้พิพากษาสมทบ'}
                       </option>
+                      <option value="director">
+                        {lang === 'en' ? POSITION_LABELS_EN.director : 'ผู้อำนวยการ'}
+                      </option>
                       <option value="other">
                         {lang === 'en' ? POSITION_LABELS_EN.other : 'อื่น ๆ (ระบุตำแหน่ง)'}
                       </option>
@@ -687,4 +691,3 @@ export default function RegisterUserFormClient() {
     </main>
   );
 }
-

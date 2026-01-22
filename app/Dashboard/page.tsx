@@ -2,8 +2,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { getBrowserClient } from '../../lib/supabaseBrowser';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { maskPhone } from '@/lib/maskPhone';
 import './Dashboard.css';
 
@@ -11,113 +9,77 @@ export const dynamic = 'force-dynamic';
 
 type AttendeeRow = {
   id: string;
-  event_id: string | null;
   name_prefix: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
-  job_position: string | null;  // ✅ ตำแหน่ง
-  province: string | null;      // ✅ จังหวัด
-  region: number | null;        // ✅ ภาค 1-9
-  qr_image_url: string | null;  // ✅ รูป QR
-  slip_url: string | null;
-  food_type: string | null;     // ✅ ประเภทอาหาร
-  hotel_name: string | null;    // ✅ ชื่อโรงแรม
-  checked_in_at: string | null;
-  created_at: string | null;
 };
 
-// ---- ตั้งค่า Supabase ฝั่ง client ----
-let supabase: SupabaseClient | null = null;
-try {
-  supabase = getBrowserClient();
-} catch (err) {
-  console.warn('Supabase browser client not configured:', err);
-}
+type DashboardSummary = {
+  total: number;
+  checked: number;
+  notChecked: number;
+  slip: number;
+  round1: number;
+  round2: number;
+  round3: number;
+  latestNotChecked: AttendeeRow[];
+};
+
+type DashboardSummaryResponse =
+  | { ok: true; data: DashboardSummary }
+  | { ok: false; message: string };
 
 export default function DashboardPage() {
-  const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ---- ดึงข้อมูล + สมัคร realtime ----
+  // ---- ดึงข้อมูล + รีเฟรชอัตโนมัติ ----
   useEffect(() => {
-    if (!supabase) {
-      setError('ระบบยังไม่ได้ตั้งค่า Supabase (ตรวจสอบไฟล์ .env.local)');
-      setLoading(false);
-      return;
-    }
-
     let isMounted = true;
 
-    const fetchAttendees = async () => {
-      const { data, error } = await supabase
-        .from('attendees')
-        .select(
-          `
-          id,
-          event_id,
-          name_prefix,
-          full_name,
-          phone,
-          organization,
-          job_position,
-          province,
-          region,
-          qr_image_url,
-          slip_url,
-          food_type,
-          hotel_name,
-          checked_in_at,
-          created_at
-        `
-        )
-        .order('created_at', { ascending: false });
-
-      if (!isMounted) return;
-
-      if (error) {
-        setError(error.message);
-      } else {
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch('/api/dashboard/summary', { cache: 'no-store' });
+        const payload = (await res.json().catch(() => null)) as DashboardSummaryResponse | null;
+        if (!res.ok || !payload || !payload.ok) {
+          const message =
+            payload && 'message' in payload && typeof payload.message === 'string'
+              ? payload.message
+              : 'โหลดข้อมูลไม่สำเร็จ';
+          throw new Error(message);
+        }
+        if (!isMounted) return;
+        setSummary(payload.data);
         setError(null);
-        setAttendees((data || []) as AttendeeRow[]);
+      } catch (err: any) {
+        if (!isMounted) return;
+        setError(err?.message || 'โหลดข้อมูลไม่สำเร็จ');
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
     };
 
-    // โหลดรอบแรก
-    fetchAttendees();
-
-    // realtime ทุก event บนตาราง attendees
-    const channel = supabase
-      .channel('attendees-dashboard')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'attendees' },
-        () => {
-          fetchAttendees();
-        }
-      )
-      .subscribe();
+    fetchSummary();
+    const interval = setInterval(fetchSummary, 10000);
 
     return () => {
       isMounted = false;
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      clearInterval(interval);
     };
   }, []);
 
   // ---- คำนวณตัวเลขสรุป ----
-  const total = attendees.length;
-  const totalChecked = attendees.filter((a) => a.checked_in_at).length;
-  const totalWithSlip = attendees.filter((a) => a.slip_url).length;
-  const totalNotChecked = attendees.filter((a) => !a.checked_in_at).length;
+  const total = summary?.total ?? 0;
+  const totalChecked = summary?.checked ?? 0;
+  const totalWithSlip = summary?.slip ?? 0;
+  const totalNotChecked = summary?.notChecked ?? 0;
 
   // รายชื่อที่ยังไม่เช็กอิน (แค่ 5 คนล่าสุด)
   const latestNotChecked = useMemo(
-    () => attendees.filter((a) => !a.checked_in_at).slice(0, 5),
-    [attendees]
+    () => summary?.latestNotChecked ?? [],
+    [summary]
   );
 
   // สำหรับกราฟแท่งแนวตั้ง (4 สถานะ)

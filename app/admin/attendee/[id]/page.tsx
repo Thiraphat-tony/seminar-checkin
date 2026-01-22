@@ -49,6 +49,7 @@ export default async function AttendeeEditPage({ params }: PageProps) {
     .select(
       `
       id,
+      name_prefix,
       full_name,
       phone,
       organization,
@@ -56,6 +57,9 @@ export default async function AttendeeEditPage({ params }: PageProps) {
       province,
       region,
       hotel_name,
+      travel_mode,
+      travel_other,
+      food_type,
       ticket_token
     `
     )
@@ -89,6 +93,12 @@ export default async function AttendeeEditPage({ params }: PageProps) {
     if (!name) return '👤';
     return name.trim().charAt(0).toUpperCase();
   };
+
+  const displayName = [data.name_prefix, data.full_name]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+    .join(' ')
+    .trim() || 'ไม่ระบุชื่อ';
 
   return (
     <div className="page-wrap">
@@ -131,11 +141,11 @@ export default async function AttendeeEditPage({ params }: PageProps) {
         {/* User Info Card */}
         <section className="attendee-edit-userinfo">
           <div className="attendee-edit-userinfo__avatar">
-            {getInitial(data.full_name)}
+            {getInitial(displayName)}
           </div>
           <div className="attendee-edit-userinfo__details">
             <h2 className="attendee-edit-userinfo__name">
-              {data.full_name || 'ไม่ระบุชื่อ'}
+              {displayName}
             </h2>
             <p className="attendee-edit-userinfo__token">
               Token: <span>{data.ticket_token}</span>

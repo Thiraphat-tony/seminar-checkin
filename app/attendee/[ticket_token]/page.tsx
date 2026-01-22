@@ -7,6 +7,7 @@ import { maskPhone } from '@/lib/maskPhone';
 
 type Attendee = {
   id: string;
+  name_prefix: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
@@ -330,12 +331,15 @@ export default function Page() {
     );
   }
 
-  const displayName =
-    attendee.full_name && attendee.full_name.trim().length > 0
-      ? attendee.full_name.trim()
-      : 'ไม่ระบุชื่อ';
+  const displayName = (() => {
+    const prefix = (attendee.name_prefix ?? '').trim();
+    const fullName = (attendee.full_name ?? '').trim();
+    const combined = [prefix, fullName].filter(Boolean).join(' ').trim();
+    return combined.length ? combined : 'ไม่ระบุชื่อ';
+  })();
 
-  const avatarInitial = getAvatarInitial(attendee.full_name);
+  const avatarInitial = getAvatarInitial(displayName);
+  const regionValue = typeof attendee.region === 'number' ? attendee.region : null;
   const hasAnyCheckin =
     !!checkedInAt ||
     !!checkinRounds.round1At ||
@@ -376,10 +380,6 @@ export default function Page() {
       </header>
 
       <div className="attendee-page-main">
-        <p>
-          รหัสบัตร (TOKEN): <code>{ticketToken}</code>
-        </p>
-
         {/* การ์ดข้อมูลผู้เข้าร่วม */}
         <section className="attendee-card">
           <div className="attendee-card-header">
@@ -398,11 +398,11 @@ export default function Page() {
             <div>ตำแหน่ง: {attendee.job_position || 'ไม่ระบุตำแหน่ง'}</div>
             <div>
               ภาค:{' '}
-              {attendee.region === 0
+              {regionValue === null
+                ? 'ไม่ระบุภาค'
+                : regionValue === 0
                 ? 'ศาลเยาวชนและครอบครัวกลาง (กรุงเทพมหานคร)'
-                : typeof attendee.region === 'number'
-                ? `ภาค ${attendee.region}`
-                : 'ไม่ระบุภาค'}
+                : `ภาค ${regionValue}`}
             </div>
             <div>
               รอบเช็กอิน 1:{' '}
@@ -422,17 +422,17 @@ export default function Page() {
                 ? `เช็กอินแล้ว (${formatCheckinTime(checkinRounds.round3At)})`
                 : 'ยังไม่เช็กอิน'}
             </div>
-            {attendee.region && (
+            {regionValue !== null && regionValue > 0 && (
               <div className="attendee-region-note">
-                {attendee.region === 1 && 'ภาค 1: กรุงเทพมหานครและจังหวัดในภาคกลาง'}
-                {attendee.region === 2 && 'ภาค 2: จังหวัดในภาคตะวันออก'}
-                {attendee.region === 3 && 'ภาค 3: จังหวัดในภาคอีสานตอนล่าง'}
-                {attendee.region === 4 && 'ภาค 4: จังหวัดในภาคอีสานตอนบน'}
-                {attendee.region === 5 && 'ภาค 5: จังหวัดในภาคเหนือ'}
-                {attendee.region === 6 && 'ภาค 6: จังหวัดในภาคกลางตอนบน'}
-                {attendee.region === 7 && 'ภาค 7: จังหวัดในภาคตะวันตก'}
-                {attendee.region === 8 && 'ภาค 8: จังหวัดในภาคใต้ตอนบน'}
-                {attendee.region === 9 && 'ภาค 9: จังหวัดในภาคใต้ตอนล่าง'}
+                {regionValue === 1 && 'ภาค 1: กรุงเทพมหานครและจังหวัดในภาคกลาง'}
+                {regionValue === 2 && 'ภาค 2: จังหวัดในภาคตะวันออก'}
+                {regionValue === 3 && 'ภาค 3: จังหวัดในภาคอีสานตอนล่าง'}
+                {regionValue === 4 && 'ภาค 4: จังหวัดในภาคอีสานตอนบน'}
+                {regionValue === 5 && 'ภาค 5: จังหวัดในภาคเหนือ'}
+                {regionValue === 6 && 'ภาค 6: จังหวัดในภาคกลางตอนบน'}
+                {regionValue === 7 && 'ภาค 7: จังหวัดในภาคตะวันตก'}
+                {regionValue === 8 && 'ภาค 8: จังหวัดในภาคใต้ตอนบน'}
+                {regionValue === 9 && 'ภาค 9: จังหวัดในภาคใต้ตอนล่าง'}
               </div>
             )}
           </div>
