@@ -31,6 +31,7 @@ type AdminPageProps = {
 
 type AttendeeRow = {
   id: string;
+  name_prefix: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
@@ -214,6 +215,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .select(
       `
       id,
+      name_prefix,
       full_name,
       phone,
       organization,
@@ -539,13 +541,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     const hasSlip = !!a.slip_url;
                     const isChecked = !!a.checked_in_at;
                     const foodLabel = formatFoodType(a.food_type);
+                    const namePrefix = (a.name_prefix ?? '').trim();
+                    const fullName = (a.full_name ?? '').trim();
+                    const displayName =
+                      namePrefix || fullName
+                        ? `${namePrefix ? `${namePrefix} ` : ''}${fullName}`.trim()
+                        : '-';
 
                     return (
                       <tr key={a.id ?? idx}>
                         <td>{from + idx + 1}</td>
 
                         <td>
-                          <div>{a.full_name || '-'}</div>
+                          <div>{displayName}</div>
                           <div>
                             <small>{maskPhone(a.phone)}</small>
                           </div>

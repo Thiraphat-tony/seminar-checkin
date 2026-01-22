@@ -79,6 +79,64 @@ html, body {
   font-size: 1rem;
 }
 
+.registeruser-header__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.registeruser-header__text {
+  flex: 1 1 auto;
+}
+
+.registeruser-lang {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(91, 192, 222, 0.12);
+  border: 1px solid rgba(91, 192, 222, 0.35);
+  min-width: 150px;
+}
+
+.registeruser-lang__label {
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+.registeruser-lang__buttons {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.registeruser-lang__button {
+  flex: 1 1 0;
+  height: 40px;
+  border-radius: 10px;
+  border: 2px solid rgba(91, 192, 222, 0.45);
+  background: #fff;
+  color: var(--text-primary);
+  font-weight: 900;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+.registeruser-lang__button.is-active {
+  background: linear-gradient(120deg, rgba(91, 192, 222, 0.92), rgba(91, 192, 222, 0.82));
+  color: #fff;
+  box-shadow: var(--shadow-soft);
+}
+
+.registeruser-lang__button:active {
+  transform: translateY(1px);
+}
+
 /* ===== FORM LAYOUT ===== */
 .registeruser-form {
   padding: 22px;
@@ -376,6 +434,16 @@ html, body {
 @media (max-width: 768px) {
   .registeruser-form { padding: 16px; }
   .registeruser-section { padding: 14px; }
+
+  .registeruser-header__top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .registeruser-lang {
+    align-items: flex-start;
+    width: 100%;
+  }
 
   .participant-row { gap: 8px; }
   .participant-left { width: 100%; justify-content: center; text-align: center; }

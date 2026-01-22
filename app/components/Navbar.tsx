@@ -44,6 +44,19 @@ function getDisplayNameFromEmail(email?: string | null) {
   return localPart || 'User';
 }
 
+type CourtRelation = { court_name: string | null } | { court_name: string | null }[] | null;
+
+function getCourtNameFromRelation(courts: CourtRelation): string {
+  if (!courts) return '';
+  if (Array.isArray(courts)) {
+    return (courts[0]?.court_name ?? '').trim();
+  }
+  if (typeof courts === 'object') {
+    return String(courts.court_name ?? '').trim();
+  }
+  return '';
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -94,7 +107,17 @@ export default function Navbar() {
 
         if (!active) return;
         if (staff) {
-          const courtName = (staff.courts?.[0]?.court_name ?? '').trim();
+          let courtName = getCourtNameFromRelation(
+            (staff as { courts: CourtRelation }).courts ?? null,
+          );
+          if (!courtName && staff.court_id) {
+            const { data: court } = await supabase
+              .from('courts')
+              .select('court_name')
+              .eq('id', staff.court_id)
+              .maybeSingle();
+            courtName = (court?.court_name ?? '').trim();
+          }
           setUserName(courtName || getDisplayNameFromEmail(user.email));
           setCanManageEvent(staff.role === 'super_admin');
         }

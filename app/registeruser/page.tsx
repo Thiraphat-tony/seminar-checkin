@@ -1,4 +1,4 @@
-// app/registeruser/page.tsx
+﻿// app/registeruser/page.tsx
 'use client';
 
 import './registeruser-page.css';
@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 type FoodType = 'normal' | 'vegetarian' | 'halal';
 type PositionType = 'chief_judge' | 'associate_judge' | 'other';
 type TravelMode = 'car' | 'van' | 'bus' | 'train' | 'plane' | 'motorcycle' | 'other';
+type Lang = 'th' | 'en';
 
 type Participant = {
   namePrefix: string;
@@ -50,6 +51,18 @@ const TRAVEL_MODE_LABELS: Record<(typeof TRAVEL_MODE_VALUES)[number], string> = 
   motorcycle: 'รถจักรยานยนต์',
   other: 'อื่น ๆ',
 };
+
+const TRAVEL_MODE_LABELS_EN: Record<(typeof TRAVEL_MODE_VALUES)[number], string> = {
+  car: 'Private car',
+  van: 'Van',
+  bus: 'Bus',
+  train: 'Train',
+  plane: 'Plane',
+  motorcycle: 'Motorcycle',
+  other: 'Other',
+};
+
+const LANG_STORAGE_KEY = 'registeruser:lang';
 
 // ✅ mapping ภาค/ศาลกลาง → รายชื่อศาล
 const REGION_ORGANIZATIONS: Record<string, string[]> = {
@@ -200,6 +213,30 @@ function getPrefixSelectValue(prefix: string) {
 
 export default function RegisterUserPage() {
   const router = useRouter();
+
+  const [lang, setLang] = useState<Lang>('th');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LANG_STORAGE_KEY);
+      if (stored === 'th' || stored === 'en') {
+        setLang(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setLanguage = (next: Lang) => {
+    setLang(next);
+    try {
+      localStorage.setItem(LANG_STORAGE_KEY, next);
+    } catch {
+      // ignore
+    }
+  };
+
+  const t = (th: string, en: string) => (lang === 'en' ? en : th);
 
   const [organization, setOrganization] = useState('');
   const [province, setProvince] = useState('');
@@ -394,24 +431,24 @@ export default function RegisterUserPage() {
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
-    if (!organization.trim()) return setErrorMessage('กรุณากรอกชื่อหน่วยงาน / ศาล');
-    if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
-    if (courtsLoading) return setErrorMessage('กำลังโหลดรายชื่อศาล กรุณารอสักครู่');
+    if (!region) return setErrorMessage(t('กรุณาเลือกสังกัดภาค / ศาลกลาง', 'Please select a region / central court'));
+    if (!organization.trim()) return setErrorMessage(t('กรุณากรอกชื่อหน่วยงาน / ศาล', 'Please enter the organization / court name'));
+    if (!province.trim()) return setErrorMessage(t('กรุณากรอกจังหวัด', 'Please enter the province'));
+    if (courtsLoading) return setErrorMessage(t('กำลังโหลดรายชื่อศาล กรุณารอสักครู่', 'Loading court list. Please wait.'));
     if (courtsError) return setErrorMessage(courtsError);
 
     const resolvedCourtId = resolveCourtId(organization, courts);
-    if (!resolvedCourtId) return setErrorMessage('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล');
+    if (!resolvedCourtId) return setErrorMessage(t('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล', 'No matching court found for the organization name'));
 
-    if (!coordinatorPrefix.trim()) return setErrorMessage('กรุณาเลือกคำนำหน้าผู้ประสานงาน');
+    if (!coordinatorPrefix.trim()) return setErrorMessage(t('กรุณาเลือกคำนำหน้าผู้ประสานงาน', 'Please select a coordinator prefix'));
     if (coordinatorPrefix === OTHER_PREFIX_VALUE && !coordinatorPrefixOther.trim())
-      return setErrorMessage('กรุณาระบุคำนำหน้าผู้ประสานงาน');
-    if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
-    if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
+      return setErrorMessage(t('กรุณาระบุคำนำหน้าผู้ประสานงาน', 'Please specify the coordinator prefix'));
+    if (!coordinatorName.trim()) return setErrorMessage(t('กรุณากรอกชื่อ-สกุลผู้ประสานงาน', 'Please enter the coordinator full name'));
+    if (!coordinatorPhone.trim()) return setErrorMessage(t('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน', 'Please enter the coordinator phone number'));
 
     const { isValidPhone } = await import('@/lib/phone');
     if (!isValidPhone(coordinatorPhone))
-      return setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
+      return setErrorMessage(t('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก', 'Coordinator phone number must be 10 digits'));
 
     const count = clampCount(Number(totalInput));
     setTotalInput(String(count));
@@ -426,20 +463,20 @@ export default function RegisterUserPage() {
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    if (!region) return setErrorMessage('กรุณาเลือกสังกัดภาค / ศาลกลาง');
-    if (!organization.trim()) return setErrorMessage('กรุณากรอกชื่อหน่วยงาน / ศาล');
-    if (!province.trim()) return setErrorMessage('กรุณากรอกจังหวัด');
-    if (courtsLoading) return setErrorMessage('กำลังโหลดรายชื่อศาล กรุณารอสักครู่');
+    if (!region) return setErrorMessage(t('กรุณาเลือกสังกัดภาค / ศาลกลาง', 'Please select a region / central court'));
+    if (!organization.trim()) return setErrorMessage(t('กรุณากรอกชื่อหน่วยงาน / ศาล', 'Please enter the organization / court name'));
+    if (!province.trim()) return setErrorMessage(t('กรุณากรอกจังหวัด', 'Please enter the province'));
+    if (courtsLoading) return setErrorMessage(t('กำลังโหลดรายชื่อศาล กรุณารอสักครู่', 'Loading court list. Please wait.'));
     if (courtsError) return setErrorMessage(courtsError);
 
     const resolvedCourtId = resolveCourtId(organization, courts);
-    if (!resolvedCourtId) return setErrorMessage('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล');
+    if (!resolvedCourtId) return setErrorMessage(t('ไม่พบศาลที่ตรงกับชื่อหน่วยงาน/ศาล', 'No matching court found for the organization name'));
 
-    if (!coordinatorPrefix.trim()) return setErrorMessage('กรุณาเลือกคำนำหน้าผู้ประสานงาน');
+    if (!coordinatorPrefix.trim()) return setErrorMessage(t('กรุณาเลือกคำนำหน้าผู้ประสานงาน', 'Please select a coordinator prefix'));
     if (coordinatorPrefix === OTHER_PREFIX_VALUE && !coordinatorPrefixOther.trim())
-      return setErrorMessage('กรุณาระบุคำนำหน้าผู้ประสานงาน');
-    if (!coordinatorName.trim()) return setErrorMessage('กรุณากรอกชื่อ-สกุลผู้ประสานงาน');
-    if (!coordinatorPhone.trim()) return setErrorMessage('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน');
+      return setErrorMessage(t('กรุณาระบุคำนำหน้าผู้ประสานงาน', 'Please specify the coordinator prefix'));
+    if (!coordinatorName.trim()) return setErrorMessage(t('กรุณากรอกชื่อ-สกุลผู้ประสานงาน', 'Please enter the coordinator full name'));
+    if (!coordinatorPhone.trim()) return setErrorMessage(t('กรุณากรอกเบอร์โทรศัพท์ผู้ประสานงาน', 'Please enter the coordinator phone number'));
 
     // ✅ ดึงผู้เข้าร่วมจากหน้า /registeruser/form
     let participants: Participant[] = [];
@@ -453,10 +490,10 @@ export default function RegisterUserPage() {
     const filledParticipants = filterFilledParticipants(Array.isArray(participants) ? participants : []);
 
     if (filledParticipants.length === 0) {
-      return setErrorMessage('กรุณากด “บันทึกจำนวนผู้เข้าร่วม” แล้วกรอกข้อมูลผู้เข้าร่วมให้ครบถ้วน');
+      return setErrorMessage(t('กรุณากด “บันทึกจำนวนผู้เข้าร่วม” แล้วกรอกข้อมูลผู้เข้าร่วมให้ครบถ้วน', 'Please click “Save participant count” and complete all participant details'));
     }
     if (!participants[0]?.fullName?.trim()) {
-      return setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
+      return setErrorMessage(t('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1', 'Please enter the full name of participant #1'));
     }
 
     const missingPrefixIndex = filledParticipants.findIndex((p) => {
@@ -464,7 +501,12 @@ export default function RegisterUserPage() {
       return !prefix || prefix === OTHER_PREFIX_VALUE;
     });
     if (missingPrefixIndex >= 0) {
-      return setErrorMessage(`กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`);
+      return setErrorMessage(
+        t(
+          `กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`,
+          `Please select a prefix for participant #${missingPrefixIndex + 1}`,
+        ),
+      );
     }
 
     const missingHotelIndex = filledParticipants.findIndex((p) => {
@@ -472,7 +514,12 @@ export default function RegisterUserPage() {
       return !name || name === OTHER_HOTEL_VALUE;
     });
     if (missingHotelIndex >= 0) {
-      return setErrorMessage(`กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`);
+      return setErrorMessage(
+        t(
+          `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
+          `Please select a hotel for participant #${missingHotelIndex + 1}`,
+        ),
+      );
     }
 
     // ✅ แก้ข้อความ error ที่เป็น ????? ให้เป็นไทยชัด ๆ
@@ -482,7 +529,12 @@ export default function RegisterUserPage() {
       return !(p.positionOther ?? '').trim();
     });
     if (missingPositionOtherIndex >= 0) {
-      return setErrorMessage(`กรุณาระบุตำแหน่ง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`);
+      return setErrorMessage(
+        t(
+          `กรุณาระบุตำแหน่ง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`,
+          `Please specify the position (other) for participant #${missingPositionOtherIndex + 1}`,
+        ),
+      );
     }
 
     const missingTravelModeIndex = filledParticipants.findIndex((p) => {
@@ -490,7 +542,12 @@ export default function RegisterUserPage() {
       return !mode;
     });
     if (missingTravelModeIndex >= 0) {
-      return setErrorMessage(`กรุณาเลือกวิธีการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`);
+      return setErrorMessage(
+        t(
+          `กรุณาเลือกวิธีการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`,
+          `Please select a travel mode for participant #${missingTravelModeIndex + 1}`,
+        ),
+      );
     }
 
     const invalidTravelModeIndex = filledParticipants.findIndex((p) => {
@@ -498,7 +555,12 @@ export default function RegisterUserPage() {
       return !!mode && !TRAVEL_MODE_VALUES.includes(mode as (typeof TRAVEL_MODE_VALUES)[number]);
     });
     if (invalidTravelModeIndex >= 0) {
-      return setErrorMessage(`วิธีการเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`);
+      return setErrorMessage(
+        t(
+          `วิธีการเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`,
+          `Travel mode for participant #${invalidTravelModeIndex + 1} is invalid`,
+        ),
+      );
     }
 
     const missingTravelOtherIndex = filledParticipants.findIndex((p) => {
@@ -507,7 +569,12 @@ export default function RegisterUserPage() {
       return mode === 'other' && !other;
     });
     if (missingTravelOtherIndex >= 0) {
-      return setErrorMessage(`กรุณาระบุวิธีการเดินทาง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`);
+      return setErrorMessage(
+        t(
+          `กรุณาระบุวิธีการเดินทาง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`,
+          `Please specify the travel mode (other) for participant #${missingTravelOtherIndex + 1}`,
+        ),
+      );
     }
 
     try {
@@ -517,7 +584,7 @@ export default function RegisterUserPage() {
       const { normalizePhone, isValidPhone, phoneForStorage } = await import('@/lib/phone');
       const normCoordinator = normalizePhone(coordinatorPhone);
       if (!isValidPhone(normCoordinator)) {
-        setErrorMessage('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก');
+      setErrorMessage(t('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก', 'Coordinator phone number must be 10 digits'));
         setSubmitting(false);
         return;
       }
@@ -586,11 +653,14 @@ export default function RegisterUserPage() {
 
       await res.json();
 
-      setSuccessMessage('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว');
+      setSuccessMessage(t('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'Registration saved successfully'));
       setCompleted(true);
       saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
     } catch (err: any) {
-      setErrorMessage(err?.message || 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+      setErrorMessage(
+        err?.message ||
+          t('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'Unable to save. Please try again.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -612,9 +682,14 @@ export default function RegisterUserPage() {
       <main className="registeruser-page registeruser-page--closed">
         <div className="registeruser-closed-card">
           <div className="registeruser-closed__code">REGISTRATION_CLOSED</div>
-          <h1 className="registeruser-closed__title">ระบบปิดการลงทะเบียน</h1>
+          <h1 className="registeruser-closed__title">
+            {t('ระบบปิดการลงทะเบียน', 'Registration is closed')}
+          </h1>
           <p className="registeruser-closed__subtitle">
-            ขณะนี้ปิดรับลงทะเบียนแล้ว หากต้องการข้อมูลเพิ่มเติมโปรดติดต่อผู้ดูแลระบบ
+            {t(
+              'ขณะนี้ปิดรับลงทะเบียนแล้ว หากต้องการข้อมูลเพิ่มเติมโปรดติดต่อผู้ดูแลระบบ',
+              'Registration is currently closed. For more information, please contact the administrator.',
+            )}
           </p>
         </div>
       </main>
@@ -625,22 +700,50 @@ export default function RegisterUserPage() {
     <main className="registeruser-page">
       <div className="registeruser-card">
         <header className="registeruser-header">
-          <h1>
-            แบบฟอร์มลงทะเบียนการประชุมสัมมนาทางวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัว
-            ทั่วราชอาณาจักร ประจำปี ๒๕๖๙
-          </h1>
-          <p>
-            สำหรับผู้พิพากษาหัวหน้าศาลฯ และผู้พิพากษาสมทบ กรุณากรอกข้อมูลให้ครบถ้วนก่อนกดส่งแบบฟอร์ม
-          </p>
-        </header>
+  <div className="registeruser-header__top">
+    <div className="registeruser-header__text">
+      <h1>
+        {t('แบบฟอร์มลงทะเบียนการประชุมสัมมนาทางวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัวทั่วราชอาณาจักร ประจำปี ๒๕๖๙', 'Registration Form for the Academic Seminar of Juvenile & Family Court Lay Judges (Nationwide) - 2026')}
+      </h1>
+      <p>
+        {t('สำหรับผู้พิพากษาหัวหน้าศาลฯ และผู้พิพากษาสมทบ กรุณากรอกข้อมูลให้ครบถ้วนก่อนส่งแบบฟอร์ม', 'For chief judges and lay judges. Please complete all required fields before submitting the form.')}
+      </p>
+    </div>
+    <div className="registeruser-lang">
+      <span className="registeruser-lang__label">{t('ภาษา', 'Language')}</span>
+      <div className="registeruser-lang__buttons" role="group" aria-label="Language toggle">
+        <button
+          type="button"
+          className={`registeruser-lang__button ${lang === 'th' ? 'is-active' : ''}`}
+          aria-pressed={lang === 'th'}
+          onClick={() => setLanguage('th')}
+        >
+          ไทย
+        </button>
+        <button
+          type="button"
+          className={`registeruser-lang__button ${lang === 'en' ? 'is-active' : ''}`}
+          aria-pressed={lang === 'en'}
+          onClick={() => setLanguage('en')}
+        >
+          EN
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
 
         <form className="registeruser-form" onSubmit={handleSubmit}>
           {/* 1. ข้อมูลหน่วยงาน */}
           <section className="registeruser-section">
-            <h2 className="registeruser-section__title">1. ข้อมูลหน่วยงาน</h2>
+            <h2 className="registeruser-section__title">
+              {t('1. ข้อมูลหน่วยงาน', '1. Organization')}
+            </h2>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">สังกัดภาค / ศาลกลาง *</label>
+              <label className="registeruser-label">
+                {t('สังกัดภาค / ศาลกลาง *', 'Region / Central Court *')}
+              </label>
               <select
                 className="registeruser-input"
                 value={region}
@@ -648,22 +751,26 @@ export default function RegisterUserPage() {
                 required
                 disabled={submitting}
               >
-                <option value="">— กรุณาเลือก —</option>
-                <option value="0">ศาลกลาง (กรุงเทพมหานคร)</option>
-                <option value="1">ภาค 1</option>
-                <option value="2">ภาค 2</option>
-                <option value="3">ภาค 3</option>
-                <option value="4">ภาค 4</option>
-                <option value="5">ภาค 5</option>
-                <option value="6">ภาค 6</option>
-                <option value="7">ภาค 7</option>
-                <option value="8">ภาค 8</option>
-                <option value="9">ภาค 9</option>
+                <option value="">{t('— กรุณาเลือก —', '— Please select —')}</option>
+                <option value="0">
+                  {t('ศาลกลาง (กรุงเทพมหานคร)', 'Central Court (Bangkok)')}
+                </option>
+                <option value="1">{t('ภาค 1', 'Region 1')}</option>
+                <option value="2">{t('ภาค 2', 'Region 2')}</option>
+                <option value="3">{t('ภาค 3', 'Region 3')}</option>
+                <option value="4">{t('ภาค 4', 'Region 4')}</option>
+                <option value="5">{t('ภาค 5', 'Region 5')}</option>
+                <option value="6">{t('ภาค 6', 'Region 6')}</option>
+                <option value="7">{t('ภาค 7', 'Region 7')}</option>
+                <option value="8">{t('ภาค 8', 'Region 8')}</option>
+                <option value="9">{t('ภาค 9', 'Region 9')}</option>
               </select>
             </div>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">หน่วยงาน / ศาล *</label>
+              <label className="registeruser-label">
+                {t('หน่วยงาน / ศาล *', 'Organization / Court *')}
+              </label>
 
               <select
                 className="registeruser-input"
@@ -671,52 +778,73 @@ export default function RegisterUserPage() {
                 onChange={handleOrganizationSelect}
                 disabled={!region || submitting}
               >
-                <option value="">— เลือกจากรายการ (ถ้ามี) —</option>
+                <option value="">
+                  {t('— เลือกจากรายการ (ถ้ามี) —', '— Select from list (if available) —')}
+                </option>
                 {currentOrganizations.map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
                 ))}
-                <option value="__custom">กำหนดเอง (พิมพ์เอง)</option>
+                <option value="__custom">
+                  {t('กำหนดเอง (พิมพ์เอง)', 'Custom (type manually)')}
+                </option>
               </select>
 
               <input
                 className="registeruser-input"
                 value={organization}
                 onChange={handleOrganizationInput}
-                placeholder="พิมพ์ชื่อหน่วยงาน / ศาล (ให้ตรงกับรายชื่อศาลในระบบ)"
+                placeholder={t(
+                  'พิมพ์ชื่อหน่วยงาน / ศาล (ให้ตรงกับรายชื่อศาลในระบบ)',
+                  'Type organization / court name (must match the system list)',
+                )}
                 required
                 disabled={!region || submitting}
               />
 
               {courtsLoading ? (
-                <p className="registeruser-help">กำลังโหลดรายชื่อศาล…</p>
+                <p className="registeruser-help">
+                  {t('กำลังโหลดรายชื่อศาล…', 'Loading court list...')}
+                </p>
               ) : courtsError ? (
                 <p className="registeruser-help">{courtsError}</p>
               ) : (
                 <p className="registeruser-help">
-                  * ระบบจะจับคู่ “ชื่อหน่วยงาน/ศาล” กับรายชื่อศาลในฐานข้อมูล (ต้องพิมพ์ให้ตรง)
+                  {t(
+                    '* ระบบจะจับคู่ “ชื่อหน่วยงาน/ศาล” กับรายชื่อศาลในฐานข้อมูล (ต้องพิมพ์ให้ตรง)',
+                    '* The system matches the organization/court name with the court list in the database (must match exactly).',
+                  )}
                 </p>
               )}
             </div>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">จังหวัด *</label>
+              <label className="registeruser-label">
+                {t('จังหวัด *', 'Province *')}
+              </label>
               <input
                 className="registeruser-input"
                 value={province}
                 onChange={(e) => setProvince(e.target.value)}
-                placeholder="เช่น สุราษฎร์ธานี"
+                placeholder={t('เช่น สุราษฎร์ธานี', 'e.g. Surat Thani')}
                 required
                 disabled={!region || region === '0' || submitting}
               />
               {region === '0' && (
-                <p className="registeruser-help">ศาลกลางกำหนดจังหวัดเป็น “กรุงเทพมหานคร” อัตโนมัติ</p>
+                <p className="registeruser-help">
+                  {t(
+                    'ศาลกลางกำหนดจังหวัดเป็น “กรุงเทพมหานคร” อัตโนมัติ',
+                    'Central Court auto-sets the province to “Bangkok”.',
+                  )}
+                </p>
               )}
             </div>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">คำนำหน้าผู้ประสานงาน *</label>
+              <label className="registeruser-label">
+                {t('คำนำหน้าผู้ประสานงาน *', 'Coordinator prefix *')}
+              </label>
               <select
                 className="registeruser-input"
                 value={coordinatorPrefixSelectValue}
@@ -724,13 +852,15 @@ export default function RegisterUserPage() {
                 required
                 disabled={submitting}
               >
-                <option value="">— กรุณาเลือก —</option>
+                <option value="">{t('— กรุณาเลือก —', '— Please select —')}</option>
                 {PREFIX_OPTIONS.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
                 ))}
-                <option value={OTHER_PREFIX_VALUE}>อื่น ๆ (ระบุเอง)</option>
+                <option value={OTHER_PREFIX_VALUE}>
+                  {t('อื่น ๆ (ระบุเอง)', 'Other (specify)')}
+                </option>
               </select>
 
               {coordinatorPrefixSelectValue === OTHER_PREFIX_VALUE && (
@@ -738,7 +868,7 @@ export default function RegisterUserPage() {
                   className="registeruser-input"
                   value={coordinatorPrefixOther}
                   onChange={(e) => setCoordinatorPrefixOther(e.target.value)}
-                  placeholder="ระบุคำนำหน้า (เช่น ว่าที่ ร.ต.)"
+                  placeholder={t('ระบุคำนำหน้า (เช่น ว่าที่ ร.ต.)', 'Specify prefix (e.g., Lt. Jr.)')}
                   required
                   disabled={submitting}
                 />
@@ -746,19 +876,23 @@ export default function RegisterUserPage() {
             </div>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">ชื่อ-สกุลผู้ประสานงาน *</label>
+              <label className="registeruser-label">
+                {t('ชื่อ-สกุลผู้ประสานงาน *', 'Coordinator full name *')}
+              </label>
               <input
                 className="registeruser-input"
                 value={coordinatorName}
                 onChange={(e) => setCoordinatorName(e.target.value)}
-                placeholder="ชื่อ-นามสกุล"
+                placeholder={t('ชื่อ-นามสกุล', 'Full name')}
                 required
                 disabled={submitting}
               />
             </div>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">เบอร์โทรผู้ประสานงาน (10 หลัก) *</label>
+              <label className="registeruser-label">
+                {t('เบอร์โทรผู้ประสานงาน (10 หลัก) *', 'Coordinator phone (10 digits) *')}
+              </label>
               <input
                 className="registeruser-input"
                 value={coordinatorPhone}
@@ -773,10 +907,14 @@ export default function RegisterUserPage() {
 
           {/* 2. ผู้เข้าร่วมสัมมนาฯ */}
           <section className="registeruser-section">
-            <h2 className="registeruser-section__title">2. ผู้เข้าร่วมสัมมนาฯ</h2>
+            <h2 className="registeruser-section__title">
+              {t('2. ผู้เข้าร่วมสัมมนาฯ', '2. Participants')}
+            </h2>
 
             <div className="registeruser-field">
-              <label className="registeruser-label">รวมผู้เข้าร่วมทั้งหมด *</label>
+              <label className="registeruser-label">
+                {t('รวมผู้เข้าร่วมทั้งหมด *', 'Total participants *')}
+              </label>
               <input
                 type="number"
                 min={1}
@@ -801,24 +939,34 @@ export default function RegisterUserPage() {
                   onClick={goToFormCount}
                   disabled={submitting}
                 >
-                  {completed ? 'แก้ไข' : 'บันทึกจำนวนผู้เข้าร่วม'}
+                  {completed
+                    ? t('แก้ไข', 'Edit')
+                    : t('บันทึกจำนวนผู้เข้าร่วม', 'Save participant count')}
                 </button>
               </div>
 
               <p className="registeruser-help">
-                * หลังบันทึกจำนวนผู้เข้าร่วม ระบบจะพาไปหน้ากรอกข้อมูลรายบุคคล (รวมถึงโรงแรม / วิธีเดินทาง)
+                {t(
+                  '* หลังบันทึกจำนวนผู้เข้าร่วม ระบบจะพาไปหน้ากรอกข้อมูลรายบุคคล (รวมถึงโรงแรม / วิธีเดินทาง)',
+                  '* After saving the participant count, you will be taken to the participant details page (including hotel / travel mode).',
+                )}
                 <br />
-                * วิธีเดินทาง: {TRAVEL_MODE_VALUES.map((m) => TRAVEL_MODE_LABELS[m]).join(', ')}
+                {t('* วิธีเดินทาง: ', '* Travel modes: ')}
+                {TRAVEL_MODE_VALUES.map((m) =>
+                  lang === 'en' ? TRAVEL_MODE_LABELS_EN[m] : TRAVEL_MODE_LABELS[m],
+                ).join(', ')}
               </p>
             </div>
           </section>
 
           {/* 3. หลักฐานค่าลงทะเบียน */}
           <section className="registeruser-section">
-            <h2 className="registeruser-section__title">3. หลักฐานค่าลงทะเบียน</h2>
+            <h2 className="registeruser-section__title">
+              {t('3. หลักฐานค่าลงทะเบียน', '3. Registration payment proof')}
+            </h2>
             <div className="registeruser-field">
               <label htmlFor="slip" className="registeruser-label">
-                แนบไฟล์ *
+                {t('แนบไฟล์ *', 'Attach file *')}
               </label>
               <input
                 id="slip"
@@ -829,7 +977,9 @@ export default function RegisterUserPage() {
                 required
                 disabled={submitting}
               />
-              <p className="registeruser-help">รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF</p>
+              <p className="registeruser-help">
+                {t('รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF', 'Supports image files (JPG, PNG) or PDF')}
+              </p>
             </div>
           </section>
 
@@ -838,7 +988,7 @@ export default function RegisterUserPage() {
 
           <div className="registeruser-actions">
             <button type="submit" className="registeruser-button" disabled={submitting}>
-              {submitting ? 'กำลังบันทึก...' : 'ส่งแบบฟอร์มลงทะเบียน'}
+              {submitting ? t('กำลังบันทึก...', 'Saving...') : t('ส่งแบบฟอร์มลงทะเบียน', 'Submit registration')}
             </button>
           </div>
         </form>
@@ -846,3 +996,4 @@ export default function RegisterUserPage() {
     </main>
   );
 }
+

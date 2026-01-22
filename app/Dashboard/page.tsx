@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 type AttendeeRow = {
   id: string;
   event_id: string | null;
+  name_prefix: string | null;
   full_name: string | null;
   phone: string | null;
   organization: string | null;
@@ -56,6 +57,7 @@ export default function DashboardPage() {
           `
           id,
           event_id,
+          name_prefix,
           full_name,
           phone,
           organization,
@@ -301,7 +303,7 @@ export default function DashboardPage() {
                   <tbody>
                     {latestNotChecked.map((a) => (
                       <tr key={a.id}>
-                        <td>{a.full_name || '-'}</td>
+                        <td>{`${a.name_prefix ? `${a.name_prefix} ` : ''}${a.full_name ?? ''}`.trim() || '-'}</td>
                         <td>{a.organization || '-'}</td>
                         <td>{maskPhone(a.phone)}</td>
                       </tr>

@@ -1,4 +1,4 @@
-// app/registeruser/form/RegisterUserFormClient.tsx
+﻿// app/registeruser/form/RegisterUserFormClient.tsx
 'use client';
 
 import './registeruser-form.css';
@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 type FoodType = 'normal' | 'vegetarian' | 'halal';
 type PositionType = 'chief_judge' | 'associate_judge' | 'other';
 type TravelMode = 'car' | 'van' | 'bus' | 'train' | 'plane' | 'motorcycle' | 'other';
+type Lang = 'th' | 'en';
 
 type Participant = {
   namePrefix: string;
@@ -38,6 +39,7 @@ type SavedState = {
 const STORAGE_KEY = 'registeruser:state';
 const DRAFT_KEY = 'registeruser:draft';
 const PARTICIPANTS_KEY = 'registeruser:participants';
+const LANG_STORAGE_KEY = 'registeruser:lang';
 
 const PREFIX_OPTIONS = ['นาย', 'นาง', 'นางสาว', 'ดร.', 'ผศ.', 'รศ.', 'ศ.'];
 const OTHER_PREFIX_VALUE = '__other__';
@@ -51,6 +53,28 @@ const TRAVEL_MODE_OPTIONS: Array<{ value: TravelMode; label: string }> = [
   { value: 'motorcycle', label: 'รถจักรยานยนต์' },
   { value: 'other', label: 'อื่น ๆ (ระบุ)' },
 ];
+
+const TRAVEL_MODE_LABELS_EN: Record<TravelMode, string> = {
+  car: 'Private car',
+  van: 'Van',
+  bus: 'Bus',
+  train: 'Train',
+  plane: 'Plane',
+  motorcycle: 'Motorcycle',
+  other: 'Other (specify)',
+};
+
+const POSITION_LABELS_EN: Record<PositionType, string> = {
+  chief_judge: 'Chief Judge',
+  associate_judge: 'Associate Judge',
+  other: 'Other (specify position)',
+};
+
+const FOOD_LABELS_EN: Record<FoodType, string> = {
+  normal: 'Normal',
+  vegetarian: 'Vegetarian',
+  halal: 'Halal',
+};
 
 const HOTEL_OPTIONS = [
   'โรงแรมวังใต้',
@@ -122,6 +146,30 @@ function getTravelSelectValue(travelMode: string) {
 export default function RegisterUserFormClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const [lang, setLang] = useState<Lang>('th');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LANG_STORAGE_KEY);
+      if (stored === 'th' || stored === 'en') {
+        setLang(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setLanguage = (next: Lang) => {
+    setLang(next);
+    try {
+      localStorage.setItem(LANG_STORAGE_KEY, next);
+    } catch {
+      // ignore
+    }
+  };
+
+  const t = (th: string, en: string) => (lang === 'en' ? en : th);
 
   const count = useMemo(() => {
     const raw = searchParams.get('count');
@@ -216,18 +264,18 @@ export default function RegisterUserFormClient() {
     setErrorMessage(null);
 
     if (!state) {
-      setErrorMessage('ไม่พบข้อมูลหน้าก่อนหน้า กรุณากลับไปที่ /registeruser');
+      setErrorMessage(t('ไม่พบข้อมูลหน้าก่อนหน้า กรุณากลับไปที่ /registeruser', 'Previous data not found. Please go back to /registeruser'));
       return;
     }
 
     const filledParticipants = filterFilledParticipants(participants);
 
     if (filledParticipants.length === 0) {
-      setErrorMessage('ต้องมีผู้เข้าร่วมอย่างน้อย 1 คน');
+      setErrorMessage(t('ต้องมีผู้เข้าร่วมอย่างน้อย 1 คน', 'At least one participant is required'));
       return;
     }
     if (!participants[0].fullName.trim()) {
-      setErrorMessage('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1');
+      setErrorMessage(t('กรุณากรอกชื่อ-สกุลของผู้เข้าร่วมคนที่ 1', 'Please enter the full name of participant #1'));
       return;
     }
 
@@ -236,7 +284,12 @@ export default function RegisterUserFormClient() {
       return !prefix || prefix === OTHER_PREFIX_VALUE;
     });
     if (missingPrefixIndex >= 0) {
-      setErrorMessage(`กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`);
+      setErrorMessage(
+        t(
+          `กรุณาเลือกคำนำหน้าผู้เข้าร่วมคนที่ ${missingPrefixIndex + 1}`,
+          `Please select a prefix for participant #${missingPrefixIndex + 1}`,
+        ),
+      );
       return;
     }
 
@@ -245,7 +298,12 @@ export default function RegisterUserFormClient() {
       return !name || name === OTHER_HOTEL_VALUE;
     });
     if (missingHotelIndex >= 0) {
-      setErrorMessage(`กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`);
+      setErrorMessage(
+        t(
+          `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
+          `Please select a hotel for participant #${missingHotelIndex + 1}`,
+        ),
+      );
       return;
     }
 
@@ -256,7 +314,12 @@ export default function RegisterUserFormClient() {
       return !(p.positionOther ?? '').trim();
     });
     if (missingPositionOtherIndex >= 0) {
-      setErrorMessage(`กรุณาระบุตำแหน่งของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`);
+      setErrorMessage(
+        t(
+          `กรุณาระบุตำแหน่งของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`,
+          `Please specify the position for participant #${missingPositionOtherIndex + 1}`,
+        ),
+      );
       return;
     }
 
@@ -265,7 +328,12 @@ export default function RegisterUserFormClient() {
       return !mode;
     });
     if (missingTravelModeIndex >= 0) {
-      setErrorMessage(`กรุณาเลือกพาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`);
+      setErrorMessage(
+        t(
+          `กรุณาเลือกพาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`,
+          `Please select a travel mode for participant #${missingTravelModeIndex + 1}`,
+        ),
+      );
       return;
     }
 
@@ -274,7 +342,12 @@ export default function RegisterUserFormClient() {
       return !!mode && !TRAVEL_MODE_OPTIONS.some((option) => option.value === mode);
     });
     if (invalidTravelModeIndex >= 0) {
-      setErrorMessage(`พาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`);
+      setErrorMessage(
+        t(
+          `พาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${invalidTravelModeIndex + 1} ไม่ถูกต้อง`,
+          `Travel mode for participant #${invalidTravelModeIndex + 1} is invalid`,
+        ),
+      );
       return;
     }
 
@@ -284,7 +357,12 @@ export default function RegisterUserFormClient() {
       return mode === 'other' && !other;
     });
     if (missingTravelOtherIndex >= 0) {
-      setErrorMessage(`กรุณาระบุพาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`);
+      setErrorMessage(
+        t(
+          `กรุณาระบุพาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelOtherIndex + 1}`,
+          `Please specify the travel mode (other) for participant #${missingTravelOtherIndex + 1}`,
+        ),
+      );
       return;
     }
 
@@ -299,7 +377,12 @@ export default function RegisterUserFormClient() {
       const { normalizePhone, isValidPhone } = await import('@/lib/phone');
       const n = normalizePhone(rawPhone);
       if (!isValidPhone(n)) {
-        setErrorMessage(`เบอร์โทรของผู้เข้าร่วมคนที่ ${idx + 1} ต้องเป็นตัวเลข 10 หลัก`);
+        setErrorMessage(
+          t(
+            `เบอร์โทรของผู้เข้าร่วมคนที่ ${idx + 1} ต้องเป็นตัวเลข 10 หลัก`,
+            `Phone number for participant #${idx + 1} must be 10 digits`,
+          ),
+        );
         return;
       }
     }
@@ -310,11 +393,14 @@ export default function RegisterUserFormClient() {
       // ✅ เก็บทั้ง array (ไม่ตัดคนว่างทิ้ง) เพื่อกลับมาแก้ได้ตาม count
       persistBack(participants);
 
-      setSuccessMessage('บันทึกข้อมูลผู้เข้าร่วมแล้ว');
+      setSuccessMessage(t('บันทึกข้อมูลผู้เข้าร่วมแล้ว', 'Participant details saved'));
       router.replace('/registeruser');
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err?.message || 'บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      setErrorMessage(
+        err?.message ||
+          t('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'Save failed. Please try again.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -324,15 +410,40 @@ export default function RegisterUserFormClient() {
     <main className="registeruser-page">
       <div className="registeruser-card">
         <header className="registeruser-header">
-          <h1>กรอกข้อมูลผู้เข้าร่วม</h1>
-          {state ? (
-            <p>
-              {state.organization} • {state.province}
-            </p>
-          ) : (
-            <p>ไม่พบข้อมูลหน้าก่อนหน้า</p>
-          )}
-        </header>
+  <div className="registeruser-header__top">
+    <div className="registeruser-header__text">
+      <h1>{t('กรอกข้อมูลผู้เข้าร่วม', 'Participant details')}</h1>
+      {state ? (
+        <p>
+          {state.organization} • {state.province}
+        </p>
+      ) : (
+        <p>{t('ไม่พบข้อมูลหน้าก่อนหน้า', 'Previous data not found')}</p>
+      )}
+    </div>
+    <div className="registeruser-lang">
+      <span className="registeruser-lang__label">{t('ภาษา', 'Language')}</span>
+      <div className="registeruser-lang__buttons" role="group" aria-label="Language toggle">
+        <button
+          type="button"
+          className={`registeruser-lang__button ${lang === 'th' ? 'is-active' : ''}`}
+          aria-pressed={lang === 'th'}
+          onClick={() => setLanguage('th')}
+        >
+          ไทย
+        </button>
+        <button
+          type="button"
+          className={`registeruser-lang__button ${lang === 'en' ? 'is-active' : ''}`}
+          aria-pressed={lang === 'en'}
+          onClick={() => setLanguage('en')}
+        >
+          EN
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
 
         <div className="registeruser-actions">
           <button
@@ -341,14 +452,17 @@ export default function RegisterUserFormClient() {
             onClick={() => router.push('/registeruser')}
             disabled={submitting}
           >
-            กลับไปหน้า /registeruser
+            {t('กลับไปหน้า /registeruser', 'Back to /registeruser')}
           </button>
         </div>
 
         <form className="registeruser-form" onSubmit={handleSave}>
           <section className="registeruser-section">
             <div className="participants-head">
-              <h2 className="participants-total">ผู้เข้าร่วมทั้งหมด: {participants.length} คน</h2>
+              <h2 className="participants-total">
+                {t('ผู้เข้าร่วมทั้งหมด', 'Total participants')}: {participants.length}{' '}
+                {t('คน', 'people')}
+              </h2>
             </div>
 
             {participants.map((p, idx) => {
@@ -359,7 +473,9 @@ export default function RegisterUserFormClient() {
               return (
                 <div key={idx} id={`participant-${idx + 1}`} className="participant-block">
                   <div className="participant-row">
-                    <div className="participant-left">ผู้เข้าร่วมคนที่ {idx + 1}</div>
+                    <div className="participant-left">
+                      {t('ผู้เข้าร่วมคนที่', 'Participant')} {idx + 1}
+                    </div>
 
                     <select
                       className="participant-select prefix"
@@ -374,13 +490,15 @@ export default function RegisterUserFormClient() {
                       required={Boolean(p.fullName.trim())}
                       disabled={submitting}
                     >
-                      <option value="">คำนำหน้า</option>
+                      <option value="">{t('คำนำหน้า', 'Prefix')}</option>
                       {PREFIX_OPTIONS.map((prefix) => (
                         <option key={prefix} value={prefix}>
                           {prefix}
                         </option>
                       ))}
-                      <option value={OTHER_PREFIX_VALUE}>อื่น ๆ (ระบุ)</option>
+                      <option value={OTHER_PREFIX_VALUE}>
+                        {t('อื่น ๆ (ระบุ)', 'Other (specify)')}
+                      </option>
                     </select>
 
                     <input
@@ -388,7 +506,7 @@ export default function RegisterUserFormClient() {
                       className="participant-input name"
                       value={p.fullName}
                       onChange={(e) => handleParticipantChange(idx, 'fullName', e.target.value)}
-                      placeholder="ชื่อ-สกุล"
+                      placeholder={t('ชื่อ-สกุล', 'Full name')}
                       required={idx === 0}
                       disabled={submitting}
                     />
@@ -403,9 +521,15 @@ export default function RegisterUserFormClient() {
                       }}
                       disabled={submitting}
                     >
-                      <option value="chief_judge">ผู้พิพากษาหัวหน้าศาล</option>
-                      <option value="associate_judge">ผู้พิพากษาสมทบ</option>
-                      <option value="other">อื่น ๆ (ระบุตำแหน่ง)</option>
+                      <option value="chief_judge">
+                        {lang === 'en' ? POSITION_LABELS_EN.chief_judge : 'ผู้พิพากษาหัวหน้าศาล'}
+                      </option>
+                      <option value="associate_judge">
+                        {lang === 'en' ? POSITION_LABELS_EN.associate_judge : 'ผู้พิพากษาสมทบ'}
+                      </option>
+                      <option value="other">
+                        {lang === 'en' ? POSITION_LABELS_EN.other : 'อื่น ๆ (ระบุตำแหน่ง)'}
+                      </option>
                     </select>
 
                     <input
@@ -413,7 +537,7 @@ export default function RegisterUserFormClient() {
                       className="participant-input phone"
                       value={p.phone}
                       onChange={(e) => handleParticipantChange(idx, 'phone', e.target.value)}
-                      placeholder="เบอร์โทร (ถ้ามี)"
+                      placeholder={t('เบอร์โทร (ถ้ามี)', 'Phone (optional)')}
                       disabled={submitting}
                     />
 
@@ -428,10 +552,10 @@ export default function RegisterUserFormClient() {
                       required={Boolean(p.fullName.trim())}
                       disabled={submitting}
                     >
-                      <option value="">เลือกพาหนะ/วิธีเดินทาง</option>
+                      <option value="">{t('เลือกพาหนะ/วิธีเดินทาง', 'Select travel mode')}</option>
                       {TRAVEL_MODE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {lang === 'en' ? TRAVEL_MODE_LABELS_EN[option.value] : option.label}
                         </option>
                       ))}
                     </select>
@@ -449,13 +573,15 @@ export default function RegisterUserFormClient() {
                       required={Boolean(p.fullName.trim())}
                       disabled={submitting}
                     >
-                      <option value="">เลือกโรงแรม</option>
+                      <option value="">{t('เลือกโรงแรม', 'Select hotel')}</option>
                       {HOTEL_OPTIONS.map((hotel) => (
                         <option key={hotel} value={hotel}>
                           {hotel}
                         </option>
                       ))}
-                      <option value={OTHER_HOTEL_VALUE}>อื่น ๆ (ระบุชื่อโรงแรม)</option>
+                      <option value={OTHER_HOTEL_VALUE}>
+                        {t('อื่น ๆ (ระบุชื่อโรงแรม)', 'Other (specify hotel)')}
+                      </option>
                     </select>
 
                     <select
@@ -464,9 +590,15 @@ export default function RegisterUserFormClient() {
                       onChange={(e) => handleParticipantChange(idx, 'foodType', e.target.value)}
                       disabled={submitting}
                     >
-                      <option value="normal">ปกติ</option>
-                      <option value="vegetarian">มังสวิรัติ</option>
-                      <option value="halal">ฮาลาล</option>
+                      <option value="normal">
+                        {lang === 'en' ? FOOD_LABELS_EN.normal : 'ปกติ'}
+                      </option>
+                      <option value="vegetarian">
+                        {lang === 'en' ? FOOD_LABELS_EN.vegetarian : 'มังสวิรัติ'}
+                      </option>
+                      <option value="halal">
+                        {lang === 'en' ? FOOD_LABELS_EN.halal : 'ฮาลาล'}
+                      </option>
                     </select>
                   </div>
 
@@ -483,7 +615,7 @@ export default function RegisterUserFormClient() {
                             e.target.value.trim() ? e.target.value : OTHER_PREFIX_VALUE,
                           )
                         }
-                        placeholder="ระบุคำนำหน้า"
+                        placeholder={t('ระบุคำนำหน้า', 'Specify prefix')}
                         required={Boolean(p.fullName.trim())}
                         disabled={submitting}
                       />
@@ -497,7 +629,7 @@ export default function RegisterUserFormClient() {
                         className="participant-input position-other"
                         value={p.positionOther ?? ''}
                         onChange={(e) => handleParticipantChange(idx, 'positionOther', e.target.value)}
-                        placeholder="ระบุตำแหน่ง"
+                        placeholder={t('ระบุตำแหน่ง', 'Specify position')}
                         required={Boolean(p.fullName.trim())}
                         disabled={submitting}
                       />
@@ -511,7 +643,7 @@ export default function RegisterUserFormClient() {
                         className="participant-input travel-other"
                         value={p.travelOther ?? ''}
                         onChange={(e) => handleParticipantChange(idx, 'travelOther', e.target.value)}
-                        placeholder="ระบุพาหนะ/วิธีเดินทาง"
+                        placeholder={t('ระบุพาหนะ/วิธีเดินทาง', 'Specify travel mode')}
                         required={Boolean(p.fullName.trim())}
                         disabled={submitting}
                       />
@@ -531,7 +663,7 @@ export default function RegisterUserFormClient() {
                             e.target.value.trim() ? e.target.value : OTHER_HOTEL_VALUE,
                           )
                         }
-                        placeholder="ระบุชื่อโรงแรม"
+                        placeholder={t('ระบุชื่อโรงแรม', 'Specify hotel')}
                         required={Boolean(p.fullName.trim())}
                         disabled={submitting}
                       />
@@ -547,7 +679,7 @@ export default function RegisterUserFormClient() {
 
           <div className="registeruser-actions">
             <button type="submit" className="registeruser-button" disabled={submitting}>
-              {submitting ? 'กำลังบันทึก...' : 'บันทึก'}
+              {submitting ? t('กำลังบันทึก...', 'Saving...') : t('บันทึก', 'Save')}
             </button>
           </div>
         </form>
@@ -555,3 +687,4 @@ export default function RegisterUserFormClient() {
     </main>
   );
 }
+
