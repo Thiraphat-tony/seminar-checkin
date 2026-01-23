@@ -21,7 +21,7 @@ const kanit = Kanit({
 
 export const metadata: Metadata = {
   title: "Seminar Check-in System",
-  description: "ระบบการจัดการลงทะเบียนและเช็คอินสัมมนา",
+  description: "ระบบการจัดการลงทะเบียนและลงทะเบียนสัมมนา",
 };
 
 export default function RootLayout({

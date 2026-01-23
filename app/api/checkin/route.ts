@@ -1,4 +1,4 @@
-// app/api/checkin/route.ts
+﻿// app/api/checkin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, timingSafeEqual } from 'crypto';
 
@@ -390,7 +390,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           success: false,
           status: 'invalid',
-          message: 'ไม่พบข้อมูลการตั้งค่าเช็กอิน',
+          message: 'ไม่พบข้อมูลการตั้งค่าลงทะเบียน',
         },
         { status: 404 },
       );
@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           success: false,
           status: 'invalid',
-          message: 'ไม่สามารถตรวจสอบสถานะการเช็กอินรอบนี้ได้',
+          message: 'ไม่สามารถตรวจสอบสถานะการลงทะเบียนรอบนี้ได้',
         },
         { status: 500 },
       );
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
         checked_in_at: existingCheckin.checked_in_at ?? attendee.checked_in_at ?? null,
         checkedInAt: existingCheckin.checked_in_at ?? attendee.checked_in_at ?? null,
         alreadyCheckedIn: true,
-        message: 'เช็กอินรอบนี้ไว้แล้ว',
+        message: 'ลงทะเบียนรอบนี้ไว้แล้ว',
       });
     }
 
@@ -468,7 +468,7 @@ export async function POST(req: NextRequest) {
           checked_in_at: attendee.checked_in_at ?? null,
           checkedInAt: attendee.checked_in_at ?? null,
           alreadyCheckedIn: true,
-          message: 'เช็กอินรอบนี้ไว้แล้ว',
+          message: 'ลงทะเบียนรอบนี้ไว้แล้ว',
         });
       }
 
@@ -478,7 +478,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           success: false,
           status: 'invalid',
-          message: 'เช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
+          message: 'ลงทะเบียนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
         },
         { status: 500 },
       );
@@ -503,7 +503,7 @@ export async function POST(req: NextRequest) {
       checked_in_at: inserted?.checked_in_at ?? null,
       checkedInAt: inserted?.checked_in_at ?? null,
       alreadyCheckedIn: false,
-      message: `เช็กอินรอบ ${checkinRoundOpen} สำเร็จ`,
+      message: `ลงทะเบียนรอบ ${checkinRoundOpen} สำเร็จ`,
     });
   } catch (err) {
     console.error('checkin: unexpected error', err);
@@ -512,7 +512,7 @@ export async function POST(req: NextRequest) {
         ok: false,
         success: false,
         status: 'invalid',
-        message: 'เกิดข้อผิดพลาดในระบบเช็กอิน กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
+        message: 'เกิดข้อผิดพลาดในระบบลงทะเบียน กรุณาลองใหม่หรือติดต่อเจ้าหน้าที่',
       },
       { status: 500 },
     );

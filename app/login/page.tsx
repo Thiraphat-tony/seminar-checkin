@@ -155,6 +155,19 @@ export default function LoginPage() {
     }
   }, []);
 
+  const checkStaffExists = async (courtId: string) => {
+    try {
+      const res = await fetch(`/api/staff/exists?court_id=${encodeURIComponent(courtId)}`, {
+        cache: "no-store",
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) return null;
+      return Boolean(payload.exists);
+    } catch {
+      return null;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -213,7 +226,12 @@ export default function LoginPage() {
       });
 
       if (signInErr || !data.session) {
-        setError("จังหวัดหรือรหัสผ่านไม่ถูกต้อง");
+        const exists = await checkStaffExists(selectedCourt.id);
+        if (exists === false) {
+          setError("ยังไม่ได้สมัครเจ้าหน้าที่ กรุณาสมัครก่อน");
+        } else {
+          setError("ศาลหรือรหัสผ่านไม่ถูกต้อง");
+        }
         setLoading(false);
         return;
       }

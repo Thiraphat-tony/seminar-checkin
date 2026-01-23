@@ -245,7 +245,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const summaryParams = {
     p_event_id: eventId,
     p_keyword: keyword || null,
-    p_status: status,
+    p_status: status === 'all' ? null : status,
     p_region: regionFilterNum,
     p_province: provinceFilter || null,
     p_organization: organizationFilter || null,
@@ -262,19 +262,42 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     console.error('Admin summary query error:', summaryError);
   }
 
-  let totalFiltered = summaryData?.total ?? 0;
+  let fallbackSummary: SummaryCounts | null = null;
   if (!summaryData) {
-    const { count: fallbackCount, error: fallbackError } = await applyFilters(
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true }),
-    );
-    if (fallbackError) {
-      console.error('Admin count query error:', fallbackError);
-    } else {
-      totalFiltered = fallbackCount ?? 0;
-    }
+    const baseCountQuery = () =>
+      supabase.from('v_attendees_checkin_rounds').select('id', { count: 'exact', head: true });
+
+    const [
+      totalRes,
+      round1Res,
+      round2Res,
+      round3Res,
+      slipRes,
+    ] = await Promise.all([
+      applyFilters(baseCountQuery()),
+      applyFilters(baseCountQuery()).not('checkin_round1_at', 'is', null),
+      applyFilters(baseCountQuery()).not('checkin_round2_at', 'is', null),
+      applyFilters(baseCountQuery()).not('checkin_round3_at', 'is', null),
+      applyFilters(baseCountQuery()).not('slip_url', 'is', null),
+    ]);
+
+    if (totalRes.error) console.error('Admin count query error:', totalRes.error);
+    if (round1Res.error) console.error('Admin round1 count error:', round1Res.error);
+    if (round2Res.error) console.error('Admin round2 count error:', round2Res.error);
+    if (round3Res.error) console.error('Admin round3 count error:', round3Res.error);
+    if (slipRes.error) console.error('Admin slip count error:', slipRes.error);
+
+    fallbackSummary = {
+      total: totalRes.count ?? 0,
+      round1: round1Res.count ?? 0,
+      round2: round2Res.count ?? 0,
+      round3: round3Res.count ?? 0,
+      slip: slipRes.count ?? 0,
+    };
   }
+
+  const summary = summaryData ?? fallbackSummary;
+  const totalFiltered = summary?.total ?? 0;
 
   if (error || !data) {
     return (
@@ -306,10 +329,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     new Set(attendees.map((a) => a.province ?? '').filter((p) => p.trim().length > 0)),
   ).sort((a, b) => a.localeCompare(b, 'th-TH'));
 
-  const totalCheckedRound1 = summaryData?.round1 ?? 0;
-  const totalCheckedRound2 = summaryData?.round2 ?? 0;
-  const totalCheckedRound3 = summaryData?.round3 ?? 0;
-  const totalWithSlip = summaryData?.slip ?? 0;
+  const totalCheckedRound1 = summary?.round1 ?? 0;
+  const totalCheckedRound2 = summary?.round2 ?? 0;
+  const totalCheckedRound3 = summary?.round3 ?? 0;
+  const totalWithSlip = summary?.slip ?? 0;
 
   const safeTotalFiltered = totalFiltered ?? 0;
   const totalPages = Math.ceil(safeTotalFiltered / PAGE_SIZE);
@@ -458,7 +481,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="attendee-header__badge">ADMIN DASHBOARD</div>
               <h1 className="admin-header__title">สรุปรายชื่อผู้เข้าร่วมงานสัมมนา</h1>
               <p className="admin-header__subtitle">
-                หน้านี้สำหรับเจ้าหน้าที่ใช้ตรวจสอบสถานะการแนบสลิป การเช็กอิน ประเภทอาหาร และข้อมูลผู้ประสานงานของผู้เข้าร่วม
+                หน้านี้สำหรับเจ้าหน้าที่ใช้ตรวจสอบสถานะการแนบสลิป การลงทะเบียน ประเภทอาหาร และข้อมูลผู้ประสานงานของผู้เข้าร่วม
               </p>
             </div>
           </div>
@@ -471,19 +494,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="admin-summary__value">{totalFiltered}</div>
             </div>
             <div className="admin-summary__item">
-              <div className="admin-summary__label">เช็กอินรอบ 1</div>
+              <div className="admin-summary__label">ลงทะเบียนรอบ 1</div>
               <div className="admin-summary__value admin-summary__value--green">
                 {totalCheckedRound1}
               </div>
             </div>
             <div className="admin-summary__item">
-              <div className="admin-summary__label">เช็กอินรอบ 2</div>
+              <div className="admin-summary__label">ลงทะเบียนรอบ 2</div>
               <div className="admin-summary__value admin-summary__value--green">
                 {totalCheckedRound2}
               </div>
             </div>
             <div className="admin-summary__item">
-              <div className="admin-summary__label">เช็กอินรอบ 3</div>
+              <div className="admin-summary__label">ลงทะเบียนรอบ 3</div>
               <div className="admin-summary__value admin-summary__value--green">
                 {totalCheckedRound3}
               </div>
@@ -523,7 +546,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <th>โรงแรม</th>
                   <th>การเดินทาง</th>
                   <th>สลิป</th>
-                  <th>เช็กอิน</th>
+                  <th>ลงทะเบียน</th>
                   <th>ประเภทอาหาร</th>
                   <th>จัดการ</th>
                 </tr>
@@ -592,14 +615,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <td>
                           {isChecked ? (
                             <div className="admin-table__checkin">
-                              <span className="admin-pill admin-pill--green">เช็กอินแล้ว</span>
+                              <span className="admin-pill admin-pill--green">ลงทะเบียนแล้ว</span>
                               <span className="admin-table__checkin-time" suppressHydrationWarning>
                                 {formatDateTime(a.checked_in_at)}
                               </span>
                             </div>
                           ) : (
                             <div className="admin-table__checkin">
-                              <span className="admin-pill admin-pill--warning">ยังไม่เช็กอิน</span>
+                              <span className="admin-pill admin-pill--warning">ยังไม่ลงทะเบียน</span>
                             </div>
                           )}
                         </td>
@@ -637,7 +660,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                 <ForceCheckinButton
                                   attendeeId={a.id}
                                   action="uncheckin"
-                                  label="ยกเลิกเช็กอิน"
+                                  label="ยกเลิกลงทะเบียน"
                                   isCheckedIn={isChecked}
                                   hasSlip={hasSlip}
                                 />
@@ -645,7 +668,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                 <ForceCheckinButton
                                   attendeeId={a.id}
                                   action="checkin"
-                                  label="เช็กอิน"
+                                  label="ลงทะเบียน"
                                   isCheckedIn={isChecked}
                                   hasSlip={hasSlip}
                                 />

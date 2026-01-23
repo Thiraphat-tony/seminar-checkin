@@ -1,5 +1,5 @@
 // app/admin/namecards/page.tsx
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForPage } from '@/lib/requireStaffForPage';
 import AdminNav from '../AdminNav';
 import '../admin-page.css';
 import { maskPhone } from '@/lib/maskPhone';
@@ -55,6 +55,7 @@ function buildQrUrl(ticketToken: string | null, qrImageUrl: string | null) {
 }
 
 export default async function NamecardsPage({ searchParams }: PageProps) {
+  const { supabase } = await requireStaffForPage({ redirectTo: '/login' });
   const sp = await searchParams;
   const keywordRaw = (sp.q ?? '').trim();
   const keyword = keywordRaw.toLowerCase();
@@ -71,7 +72,6 @@ export default async function NamecardsPage({ searchParams }: PageProps) {
       )
     : [];
 
-  const supabase = await createServerClient();
   const eventId = (process.env.EVENT_ID ?? '').trim();
 
   if (!eventId) {

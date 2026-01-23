@@ -1,4 +1,4 @@
-/* -------------------------------------------------- Global base styles (elder-friendly) -------------------------------------------------- */
+﻿/* -------------------------------------------------- Global base styles (elder-friendly) -------------------------------------------------- */
 :root {
     /* Colors - Warm & Comfortable Palette */
     --bg-deep: #f5f5f0; /* พื้นหลังเบจอ่อน สบายตา */
@@ -2401,7 +2401,7 @@ summary.admin-link-edit:hover {
     perspective: 1000px;
 }
 
-/* เพิ่มไอคอนเช็กอิน */
+/* เพิ่มไอคอนลงทะเบียน */
 .admin-forcecheckin__button::before {
     content: '✅';
     font-size: 16px;

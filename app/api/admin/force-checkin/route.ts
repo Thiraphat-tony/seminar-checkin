@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
 
 type Body = {
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     if (eventError || !event) {
       return NextResponse.json(
-        { success: false, message: 'ไม่พบข้อมูลการตั้งค่าเช็กอิน' },
+        { success: false, message: 'ไม่พบข้อมูลการตั้งค่าลงทะเบียน' },
         { status: 404 },
       );
     }
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             {
               success: false,
-              message: 'ไม่สามารถตรวจสอบรอบเช็กอินของผู้เข้าร่วมได้',
+              message: 'ไม่สามารถตรวจสอบรอบลงทะเบียนของผู้เข้าร่วมได้',
             },
             { status: 500 },
           );
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
               success: true,
               alreadyCheckedIn: true,
               round: 3,
-              message: 'ผู้เข้าร่วมรายนี้เช็กอินครบทุกรอบแล้ว',
+              message: 'ผู้เข้าร่วมรายนี้ลงทะเบียนครบทุกรอบแล้ว',
             },
             { status: 200 },
           );
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: 'ไม่สามารถตรวจสอบสถานะการเช็กอินรอบนี้ได้',
+            message: 'ไม่สามารถตรวจสอบสถานะการลงทะเบียนรอบนี้ได้',
           },
           { status: 500 },
         );
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
             success: true,
             alreadyCheckedIn: true,
             round: roundToUse,
-            message: `ผู้เข้าร่วมรายนี้เช็กอินรอบ ${roundToUse} ไว้แล้ว`,
+            message: `ผู้เข้าร่วมรายนี้ลงทะเบียนรอบ ${roundToUse} ไว้แล้ว`,
           },
           { status: 200 },
         );
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
               success: true,
               alreadyCheckedIn: true,
               round: roundToUse,
-              message: `ผู้เข้าร่วมรายนี้เช็กอินรอบ ${roundToUse} ไว้แล้ว`,
+              message: `ผู้เข้าร่วมรายนี้ลงทะเบียนรอบ ${roundToUse} ไว้แล้ว`,
             },
             { status: 200 },
           );
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: 'เช็กอินแทนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+            message: 'ลงทะเบียนแทนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
           },
           { status: 500 },
         );
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
           alreadyCheckedIn: false,
           round: roundToUse,
           checked_in_at: inserted?.checked_in_at ?? null,
-          message: `เช็กอินรอบ ${roundToUse} ให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
+          message: `ลงทะเบียนรอบ ${roundToUse} ให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
         },
         { status: 200 },
       );
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             {
               success: false,
-              message: 'ไม่สามารถตรวจสอบรอบเช็กอินของผู้เข้าร่วมได้',
+              message: 'ไม่สามารถตรวจสอบรอบลงทะเบียนของผู้เข้าร่วมได้',
             },
             { status: 500 },
           );
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
               success: true,
               alreadyUnchecked: true,
               round: 'all',
-              message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอินในระบบ',
+              message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้ลงทะเบียนในระบบ',
             },
             { status: 200 },
           );
@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            message: 'ยกเลิกเช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+            message: 'ยกเลิกลงทะเบียนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
           },
           { status: 500 },
         );
@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
             success: true,
             alreadyUnchecked: true,
             round: roundToUse ?? 'all',
-            message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอินในรอบที่เลือก',
+            message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้ลงทะเบียนในรอบที่เลือก',
           },
           { status: 200 },
         );
@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
         {
           success: true,
           round: roundToUse ?? 'all',
-          message: `ยกเลิกเช็กอินให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
+          message: `ยกเลิกลงทะเบียนให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
         },
         { status: 200 },
       );
@@ -278,7 +278,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: 'เกิดข้อผิดพลาดในระบบขณะเช็กอินแทน กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+        message: 'เกิดข้อผิดพลาดในระบบขณะลงทะเบียนแทน กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
       },
       { status: 500 },
     );

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useTransition } from 'react';
 import AdminImportButton from './AdminImportButton';
@@ -188,7 +188,7 @@ export default function AdminFilters({
 
       <div className="admin-filters__field admin-filters__field--inline">
         <div className="admin-filters__inline-group">
-          <label className="admin-filters__label">สถานะเช็กอิน</label>
+          <label className="admin-filters__label">สถานะลงทะเบียน</label>
           <select
             name="status"
             value={statusValue}
@@ -196,8 +196,8 @@ export default function AdminFilters({
             onChange={(e) => setStatusValue(e.target.value)}
           >
             <option value="all">ทั้งหมด</option>
-            <option value="checked">เช็กอินแล้ว</option>
-            <option value="unchecked">ยังไม่เช็กอิน</option>
+            <option value="checked">ลงทะเบียนแล้ว</option>
+            <option value="unchecked">ยังไม่ลงทะเบียน</option>
           </select>
         </div>
 

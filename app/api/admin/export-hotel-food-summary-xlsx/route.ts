@@ -1,4 +1,4 @@
-// app/api/admin/export-hotel-food-summary-xlsx/route.ts
+﻿// app/api/admin/export-hotel-food-summary-xlsx/route.ts
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { createServerClient } from "@/lib/supabaseServer";
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 type Row = {
   region: number | null;
   province: string | null;
+  court_id: string | null;
   hotel_name: string | null;
   food_type: string | null;
   slip_url: string | null;
@@ -30,61 +31,36 @@ const REGION_LABELS: Record<number, string> = {
   9: "ภาค 9",
 };
 
-const UNKNOWN_PROVINCE_LABEL = "ไม่ระบุจังหวัด";
+const UNKNOWN_COURT_LABEL = "ไม่ระบุศาล";
 
 function normalizeHotelName(name: string | null): string {
   const v = (name ?? "").trim();
   return v.length ? v : "ไม่ระบุโรงแรม";
 }
 
-function normalizeProvince(name: string | null): string {
-  const v = (name ?? "").trim();
-  return v.length ? v : UNKNOWN_PROVINCE_LABEL;
+function normalizeCourtLabel(courtId: string | null, courtNameMap: Record<string, string>): string {
+  if (!courtId) return UNKNOWN_COURT_LABEL;
+  const mapped = (courtNameMap[courtId] ?? "").trim();
+  return mapped || courtId;
 }
 
-const FOOD_KEYS = [
-  "normal",
-  "no_pork",
-  "vegetarian",
-  "vegan",
-  "halal",
-  "seafood_allergy",
-  "other",
-  "unknown",
-] as const;
+const FOOD_KEYS = ["normal", "vegetarian", "halal"] as const;
 type FoodKey = (typeof FOOD_KEYS)[number];
 
 const FOOD_LABELS: Record<FoodKey, string> = {
   normal: "ปกติ",
-  no_pork: "ไม่ทานหมู",
   vegetarian: "มังสวิรัติ",
-  vegan: "เจ / วีแกน",
   halal: "ฮาลาล",
-  seafood_allergy: "แพ้อาหารทะเล",
-  other: "อื่น ๆ",
-  unknown: "ไม่ระบุ",
 };
 
 function normalizeFoodType(v: string | null): FoodKey {
   const t = (v ?? "").trim().toLowerCase();
-  if (
-    t === "normal" ||
-    t === "no_pork" ||
-    t === "vegetarian" ||
-    t === "vegan" ||
-    t === "halal" ||
-    t === "seafood_allergy" ||
-    t === "other"
-  ) {
-    return t as FoodKey;
-  }
-  if (t === "ไม่ทานหมู" || t === "งดหมู" || t === "ไม่กินหมู") return "no_pork";
-  if (t === "มังสวิรัติ" || t === "มังฯ") return "vegetarian";
-  if (t === "เจ" || t === "อาหารเจ" || t === "วีแกน") return "vegan";
-  if (t === "ฮาลาล" || t === "อิสลาม") return "halal";
-  if (t === "แพ้อาหารทะเล" || t === "แพ้ซีฟู้ด") return "seafood_allergy";
-  if (t === "อื่น" || t === "อื่นๆ" || t === "อื่น ๆ") return "other";
-  return "unknown";
+  if (t === "normal") return "normal";
+  if (t === "vegetarian" || t === "มังสวิรัติ" || t === "มังฯ") return "vegetarian";
+  if (t === "halal" || t === "ฮาลาล" || t === "อิสลาม") return "halal";
+
+  // ค่าเก่าหรืออื่น ๆ ให้รวมไปที่ "ปกติ" เพื่อให้สรุปเหลือ 3 อย่างตามฟอร์ม
+  return "normal";
 }
 
 function isValidRegion(region: number | null): region is number {
@@ -143,7 +119,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("v_attendees_checkin_rounds")
-    .select("region, province, hotel_name, food_type, slip_url, checkin_round1_at, checkin_round2_at, checkin_round3_at")
+    .select("region, province, court_id, hotel_name, food_type, slip_url, checkin_round1_at, checkin_round2_at, checkin_round3_at")
     .eq("event_id", eventId)
     .order("region", { ascending: true });
 
@@ -154,40 +130,60 @@ export async function GET() {
   const rows = (data ?? []) as Row[];
   const regions = Array.from({ length: 10 }, (_, i) => i);
 
+  // ====== Courts list (for summary & hotel pivot) ======
+  const courtIdSet = new Set<string>();
+  for (const r of rows) {
+    if (r.court_id) courtIdSet.add(r.court_id);
+  }
+
+  let courtNameMap: Record<string, string> = {};
+  if (courtIdSet.size > 0) {
+    const { data: courts, error: courtErr } = await supabase
+      .from("courts")
+      .select("id, court_name")
+      .in("id", Array.from(courtIdSet));
+
+    if (courtErr) {
+      return NextResponse.json({ ok: false, message: courtErr.message }, { status: 500 });
+    }
+
+    courtNameMap = (courts ?? []).reduce<Record<string, string>>((acc, c) => {
+      const id = (c as { id: string; court_name?: string | null }).id;
+      const name = ((c as { court_name?: string | null }).court_name ?? "").trim();
+      acc[id] = name || id;
+      return acc;
+    }, {});
+  }
+
   // ====== Hotels list ======
   const hotelSet = new Set<string>();
-  const provinceSet = new Set<string>();
+  const courtLabelSet = new Set<string>();
   for (const r of rows) {
     if (!isValidRegion(r.region)) continue;
     hotelSet.add(normalizeHotelName(r.hotel_name));
-    provinceSet.add(normalizeProvince(r.province));
+    courtLabelSet.add(normalizeCourtLabel(r.court_id, courtNameMap));
   }
   const hotels = Array.from(hotelSet).sort((a, b) => a.localeCompare(b, "th"));
-  const provinces = Array.from(provinceSet).sort((a, b) => {
-    if (a === UNKNOWN_PROVINCE_LABEL && b === UNKNOWN_PROVINCE_LABEL) return 0;
-    if (a === UNKNOWN_PROVINCE_LABEL) return 1;
-    if (b === UNKNOWN_PROVINCE_LABEL) return -1;
-    return a.localeCompare(b, "th");
-  });
+  const courts = Array.from(courtLabelSet).sort((a, b) => a.localeCompare(b, "th"));
 
-  // ====== Pivot: hotel counts ======
+  // ====== Pivot: hotel counts (by court) ======
   const hotelCount: Record<string, Record<string, number>> = {};
   const hotelRowTotals: Record<string, number> = {};
   const hotelColTotals: Record<string, number> = {};
   let grandTotal = 0;
 
-  for (const province of provinces) {
-    hotelCount[province] = {};
-    hotelRowTotals[province] = 0;
+  for (const court of courts) {
+    hotelCount[court] = {};
+    hotelRowTotals[court] = 0;
   }
   for (const h of hotels) hotelColTotals[h] = 0;
 
   for (const r of rows) {
     if (!isValidRegion(r.region)) continue;
-    const province = normalizeProvince(r.province);
+    const court = normalizeCourtLabel(r.court_id, courtNameMap);
     const h = normalizeHotelName(r.hotel_name);
-    hotelCount[province][h] = (hotelCount[province][h] ?? 0) + 1;
-    hotelRowTotals[province] += 1;
+    hotelCount[court][h] = (hotelCount[court][h] ?? 0) + 1;
+    hotelRowTotals[court] += 1;
     hotelColTotals[h] = (hotelColTotals[h] ?? 0) + 1;
     grandTotal += 1;
   }
@@ -197,25 +193,15 @@ export async function GET() {
   const foodRowTotals: Record<number, number> = {};
   const foodColTotals: Record<FoodKey, number> = {
     normal: 0,
-    no_pork: 0,
     vegetarian: 0,
-    vegan: 0,
     halal: 0,
-    seafood_allergy: 0,
-    other: 0,
-    unknown: 0,
   };
 
   for (const region of regions) {
     foodCount[region] = {
       normal: 0,
-      no_pork: 0,
       vegetarian: 0,
-      vegan: 0,
       halal: 0,
-      seafood_allergy: 0,
-      other: 0,
-      unknown: 0,
     };
     foodRowTotals[region] = 0;
   }
@@ -230,13 +216,15 @@ export async function GET() {
     foodColTotals[key] += 1;
   }
 
-  // ====== Summary: participants vs check-in per region ======
-  const regionTotals: Record<number, { total: number; checked: number }> = {};
+  // ====== Summary: participants vs registration per region (3 rounds) ======
+  const regionTotals: Record<number, { total: number; round1: number; round2: number; round3: number }> = {};
   let regionTotalAll = 0;
-  let regionCheckedAll = 0;
+  let regionRound1All = 0;
+  let regionRound2All = 0;
+  let regionRound3All = 0;
 
   for (const region of regions) {
-    regionTotals[region] = { total: 0, checked: 0 };
+    regionTotals[region] = { total: 0, round1: 0, round2: 0, round3: 0 };
   }
 
   for (const r of rows) {
@@ -245,11 +233,47 @@ export async function GET() {
     regionTotals[region].total += 1;
     regionTotalAll += 1;
 
-    const hasCheckin =
-      !!r.checkin_round1_at || !!r.checkin_round2_at || !!r.checkin_round3_at;
-    if (hasCheckin) {
-      regionTotals[region].checked += 1;
-      regionCheckedAll += 1;
+    if (r.checkin_round1_at) {
+      regionTotals[region].round1 += 1;
+      regionRound1All += 1;
+    }
+    if (r.checkin_round2_at) {
+      regionTotals[region].round2 += 1;
+      regionRound2All += 1;
+    }
+    if (r.checkin_round3_at) {
+      regionTotals[region].round3 += 1;
+      regionRound3All += 1;
+    }
+  }
+
+  // ====== Summary: participants vs registration per court (3 rounds) ======
+  const courtTotals: Record<string, { total: number; round1: number; round2: number; round3: number }> = {};
+  let courtTotalAll = 0;
+  let courtRound1All = 0;
+  let courtRound2All = 0;
+  let courtRound3All = 0;
+
+  for (const r of rows) {
+    const courtId = r.court_id ?? "unknown";
+    if (!courtTotals[courtId]) {
+      courtTotals[courtId] = { total: 0, round1: 0, round2: 0, round3: 0 };
+    }
+
+    courtTotals[courtId].total += 1;
+    courtTotalAll += 1;
+
+    if (r.checkin_round1_at) {
+      courtTotals[courtId].round1 += 1;
+      courtRound1All += 1;
+    }
+    if (r.checkin_round2_at) {
+      courtTotals[courtId].round2 += 1;
+      courtRound2All += 1;
+    }
+    if (r.checkin_round3_at) {
+      courtTotals[courtId].round3 += 1;
+      courtRound3All += 1;
     }
   }
 
@@ -261,19 +285,19 @@ export async function GET() {
   // Sheet 1: Hotels
   const wsHotel = wb.addWorksheet("Hotel Summary", { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
 
-  wsHotel.addRow(["จังหวัด", ...hotels, "รวม"]);
+  wsHotel.addRow(["ศาล", ...hotels, "รวม"]);
   styleHeaderRow(wsHotel.getRow(1));
 
-  for (const province of provinces) {
+  for (const court of courts) {
     const line = [
-      province,
-      ...hotels.map((h) => hotelCount[province][h] ?? 0),
-      hotelRowTotals[province] ?? 0,
+      court,
+      ...hotels.map((h) => hotelCount[court][h] ?? 0),
+      hotelRowTotals[court] ?? 0,
     ];
     wsHotel.addRow(line);
   }
 
-  wsHotel.addRow(["รวมทุกจังหวัด", ...hotels.map((h) => hotelColTotals[h] ?? 0), grandTotal]);
+  wsHotel.addRow(["รวมทุกศาล", ...hotels.map((h) => hotelColTotals[h] ?? 0), grandTotal]);
   wsHotel.getRow(wsHotel.rowCount).font = { bold: true };
 
   // Align numbers
@@ -316,39 +340,49 @@ export async function GET() {
   applyBorders(wsFood, 1, wsFood.rowCount, 1, FOOD_KEYS.length + 2);
   autosizeColumns(wsFood);
 
-  // (Optional) Sheet 3: Raw
-  const wsRaw = wb.addWorksheet("Raw (Attendees)");
-  wsRaw.addRow([
-    "region",
-    "province",
-    "hotel_name",
-    "food_type",
-    "slip_url",
-    "checkin_round1_at",
-    "checkin_round2_at",
-    "checkin_round3_at",
-  ]);
-  styleHeaderRow(wsRaw.getRow(1));
-  for (const r of rows) {
-    wsRaw.addRow([
-      r.region ?? "",
-      normalizeProvince(r.province),
-      normalizeHotelName(r.hotel_name),
-      normalizeFoodType(r.food_type),
-      r.slip_url ?? "",
-      r.checkin_round1_at ?? "",
-      r.checkin_round2_at ?? "",
-      r.checkin_round3_at ?? "",
+  // Sheet 3: Court summary
+  const wsCourt = wb.addWorksheet("Court Summary", {
+    views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
+  });
+  wsCourt.addRow(["ศาล", "ผู้เข้าร่วมทั้งหมด", "ลงทะเบียนรอบ 1", "ลงทะเบียนรอบ 2", "ลงทะเบียนรอบ 3"]);
+  styleHeaderRow(wsCourt.getRow(1));
+
+  const sortedCourtIds = Object.keys(courtTotals).sort((a, b) => {
+    const nameA =
+      a === "unknown" ? UNKNOWN_COURT_LABEL : (courtNameMap[a] ?? a).trim();
+    const nameB =
+      b === "unknown" ? UNKNOWN_COURT_LABEL : (courtNameMap[b] ?? b).trim();
+    return nameA.localeCompare(nameB, "th");
+  });
+
+  for (const courtId of sortedCourtIds) {
+    wsCourt.addRow([
+      courtId === "unknown" ? UNKNOWN_COURT_LABEL : courtNameMap[courtId] ?? courtId,
+      courtTotals[courtId]?.total ?? 0,
+      courtTotals[courtId]?.round1 ?? 0,
+      courtTotals[courtId]?.round2 ?? 0,
+      courtTotals[courtId]?.round3 ?? 0,
     ]);
   }
-  applyBorders(wsRaw, 1, wsRaw.rowCount, 1, 8);
-  autosizeColumns(wsRaw, 40);
 
-  // Sheet 4: Check-in summary by region
+  wsCourt.addRow(["รวมทุกศาล", courtTotalAll, courtRound1All, courtRound2All, courtRound3All]);
+  wsCourt.getRow(wsCourt.rowCount).font = { bold: true };
+
+  for (let r = 2; r <= wsCourt.rowCount; r++) {
+    for (let c = 2; c <= 5; c++) {
+      wsCourt.getCell(r, c).alignment = { horizontal: "center", vertical: "middle" };
+    }
+    wsCourt.getCell(r, 1).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+  }
+
+  applyBorders(wsCourt, 1, wsCourt.rowCount, 1, 5);
+  autosizeColumns(wsCourt);
+
+  // Sheet 4: Registration summary by region
   const wsCheckin = wb.addWorksheet("Checkin Summary", {
     views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
   });
-  wsCheckin.addRow(["ภาค", "ผู้เข้าร่วมทั้งหมด", "เช็กอินแล้ว"]);
+  wsCheckin.addRow(["ภาค", "ผู้เข้าร่วมทั้งหมด", "ลงทะเบียนรอบ 1", "ลงทะเบียนรอบ 2", "ลงทะเบียนรอบ 3"]);
   styleHeaderRow(wsCheckin.getRow(1));
 
   for (const region of regions) {
@@ -356,21 +390,23 @@ export async function GET() {
     wsCheckin.addRow([
       label,
       regionTotals[region]?.total ?? 0,
-      regionTotals[region]?.checked ?? 0,
+      regionTotals[region]?.round1 ?? 0,
+      regionTotals[region]?.round2 ?? 0,
+      regionTotals[region]?.round3 ?? 0,
     ]);
   }
 
-  wsCheckin.addRow(["รวมทุกภาค", regionTotalAll, regionCheckedAll]);
+  wsCheckin.addRow(["รวมทุกภาค", regionTotalAll, regionRound1All, regionRound2All, regionRound3All]);
   wsCheckin.getRow(wsCheckin.rowCount).font = { bold: true };
 
   for (let r = 2; r <= wsCheckin.rowCount; r++) {
-    for (let c = 2; c <= 3; c++) {
+    for (let c = 2; c <= 5; c++) {
       wsCheckin.getCell(r, c).alignment = { horizontal: "center", vertical: "middle" };
     }
     wsCheckin.getCell(r, 1).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
   }
 
-  applyBorders(wsCheckin, 1, wsCheckin.rowCount, 1, 3);
+  applyBorders(wsCheckin, 1, wsCheckin.rowCount, 1, 5);
   autosizeColumns(wsCheckin);
 
   const buf = await wb.xlsx.writeBuffer();

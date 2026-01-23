@@ -1,4 +1,4 @@
-// app/api/admin/uncheckin/route.ts
+﻿// app/api/admin/uncheckin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
 
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: 'ยกเลิกเช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
+          message: 'ยกเลิกลงทะเบียนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ',
         },
         { status: 500 },
       );
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
         {
           success: true,
           alreadyUnchecked: true,
-          message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้เช็กอินอยู่แล้ว',
+          message: 'ผู้เข้าร่วมรายนี้ยังไม่ได้ลงทะเบียนอยู่แล้ว',
         },
         { status: 200 },
       );
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: `ยกเลิกเช็กอินให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
+        message: `ยกเลิกลงทะเบียนให้ผู้เข้าร่วม “${attendee.full_name ?? ''}” เรียบร้อย`,
       },
       { status: 200 },
     );
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: 'เกิดข้อผิดพลาดในระบบขณะยกเลิกเช็กอิน กรุณาลองใหม่',
+        message: 'เกิดข้อผิดพลาดในระบบขณะยกเลิกลงทะเบียน กรุณาลองใหม่',
       },
       { status: 500 },
     );

@@ -1,4 +1,4 @@
-// app/api/admin/import/route.ts
+﻿// app/api/admin/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { createServerClient } from '@/lib/supabaseServer';
@@ -351,22 +351,22 @@ const HEADER_ALIAS_MAP: Record<string, keyof PreparedRow> = (() => {
     'checkin_round1_at',
     'checkin round1',
     'round1',
-    'รอบเช็คอิน1',
-    'รอบเช็คอิน 1',
+    'รอบลงทะเบียน1',
+    'รอบลงทะเบียน 1',
   ]);
   add('checkin_round2_at', [
     'checkin_round2_at',
     'checkin round2',
     'round2',
-    'รอบเช็คอิน2',
-    'รอบเช็คอิน 2',
+    'รอบลงทะเบียน2',
+    'รอบลงทะเบียน 2',
   ]);
   add('checkin_round3_at', [
     'checkin_round3_at',
     'checkin round3',
     'round3',
-    'รอบเช็คอิน3',
-    'รอบเช็คอิน 3',
+    'รอบลงทะเบียน3',
+    'รอบลงทะเบียน 3',
   ]);
   add('event_id', ['event_id', 'event id', 'event']);
 
@@ -723,7 +723,7 @@ export async function POST(req: NextRequest) {
       importedCount += slice.length;
     }
 
-    // 6.1) ถ้ามีข้อมูลเช็กอินรายรอบ ให้เขียนลง attendee_checkins
+    // 6.1) ถ้ามีข้อมูลลงทะเบียนรายรอบ ให้เขียนลง attendee_checkins
     const checkinSeed = prepared.flatMap((row) => {
       const items: Array<{ ticket_token: string; round: number; checked_in_at: string }> = [];
       if (row.checkin_round1_at) {
@@ -786,7 +786,7 @@ export async function POST(req: NextRequest) {
 
           if (checkinError) {
             return NextResponse.json(
-              { ok: false, message: `บันทึกเช็กอินรายรอบไม่สำเร็จ: ${checkinError.message}` },
+              { ok: false, message: `บันทึกลงทะเบียนรายรอบไม่สำเร็จ: ${checkinError.message}` },
               { status: 500 },
             );
           }

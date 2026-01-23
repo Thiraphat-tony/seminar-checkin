@@ -18,7 +18,7 @@ const navLinks = [
 ];
 
 const suratLinks = [
-  { href: '/admin/settings', label: 'ปิด/เปิดลงทะเบียน-เช็คอิน', icon: '🛑' },
+  { href: '/admin/settings', label: 'ปิด/เปิดลงทะเบียน-ลงทะเบียน', icon: '🛑' },
 ];
 
 function safeDecodeURIComponent(value: string) {
@@ -64,6 +64,7 @@ export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [canManageEvent, setCanManageEvent] = useState(false);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -90,6 +91,7 @@ export default function Navbar() {
         setIsLoggedIn(false);
         setUserName(null);
         setCanManageEvent(false);
+        setIsRegistered(null);
         return;
       }
 
@@ -97,6 +99,7 @@ export default function Navbar() {
       setIsLoggedIn(true);
       setUserName(getDisplayNameFromEmail(user.email));
       setCanManageEvent(false);
+      setIsRegistered(null);
 
       try {
         const { data: staff } = await supabase
@@ -123,6 +126,17 @@ export default function Navbar() {
         }
       } catch {
         // ignore; fallback to email display
+      }
+
+      try {
+        const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
+        const payload = await res.json().catch(() => null);
+        if (!active) return;
+        if (res.ok && payload?.ok) {
+          setIsRegistered(Boolean(payload.hasRegistration));
+        }
+      } catch {
+        if (active) setIsRegistered(null);
       }
     };
 
@@ -163,6 +177,8 @@ export default function Navbar() {
     return pathname.startsWith(href);
   };
 
+  const dimOtherTabs = isLoggedIn && isRegistered === false;
+
   // ✅ ถ้ายังไม่ล็อกอิน: โชว์เมนูแค่ /registeruser เท่านั้น
   const visibleLinks = isLoggedIn
     ? (canManageEvent ? [...navLinks, ...suratLinks] : navLinks)
@@ -195,7 +211,9 @@ export default function Navbar() {
             <li key={link.href} className="navbar__item">
               <Link
                 href={link.href}
-                className={`navbar__link ${isActive(link.href) ? 'navbar__link--active' : ''}`}
+                className={`navbar__link ${isActive(link.href) ? 'navbar__link--active' : ''} ${
+                  dimOtherTabs && link.href !== '/registeruser' ? 'navbar__link--dim' : ''
+                }`}
                 aria-current={isActive(link.href) ? 'page' : undefined}
               >
                 <span className="navbar__link-icon">{link.icon}</span>

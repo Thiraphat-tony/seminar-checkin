@@ -96,7 +96,7 @@ export default async function AdminSettingsPage() {
     const name_prefix = (row.name_prefix ?? '').trim();
     const phone = (row.phone ?? '').trim();
 
-    const roleLabel = row.role === 'super_admin' ? 'ซูเปอร์แอดมิน' : 'แอดมินจังหวัด';
+    const roleLabel = row.role === 'super_admin' ? 'ซูเปอร์แอดมิน' : 'แอดมินศาล';
 
     return {
       id: row.user_id,
@@ -122,7 +122,7 @@ export default async function AdminSettingsPage() {
             <div>
               <div className="attendee-header__badge">แอดมิน</div>
               <h1 className="admin-header__title">ตั้งค่าการจัดการงานสัมมนา</h1>
-              <p className="admin-header__subtitle">เปิด/ปิดการลงทะเบียน และเปิด/ปิดการเช็คอินหน้างาน</p>
+              <p className="admin-header__subtitle">เปิด/ปิดการลงทะเบียน และเปิด/ปิดการลงทะเบียนหน้างาน</p>
             </div>
           </div>
           <AdminNav />
@@ -139,8 +139,8 @@ export default async function AdminSettingsPage() {
         <section className="admin-form__section admin-settings">
           <div className="admin-settings__header">
             <div>
-              <h2 className="admin-form__title">การจัดการแอดมินหน้างาน (รายจังหวัด)</h2>
-              <p className="admin-settings__event">เพิ่มบัญชี / รีเซ็ตรหัสผ่าน สำหรับแอดมินจังหวัด</p>
+              <h2 className="admin-form__title">การจัดการแอดมินหน้างาน (รายศาล)</h2>
+              <p className="admin-settings__event">เพิ่มบัญชี / รีเซ็ตรหัสผ่าน สำหรับแอดมินศาล</p>
             </div>
           </div>
 
@@ -148,9 +148,9 @@ export default async function AdminSettingsPage() {
             <div className="admin-settings__card">
               <div className="admin-settings__row">
                 <div className="admin-settings__info">
-                  <p className="admin-settings__label">เพิ่มแอดมินจังหวัด</p>
+                  <p className="admin-settings__label">เพิ่มแอดมินศาล</p>
                   <p className="admin-settings__hint">
-                    สร้างบัญชีแอดมินใหม่สำหรับจังหวัด/ศาลที่ต้องการให้เข้าจัดการหน้างาน
+                    สร้างบัญชีแอดมินใหม่สำหรับศาลที่ต้องการให้เข้าจัดการหน้างาน
                   </p>
                 </div>
                 <div className="admin-settings__status">
@@ -167,9 +167,9 @@ export default async function AdminSettingsPage() {
             <div className="admin-settings__card">
               <div className="admin-settings__row">
                 <div className="admin-settings__info">
-                  <p className="admin-settings__label">รีเซ็ตรหัสผ่านแอดมินจังหวัด</p>
+                  <p className="admin-settings__label">รีเซ็ตรหัสผ่านแอดมินศาล</p>
                   <p className="admin-settings__hint">
-                    กำหนดรหัสผ่านใหม่ให้แอดมินจังหวัด (กรณีลืมรหัส/ต้องการเปลี่ยน)
+                    กำหนดรหัสผ่านใหม่ให้แอดมินศาล (กรณีลืมรหัส/ต้องการเปลี่ยน)
                   </p>
                 </div>
                 <div className="admin-settings__status">
@@ -188,7 +188,7 @@ export default async function AdminSettingsPage() {
         <section className="admin-form__section admin-settings">
           <div className="admin-settings__header">
             <div>
-              <h2 className="admin-form__title">รายชื่อแอดมินจังหวัดทั้งหมด</h2>
+              <h2 className="admin-form__title">รายชื่อแอดมินศาลทั้งหมด</h2>
               <p className="admin-settings__event">
                 มีแล้ว {uniqueCourtCount} ศาล · ทั้งหมด {staffRows.length} บัญชี
               </p>
@@ -218,7 +218,7 @@ export default async function AdminSettingsPage() {
                     {staffRows.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="admin-table__empty">
-                          ยังไม่มีข้อมูลแอดมินจังหวัด
+                          ยังไม่มีข้อมูลแอดมินศาล
                         </td>
                       </tr>
                     ) : (

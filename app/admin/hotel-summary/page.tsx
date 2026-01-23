@@ -1,6 +1,6 @@
 // app/admin/hotel-summary/page.tsx
 import * as React from "react";
-import { createServerClient } from "@/lib/supabaseServer";
+import { requireStaffForPage } from "@/lib/requireStaffForPage";
 import ExportXlsxButton from "./ExportXlsxButton";
 import "./summary.css";
 
@@ -48,7 +48,7 @@ function normalizeFoodType(v: string | null): FoodKey {
 }
 
 export default async function HotelSummaryPage() {
-  const supabase = await createServerClient();
+  const { supabase } = await requireStaffForPage({ redirectTo: "/login" });
 
   const { data, error } = await supabase
     .from("attendees")
@@ -276,9 +276,9 @@ export default async function HotelSummaryPage() {
       </div>
 
       {/* ========================= */}
-      {/* สรุปผู้เข้าร่วม + เช็คอินตามภาค */}
+      {/* สรุปผู้เข้าร่วม + ลงทะเบียนตามภาค */}
       {/* ========================= */}
-      <h2 className="hsSectionTitle">สรุปผู้เข้าร่วมและเช็คอินตามภาค</h2>
+      <h2 className="hsSectionTitle">สรุปผู้เข้าร่วมและลงทะเบียนตามภาค</h2>
 
       <div className="hsCard">
         <div className="hsTableScroll">
@@ -287,7 +287,7 @@ export default async function HotelSummaryPage() {
               <tr>
                 <th className="hsStickyLeft hsTh">ภาค</th>
                 <th className="hsTh">ผู้เข้าร่วมทั้งหมด</th>
-                <th className="hsTh">เช็คอินแล้ว</th>
+                <th className="hsTh">ลงทะเบียนแล้ว</th>
               </tr>
             </thead>
 

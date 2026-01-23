@@ -30,9 +30,9 @@ export default function ForceCheckinButton({
     setMessage(null);
     setMessageType('success');
 
-    // เช็คว่าเป็นการยกเลิกเช็กอินแล้วแต่ผู้เข้าร่วมยังไม่ได้เช็กอิน
+    // เช็คว่าเป็นการยกเลิกลงทะเบียนแล้วแต่ผู้เข้าร่วมยังไม่ได้ลงทะเบียน
     if (action === 'uncheckin' && !isCheckedIn) {
-      setMessage('ผู้เข้าร่วมยังไม่ได้เช็กอิน ดังนั้นไม่สามารถยกเลิกเช็กอินได้');
+      setMessage('ผู้เข้าร่วมยังไม่ได้ลงทะเบียน ดังนั้นไม่สามารถยกเลิกลงทะเบียนได้');
       setMessageType('error');
       return;
     }
@@ -40,7 +40,7 @@ export default function ForceCheckinButton({
     // ถ้าอยากเตือนกรณียังไม่มีสลิป
     if (!hasSlip) {
       const ok = window.confirm(
-        'ยังไม่พบสลิปแนบในระบบ ต้องการเช็กอินแทนผู้เข้าร่วมรายนี้หรือไม่?'
+        'ยังไม่พบสลิปแนบในระบบ ต้องการลงทะเบียนแทนผู้เข้าร่วมรายนี้หรือไม่?'
       );
       if (!ok) return;
     }
@@ -59,12 +59,12 @@ export default function ForceCheckinButton({
       const data = await res.json();
 
       if (!data.success) {
-        setMessage(data.message || 'เช็กอินแทนไม่สำเร็จ');
+        setMessage(data.message || 'ลงทะเบียนแทนไม่สำเร็จ');
         setMessageType('error');
         return;
       }
 
-      setMessage(data.message || 'เช็กอินแทนเรียบร้อย');
+      setMessage(data.message || 'ลงทะเบียนแทนเรียบร้อย');
       setMessageType('success');
 
       // refresh หน้า admin ให้ข้อมูลในตารางอัปเดต
@@ -73,7 +73,7 @@ export default function ForceCheckinButton({
       });
     } catch (err) {
       console.error('force checkin button error', err);
-      setMessage('เกิดข้อผิดพลาดขณะเช็กอินแทน');
+      setMessage('เกิดข้อผิดพลาดขณะลงทะเบียนแทน');
       setMessageType('error');
     } finally {
       setIsCalling(false);
@@ -91,7 +91,7 @@ export default function ForceCheckinButton({
         data-no-slip={!hasSlip}
         data-loading={isLoading}
       >
-        {isLoading ? 'กำลังเช็กอิน…' : label}
+        {isLoading ? 'กำลังลงทะเบียน…' : label}
       </button>
       {message && (
         <p 

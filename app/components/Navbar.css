@@ -147,6 +147,11 @@
   background: linear-gradient(90deg, #5bc0de 0%, #0369a1 100%);
 }
 
+.navbar__link--dim {
+  opacity: 0.45;
+  filter: grayscale(0.35);
+}
+
 /* Auth Section */
 .navbar__auth {
   flex-shrink: 0;

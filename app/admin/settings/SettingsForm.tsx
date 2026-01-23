@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 
@@ -121,8 +121,8 @@ export default function SettingsForm({
         <div className="admin-settings__card" data-open={checkinOpen ? 'true' : 'false'}>
           <div className="admin-settings__row">
             <div className="admin-settings__info">
-              <p className="admin-settings__label">การเช็คอิน</p>
-              <p className="admin-settings__hint">เปิด/ปิดการเช็คอินหน้างาน</p>
+              <p className="admin-settings__label">การลงทะเบียน</p>
+              <p className="admin-settings__hint">เปิด/ปิดการลงทะเบียนหน้างาน</p>
             </div>
             <div className="admin-settings__status">
               <span
@@ -147,11 +147,11 @@ export default function SettingsForm({
                 {busy
                   ? 'กำลังบันทึก...'
                   : checkinOpen
-                  ? 'ปิดการเช็คอิน'
-                  : 'เปิดการเช็คอิน'}
+                  ? 'ปิดการลงทะเบียน'
+                  : 'เปิดการลงทะเบียน'}
               </button>
               <div>
-                <p className="admin-settings__hint">รอบเช็กอินที่เปิดอยู่</p>
+                <p className="admin-settings__hint">รอบลงทะเบียนที่เปิดอยู่</p>
                 <select
                   className="admin-filters__select"
                   value={checkinRoundOpen}

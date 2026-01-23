@@ -4,7 +4,7 @@
 // ✅ ใช้ CSS รวมของหน้า admin
 import '../../admin-page.css';
 
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForPage } from '@/lib/requireStaffForPage';
 import AttendeeEditForm from '../../AttendeeEditForm';
 import AdminNav from '../../AdminNav';
 
@@ -17,6 +17,7 @@ type PageProps = {
 export const dynamic = 'force-dynamic';
 
 export default async function AttendeeEditPage({ params }: PageProps) {
+  const { supabase } = await requireStaffForPage({ redirectTo: '/login' });
   const { id } = await params;
   const token = id;
 
@@ -42,7 +43,6 @@ export default async function AttendeeEditPage({ params }: PageProps) {
     );
   }
 
-  const supabase = createServerClient();
 
   const { data, error } = await supabase
     .from('attendees')

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForApi } from '@/lib/requireStaffForApi';
 import { phoneForStorage } from '@/lib/phone';
 import { makeProvinceKey } from '@/lib/provinceKeys';
 
@@ -45,6 +46,9 @@ function filterFilledParticipants(list: ParticipantPayload[]) {
 }
 
 export async function GET() {
+  const auth = await requireStaffForApi();
+  if (!auth.ok) return auth.response;
+
   const EVENT_ID = process.env.EVENT_ID;
   if (!EVENT_ID) {
     return NextResponse.json({ ok: false, message: 'MISSING_EVENT_ID' }, { status: 500 });
@@ -61,19 +65,42 @@ export async function GET() {
     return NextResponse.json({ ok: false, message: 'EVENT_NOT_FOUND' }, { status: 500 });
   }
 
+  let hasRegistration = false;
+  try {
+    if (auth.staff.role === 'super_admin') {
+      hasRegistration = true;
+    } else if (auth.staff.court_id) {
+      const { data: existing, error: regErr } = await supabase
+        .from('attendees')
+        .select('id')
+        .eq('event_id', EVENT_ID)
+        .eq('court_id', auth.staff.court_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!regErr && existing) hasRegistration = true;
+    }
+  } catch {
+    hasRegistration = false;
+  }
+
   return NextResponse.json({
     ok: true,
     registrationOpen: event.registration_open !== false,
+    hasRegistration,
   });
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireStaffForApi(req);
+    if (!auth.ok) return auth.response;
+
     const formData = await req.formData();
 
     const organization = (formData.get('organization') || '').toString().trim();
     const province = (formData.get('province') || '').toString().trim();
-    const courtId = (formData.get('courtId') || '').toString().trim();
+    let courtId = (formData.get('courtId') || '').toString().trim();
     const regionStr = (formData.get('region') || '').toString().trim();
     const hotelNameRaw = (formData.get('hotelName') || '').toString().trim();
     const hotelName = hotelNameRaw === OTHER_HOTEL_VALUE ? '' : hotelNameRaw;
@@ -129,6 +156,22 @@ export async function POST(req: NextRequest) {
         { ok: false, message: 'กรุณากรอกจังหวัด' },
         { status: 400 },
       );
+    }
+
+    if (auth.staff.role !== 'super_admin') {
+      if (!auth.staff.court_id) {
+        return NextResponse.json(
+          { ok: false, message: 'ไม่พบข้อมูลศาลของบัญชีผู้ใช้' },
+          { status: 403 },
+        );
+      }
+      if (courtId && courtId !== auth.staff.court_id) {
+        return NextResponse.json(
+          { ok: false, message: 'ไม่สามารถลงทะเบียนแทนศาลอื่นได้' },
+          { status: 403 },
+        );
+      }
+      courtId = auth.staff.court_id;
     }
 
     if (!courtId) {

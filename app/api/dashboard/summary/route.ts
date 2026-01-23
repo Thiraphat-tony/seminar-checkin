@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
 export const runtime = 'nodejs';
 
@@ -45,16 +45,26 @@ export async function GET() {
     );
   }
 
-  const supabase = createServerClient();
+  const auth = await requireStaffForApi();
+  if (!auth.ok) return auth.response;
+
+  const { supabase, staff } = auth;
+  const staffCourtId = (staff.court_id ?? '').trim();
+  if (!staffCourtId) {
+    return NextResponse.json<DashboardSummaryResponse>(
+      { ok: false, message: 'ไม่พบข้อมูลศาลของเจ้าหน้าที่' },
+      { status: 403 },
+    );
+  }
 
   const summaryParams = {
     p_event_id: eventId,
     p_keyword: null,
-    p_status: 'all',
+    p_status: null,
     p_region: null,
     p_province: null,
     p_organization: null,
-    p_court_id: null,
+    p_court_id: staffCourtId,
   };
 
   const summaryPromise = supabase
@@ -65,12 +75,14 @@ export async function GET() {
     .from('v_attendees_checkin_rounds')
     .select('id', { count: 'exact', head: true })
     .eq('event_id', eventId)
+    .eq('court_id', staffCourtId)
     .or('checkin_round1_at.not.is.null,checkin_round2_at.not.is.null,checkin_round3_at.not.is.null');
 
   const latestNotCheckedPromise = supabase
     .from('v_attendees_checkin_rounds')
     .select('id, name_prefix, full_name, organization, phone')
     .eq('event_id', eventId)
+    .eq('court_id', staffCourtId)
     .is('checkin_round1_at', null)
     .is('checkin_round2_at', null)
     .is('checkin_round3_at', null)
@@ -111,26 +123,31 @@ export async function GET() {
       supabase
         .from('v_attendees_checkin_rounds')
         .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId),
+        .eq('event_id', eventId)
+        .eq('court_id', staffCourtId),
       supabase
         .from('v_attendees_checkin_rounds')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', eventId)
+        .eq('court_id', staffCourtId)
         .not('checkin_round1_at', 'is', null),
       supabase
         .from('v_attendees_checkin_rounds')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', eventId)
+        .eq('court_id', staffCourtId)
         .not('checkin_round2_at', 'is', null),
       supabase
         .from('v_attendees_checkin_rounds')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', eventId)
+        .eq('court_id', staffCourtId)
         .not('checkin_round3_at', 'is', null),
       supabase
         .from('v_attendees_checkin_rounds')
         .select('id', { count: 'exact', head: true })
         .eq('event_id', eventId)
+        .eq('court_id', staffCourtId)
         .not('slip_url', 'is', null),
     ]);
 

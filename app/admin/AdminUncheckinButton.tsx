@@ -1,4 +1,4 @@
-// app/admin/AdminUncheckinButton.tsx
+﻿// app/admin/AdminUncheckinButton.tsx
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -28,7 +28,7 @@ export default function AdminUncheckinButton({
     setMessage(null);
 
     const ok = window.confirm(
-      'ต้องการยกเลิกเช็กอินให้ผู้เข้าร่วมรายนี้หรือไม่?\n(ปุ่มนี้ใช้ในกรณีกดเช็กอินผิดเท่านั้น)'
+      'ต้องการยกเลิกลงทะเบียนให้ผู้เข้าร่วมรายนี้หรือไม่?\n(ปุ่มนี้ใช้ในกรณีกดลงทะเบียนผิดเท่านั้น)'
     );
     if (!ok) return;
 
@@ -52,7 +52,7 @@ export default function AdminUncheckinButton({
         const text = await res.text();
         console.error('uncheckin response is not JSON:', text);
         setMessage(
-          'API ยกเลิกเช็กอินตอบกลับรูปแบบไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ'
+          'API ยกเลิกลงทะเบียนตอบกลับรูปแบบไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ'
         );
         return;
       }
@@ -60,12 +60,12 @@ export default function AdminUncheckinButton({
       if (!res.ok || !data) {
         setMessage(
           data?.message ||
-            'ยกเลิกเช็กอินไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ'
+            'ยกเลิกลงทะเบียนไม่สำเร็จ กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ'
         );
         return;
       }
 
-      setMessage(data.message || 'ยกเลิกเช็กอินเรียบร้อย');
+      setMessage(data.message || 'ยกเลิกลงทะเบียนเรียบร้อย');
 
       // refresh ตาราง
       startTransition(() => {
@@ -73,7 +73,7 @@ export default function AdminUncheckinButton({
       });
     } catch (err) {
       console.error('uncheckin button error', err);
-      setMessage('เกิดข้อผิดพลาดขณะยกเลิกเช็กอิน กรุณาลองใหม่');
+      setMessage('เกิดข้อผิดพลาดขณะยกเลิกลงทะเบียน กรุณาลองใหม่');
     } finally {
       setIsCalling(false);
     }
@@ -87,7 +87,7 @@ export default function AdminUncheckinButton({
         onClick={handleUncheckin}
         disabled={isLoading}
       >
-        {isLoading ? 'กำลังยกเลิกเช็กอิน…' : 'ยกเลิกเช็กอิน'}
+        {isLoading ? 'กำลังยกเลิกลงทะเบียน…' : 'ยกเลิกลงทะเบียน'}
       </button>
       {message && (
         <p className="admin-uncheckin__message" title={message}>

@@ -1,7 +1,9 @@
-import ManagerForm from './ManagerForm';
+import { requireStaffForPage } from '@/lib/requireStaffForPage';
+import ManagerPageClient from './ManagerPageClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function ManagerPage() {
-  return <ManagerForm />;
+export default async function ManagerPage() {
+  await requireStaffForPage({ redirectTo: '/login' });
+  return <ManagerPageClient />;
 }
