@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 
 // ---- Types ----
 type DbAttendee = {
-  id?: string | null;
+  id: string | null;
   event_id: string | null;
-  court_id?: string | null;
+  court_id: string | null;
   name_prefix: string | null;
   full_name: string | null;
   organization: string | null;
