@@ -1,7 +1,7 @@
 // app/admin/AdminDeleteButton.tsx
 'use client';
 
-import { useTransition, useState, useRef } from 'react';
+import { useEffect, useTransition, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 type AdminDeleteButtonProps = {
@@ -17,9 +17,24 @@ export default function AdminDeleteButton({
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduceMotion(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   // ฟังก์ชันสร้างเอฟเฟกต์ระลอกคลื่น
   const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (reduceMotion) return;
     const button = buttonRef.current;
     if (!button) return;
     

@@ -1,5 +1,6 @@
 'use client';
 import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import './admin-page.css';   // แก้จาก ../ เป็น ./
 type AdminSlipClearButtonProps = {
   attendeeId: string;
@@ -8,6 +9,7 @@ type AdminSlipClearButtonProps = {
 export default function AdminSlipClearButton({
   attendeeId,
 }: AdminSlipClearButtonProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleClick = () => {
@@ -26,8 +28,10 @@ export default function AdminSlipClearButton({
         return;
       }
 
-      // รีเฟรชหน้าให้ข้อมูลอัปเดต
-      window.location.reload();
+      // รีเฟรชข้อมูลแบบนุ่มนวล
+      startTransition(() => {
+        router.refresh();
+      });
     });
   };
 

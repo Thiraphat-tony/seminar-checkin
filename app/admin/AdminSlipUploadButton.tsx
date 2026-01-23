@@ -1,7 +1,7 @@
 // app/admin/AdminSlipUploadButton.tsx
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 type AdminSlipUploadButtonProps = {
@@ -25,11 +25,26 @@ export default function AdminSlipUploadButton({
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const isBusy = isUploading || isPending;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduceMotion(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
   // ฟังก์ชันสร้างเอฟเฟกต์ระลอกคลื่น
   const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (reduceMotion) return;
     const button = buttonRef.current;
     if (!button) return;
     

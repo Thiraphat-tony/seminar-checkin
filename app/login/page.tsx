@@ -243,7 +243,6 @@ export default function LoginPage() {
       }
 
       router.push("/");
-      router.refresh();
     } catch {
       setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
     } finally {

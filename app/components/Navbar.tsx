@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/supabaseBrowser';
 import './Navbar.css';
@@ -76,6 +76,21 @@ export default function Navbar() {
     }
   }, []);
 
+  const refreshRegistrationStatus = useCallback(async (preferTrue?: boolean) => {
+    if (preferTrue) {
+      setIsRegistered(true);
+      return;
+    }
+    try {
+      const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) return;
+      setIsRegistered(Boolean(payload.hasRegistration));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (!supabase) {
       setLoading(false);
@@ -128,15 +143,8 @@ export default function Navbar() {
         // ignore; fallback to email display
       }
 
-      try {
-        const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
-        const payload = await res.json().catch(() => null);
-        if (!active) return;
-        if (res.ok && payload?.ok) {
-          setIsRegistered(Boolean(payload.hasRegistration));
-        }
-      } catch {
-        if (active) setIsRegistered(null);
+      if (active) {
+        void refreshRegistrationStatus();
       }
     };
 
@@ -156,7 +164,21 @@ export default function Navbar() {
       active = false;
       authListener?.subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, refreshRegistrationStatus]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (detail?.hasRegistration === true) {
+        setIsRegistered(true);
+        return;
+      }
+      void refreshRegistrationStatus();
+    };
+    window.addEventListener('registration:completed', handler);
+    return () => window.removeEventListener('registration:completed', handler);
+  }, [refreshRegistrationStatus]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -169,7 +191,6 @@ export default function Navbar() {
     document.cookie = 'sb-access-token=; path=/; max-age=0';
 
     router.push('/login');
-    router.refresh();
   };
 
   const isActive = (href: string) => {

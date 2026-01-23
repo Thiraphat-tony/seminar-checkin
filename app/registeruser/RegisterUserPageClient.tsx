@@ -656,6 +656,13 @@ export default function RegisterUserPage() {
       setSuccessMessage(t('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'Registration saved successfully'));
       setCompleted(true);
       saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
+      try {
+        window.dispatchEvent(
+          new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
+        );
+      } catch {
+        // ignore
+      }
     } catch (err: any) {
       setErrorMessage(
         err?.message ||

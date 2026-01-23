@@ -38,8 +38,12 @@ export default function DashboardPage() {
   // ---- ดึงข้อมูล + รีเฟรชอัตโนมัติ ----
   useEffect(() => {
     let isMounted = true;
+    const inFlight = { current: false };
+    const intervalRef = { current: null as ReturnType<typeof setInterval> | null };
 
     const fetchSummary = async () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
       try {
         const res = await fetch('/api/dashboard/summary', { cache: 'no-store' });
         const payload = (await res.json().catch(() => null)) as DashboardSummaryResponse | null;
@@ -57,16 +61,44 @@ export default function DashboardPage() {
         if (!isMounted) return;
         setError(err?.message || 'โหลดข้อมูลไม่สำเร็จ');
       } finally {
+        inFlight.current = false;
         if (isMounted) setLoading(false);
       }
     };
 
-    fetchSummary();
-    const interval = setInterval(fetchSummary, 10000);
+    const startPolling = () => {
+      if (intervalRef.current) return;
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          void fetchSummary();
+        }
+      }, 10000);
+    };
+
+    const stopPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopPolling();
+      } else {
+        void fetchSummary();
+        startPolling();
+      }
+    };
+
+    void fetchSummary();
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

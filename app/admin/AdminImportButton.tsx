@@ -1,7 +1,7 @@
 // app/admin/AdminImportButton.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminImportButton() {
@@ -11,9 +11,11 @@ export default function AdminImportButton() {
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   // ฟังก์ชันสร้างเอฟเฟกต์ระลอกคลื่น
   const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (reduceMotion) return;
     const button = buttonRef.current;
     if (!button) return;
 
@@ -33,6 +35,19 @@ export default function AdminImportButton() {
 
     button.appendChild(circle);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduceMotion(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     // สร้างเอฟเฟกต์ระลอกคลื่น

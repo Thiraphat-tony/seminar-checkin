@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import './page.css';
 
 const actions = [
@@ -49,12 +50,31 @@ const actions = [
 ];
 
 export default function Home() {
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduceMotion(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
   return (
     <div className="admin-home">
-      <div className="stars"></div>
-      <div className="glow glow-1"></div>
-      <div className="glow glow-2"></div>
-      <div className="glow glow-3"></div>
+      {!reduceMotion && (
+        <>
+          <div className="stars"></div>
+          <div className="glow glow-1"></div>
+          <div className="glow glow-2"></div>
+          <div className="glow glow-3"></div>
+        </>
+      )}
 
       {/* Navigation Header */}
       <header className="admin-header">

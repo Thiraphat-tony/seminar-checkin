@@ -56,9 +56,9 @@ export default function ForceCheckinButton({
         body: JSON.stringify({ attendeeId, action }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!data.success) {
+      if (!res.ok || !data || !data.success) {
         setMessage(data.message || 'ลงทะเบียนแทนไม่สำเร็จ');
         setMessageType('error');
         return;
@@ -67,10 +67,16 @@ export default function ForceCheckinButton({
       setMessage(data.message || 'ลงทะเบียนแทนเรียบร้อย');
       setMessageType('success');
 
-      // refresh หน้า admin ให้ข้อมูลในตารางอัปเดต
-      startTransition(() => {
-        router.refresh();
-      });
+      const shouldRefresh =
+        action === 'checkin'
+          ? data.alreadyCheckedIn !== true
+          : data.alreadyUnchecked !== true;
+
+      if (shouldRefresh) {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
     } catch (err) {
       console.error('force checkin button error', err);
       setMessage('เกิดข้อผิดพลาดขณะลงทะเบียนแทน');

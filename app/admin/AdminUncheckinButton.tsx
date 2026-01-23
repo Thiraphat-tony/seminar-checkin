@@ -67,10 +67,11 @@ export default function AdminUncheckinButton({
 
       setMessage(data.message || 'ยกเลิกลงทะเบียนเรียบร้อย');
 
-      // refresh ตาราง
-      startTransition(() => {
-        router.refresh();
-      });
+      if (!data.alreadyUnchecked) {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
     } catch (err) {
       console.error('uncheckin button error', err);
       setMessage('เกิดข้อผิดพลาดขณะยกเลิกลงทะเบียน กรุณาลองใหม่');
