@@ -10,6 +10,7 @@ const SUPER_ADMIN_COURT_NAME = "ศาลเยาวชนและครอบ
 type Body = {
   courtId: string;
   namePrefix?: string;
+  fullName?: string;
   phone: string;
   password: string;
   inviteCode?: string;
@@ -22,12 +23,13 @@ export async function POST(req: Request) {
     const courtId = (body.courtId ?? "").trim();
     const namePrefix = typeof body.namePrefix === "string" ? body.namePrefix.trim() : "";
     const phone = (body.phone ?? "").trim();
+    const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const password = (body.password ?? "").trim();
     const inviteCode = (body.inviteCode ?? "").trim();
 
     const normalizedPhone = phoneForStorage(phone);
 
-    if (!courtId || !password || !normalizedPhone) {
+    if (!courtId || !password || !normalizedPhone || !fullName) {
       return NextResponse.json({ ok: false, message: "ข้อมูลไม่ครบ" }, { status: 400 });
     }
 
@@ -45,7 +47,9 @@ export async function POST(req: Request) {
 
     const admin = createClient(url, serviceKey);
 
-    const email = `${courtId}@staff.local`;
+    const baseEmail = `${courtId}@staff.local`;
+    const buildStaffEmail = (slot: number) =>
+      slot <= 0 ? baseEmail : `${courtId}+${slot}@staff.local`;
 
     const { data: court, error: courtErr } = await admin
       .from("courts")
@@ -95,17 +99,50 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ สร้าง user ใน Supabase Auth
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
+    // ✅ สร้าง user ใน Supabase Auth (รองรับหลายบัญชีต่อศาล)
+    let createdUser: { id: string } | null = null;
+    let sawDuplicateEmail = false;
 
-    if (createErr || !created.user) {
+    for (let slot = 0; slot < maxStaff; slot += 1) {
+      const email = buildStaffEmail(slot);
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+      if (!createErr && created?.user) {
+        createdUser = created.user;
+        break;
+      }
+
+      if (createErr) {
+        const rawMessage = createErr.message ?? "";
+        const isDuplicateEmail =
+          rawMessage.includes("A user with this email address has already been registered") ||
+          rawMessage.includes("already been registered") ||
+          rawMessage.includes("already registered");
+        if (isDuplicateEmail) {
+          sawDuplicateEmail = true;
+          continue;
+        }
+
+        return NextResponse.json(
+          { ok: false, message: createErr.message ?? "สร้างผู้ใช้ไม่สำเร็จ" },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (!createdUser) {
       return NextResponse.json(
-        { ok: false, message: createErr?.message ?? "สร้างผู้ใช้ไม่สำเร็จ" },
-        { status: 500 }
+        {
+          ok: false,
+          message: sawDuplicateEmail
+            ? "ศาลนี้มีผู้ดูแลครบตามโควตาแล้ว"
+            : "สร้างผู้ใช้ไม่สำเร็จ",
+        },
+        { status: sawDuplicateEmail ? 409 : 500 }
       );
     }
 
@@ -114,9 +151,10 @@ export async function POST(req: Request) {
 
     // ✅ insert staff profile
     const { error: profErr } = await admin.from("staff_profiles").insert({
-      user_id: created.user.id,
+      user_id: createdUser.id,
       court_id: courtId,
       name_prefix: namePrefix || null,
+      full_name: fullName || null,
       phone: normalizedPhone,
       role,
     });

@@ -12,6 +12,7 @@ type StaffRow = {
   id: string;
   courtName: string;
   name_prefix: string;
+  full_name: string;
   phone: string;
   role: string;
   isSelf: boolean;
@@ -86,7 +87,7 @@ export default async function AdminSettingsPage() {
 
   const { data: staffProfiles, error: staffProfilesError } = await supabase
     .from('staff_profiles')
-    .select('user_id, role, name_prefix, phone, courts(court_name)')
+    .select('user_id, role, name_prefix, full_name, phone, courts(court_name)')
     .order('court_id', { ascending: true });
 
   const staffRows: StaffRow[] = (staffProfiles ?? []).map((row) => {
@@ -94,6 +95,7 @@ export default async function AdminSettingsPage() {
 
     const courtName = (courtRecord?.court_name ?? '').trim();
     const name_prefix = (row.name_prefix ?? '').trim();
+    const full_name = (row.full_name ?? '').trim();
     const phone = (row.phone ?? '').trim();
 
     const roleLabel = row.role === 'super_admin' ? 'ซูเปอร์แอดมิน' : 'แอดมินศาล';
@@ -102,6 +104,7 @@ export default async function AdminSettingsPage() {
       id: row.user_id,
       courtName,
       name_prefix,
+      full_name,
       phone,
       role: row.role,
       isSelf: row.user_id === currentUserId,
@@ -227,8 +230,10 @@ export default async function AdminSettingsPage() {
                           <td>{index + 1}</td>
                           <td>{row.courtName || '-'}</td>
 
-                          {/* ✅ แสดงชื่อผู้จัดการระบบจาก name_prefix */}
-                          <td>{row.name_prefix || '-'}</td>
+                          <td>
+                            {[row.name_prefix, row.full_name].filter(Boolean).join(' ').trim() ||
+                              '-'}
+                          </td>
 
                           <td>{row.phone ? <code>{row.phone}</code> : '-'}</td>
                           <td>{row.roleLabel}</td>

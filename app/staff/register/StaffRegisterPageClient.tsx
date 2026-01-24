@@ -10,6 +10,9 @@ type CourtOption = {
   max_staff: number | null;
 };
 
+const NAME_PREFIX_OPTIONS = ["นาย", "นาง", "นางสาว", "ดร.", "ผศ.", "รศ.", "ศ."];
+const OTHER_NAME_PREFIX = "__other__";
+
 function courtIdToEmail(courtId: string) {
   return `${courtId}@staff.local`;
 }
@@ -73,6 +76,8 @@ export default function StaffRegisterPage() {
   const [password2, setPassword2] = useState("");
   const [phone, setPhone] = useState("");
   const [namePrefix, setNamePrefix] = useState("");
+  const [namePrefixOther, setNamePrefixOther] = useState("");
+  const [fullName, setFullName] = useState("");
 
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -104,6 +109,16 @@ export default function StaffRegisterPage() {
       setLoading(false);
       return;
     }
+    if (namePrefix === OTHER_NAME_PREFIX && !namePrefixOther.trim()) {
+      setError("กรุณาระบุคำนำหน้านาม");
+      setLoading(false);
+      return;
+    }
+    if (!fullName.trim()) {
+      setError("กรุณากรอกชื่อ-นามสกุล");
+      setLoading(false);
+      return;
+    }
     if (!isValidPhone(phone)) {
       setError("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
       setLoading(false);
@@ -121,12 +136,15 @@ export default function StaffRegisterPage() {
     }
 
     try {
+      const resolvedNamePrefix =
+        namePrefix === OTHER_NAME_PREFIX ? namePrefixOther.trim() : namePrefix.trim();
       const res = await fetch("/api/staff/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           courtId: selectedCourt.id,
-          namePrefix: namePrefix.trim(),
+          namePrefix: resolvedNamePrefix,
+          fullName: fullName.trim(),
           phone: phone.trim(),
           password: password.trim(),
         }),
@@ -152,7 +170,7 @@ export default function StaffRegisterPage() {
   return (
     <div className="login-container">
       <form className="login-form" onSubmit={handleSubmit}>
-        <h2>สมัครเจ้าหน้าที่</h2>
+        <h2>สมัครเจ้าหน้าที่การประชุมสัมมนาทางวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัวทั่วราชอาณาจักร ประจำปี ๒๕๖๙</h2>
 
         <label htmlFor="court">ศาล</label>
         <div style={{ position: "relative" }}>
@@ -214,12 +232,37 @@ export default function StaffRegisterPage() {
           ตัวอย่างอีเมลสำหรับล็อกอิน: <code>{selectedCourtEmail || "-"}</code>
         </div>
 
-        <label htmlFor="namePrefix">ชื่อ-นามสกุล</label>
-        <input
+        <label htmlFor="namePrefix">คำนำหน้านาม</label>
+        <select
           id="namePrefix"
-          type="text"
           value={namePrefix}
           onChange={(e) => setNamePrefix(e.target.value)}
+        >
+          <option value="">เลือกคำนำหน้านาม (ไม่บังคับ)</option>
+          {NAME_PREFIX_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          <option value={OTHER_NAME_PREFIX}>อื่นๆ (โปรดระบุ)</option>
+        </select>
+        {namePrefix === OTHER_NAME_PREFIX && (
+          <input
+            id="namePrefixOther"
+            type="text"
+            value={namePrefixOther}
+            onChange={(e) => setNamePrefixOther(e.target.value)}
+            placeholder="ระบุคำนำหน้านาม"
+          />
+        )}
+
+        <label htmlFor="fullName">ชื่อ-นามสกุล</label>
+        <input
+          id="fullName"
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          required
         />
 
         <label htmlFor="phone">เบอร์โทรศัพท์</label>
@@ -295,7 +338,8 @@ export default function StaffRegisterPage() {
         .login-form label {
           font-weight: 500;
         }
-        .login-form input {
+        .login-form input,
+        .login-form select {
           padding: 0.5rem 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 6px;

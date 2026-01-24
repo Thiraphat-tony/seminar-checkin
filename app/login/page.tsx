@@ -10,8 +10,8 @@ type CourtOption = {
   max_staff: number | null;
 };
 
-function courtIdToEmail(courtId: string) {
-  return `${courtId}@staff.local`;
+function courtIdToEmail(courtId: string, slot = 0) {
+  return slot > 0 ? `${courtId}+${slot}@staff.local` : `${courtId}@staff.local`;
 }
 
 export default function LoginPage() {
@@ -218,12 +218,31 @@ export default function LoginPage() {
     }
 
     try {
-      const email = courtIdToEmail(selectedCourt.id);
-
-      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: password.trim(),
+      const trimmedPassword = password.trim();
+      const baseEmail = courtIdToEmail(selectedCourt.id, 0);
+      let signInData = await supabase.auth.signInWithPassword({
+        email: baseEmail,
+        password: trimmedPassword,
       });
+
+      let { data, error: signInErr } = signInData;
+      const maxStaffSlots = Math.max(1, selectedCourt.max_staff ?? 1);
+
+      if ((signInErr || !data.session) && maxStaffSlots > 1) {
+        for (let slot = 1; slot < maxStaffSlots; slot += 1) {
+          const altEmail = courtIdToEmail(selectedCourt.id, slot);
+          signInData = await supabase.auth.signInWithPassword({
+            email: altEmail,
+            password: trimmedPassword,
+          });
+
+          if (!signInData.error && signInData.data.session) {
+            data = signInData.data;
+            signInErr = null;
+            break;
+          }
+        }
+      }
 
       if (signInErr || !data.session) {
         const exists = await checkStaffExists(selectedCourt.id);
@@ -253,7 +272,7 @@ export default function LoginPage() {
   return (
     <div className="login-container">
       <form className="login-form" onSubmit={handleSubmit}>
-        <h2>เข้าสู่ระบบ</h2>
+        <h2>เข้าสู่ระบบ การประชุมสัมมนาทางวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัวทั่วราชอาณาจักร ประจำปี ๒๕๖๙</h2>
 
         <label htmlFor="court">ศาล</label>
         <div style={{ position: "relative" }}>
