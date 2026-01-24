@@ -184,7 +184,7 @@ export default function LoginPage() {
     const selectedProvince = chosen || (provinces.includes(typed) ? typed : "");
 
     if (!selectedProvince) {
-      setError("กรุณาเลือกจังหวัด");
+      setError("กรุณาเลือกศาล");
       setLoading(false);
       return;
     } */
@@ -311,7 +311,7 @@ export default function LoginPage() {
               }}
             >
               {filteredCourts.length === 0 && (
-                <li style={{ padding: "8px 12px", color: "#64748b" }}>ไม่พบจังหวัด</li>
+                <li style={{ padding: "8px 12px", color: "#64748b" }}>ไม่พบศาล</li>
               )}
               {filteredCourts.map((court) => (
                 <li

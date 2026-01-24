@@ -94,7 +94,7 @@ export async function POST(req: Request) {
     }
     if (false && existing) {
       return NextResponse.json(
-        { ok: false, message: "จังหวัดนี้มีเจ้าหน้าที่แล้ว (1 จังหวัดสมัครได้ 1 คน)" },
+        { ok: false, message: "ศาลนี้มีเจ้าหน้าที่แล้ว (1 ศาลสมัครได้ 1 คน)" },
         { status: 409 }
       );
     }
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
       await admin.auth.admin.deleteUser(createdUser.id);
       const msg =
         profErr.message.includes("duplicate") || profErr.message.includes("unique")
-          ? "จังหวัดนี้มีเจ้าหน้าที่แล้ว (1 จังหวัดสมัครได้ 1 คน)"
+          ? "ศาลนี้มีเจ้าหน้าที่แล้ว (1 ศาลสมัครได้ 1 คน)"
           : profErr.message;
 
       return NextResponse.json({ ok: false, message: msg }, { status: 409 });

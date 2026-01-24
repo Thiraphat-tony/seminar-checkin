@@ -171,7 +171,7 @@ export default function ManagerForm() {
 
     const trimmedCourt = courtName.trim();
     if (!trimmedCourt) {
-      setError('กรุณาเลือกจังหวัด');
+      setError('กรุณาเลือกศาล');
       setBusy(false);
       return;
     }

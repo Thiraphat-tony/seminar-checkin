@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
 
   if (error || !data.session) {
-    return NextResponse.json({ ok: false, message: "จังหวัดหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
+    return NextResponse.json({ ok: false, message: "ศาลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
   }
 
   return NextResponse.json({ ok: true });

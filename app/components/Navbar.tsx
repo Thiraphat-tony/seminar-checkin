@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/supabaseBrowser';
 import './Navbar.css';
@@ -67,6 +67,8 @@ export default function Navbar() {
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const supabase = useMemo<SupabaseClient | null>(() => {
     try {
@@ -184,6 +186,24 @@ export default function Navbar() {
     setMenuOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) {
+        clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showNotice = useCallback((message: string) => {
+    setNotice(message);
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+    }
+    noticeTimerRef.current = setTimeout(() => {
+      setNotice(null);
+    }, 4500);
+  }, []);
+
   const handleLogout = async () => {
     if (!supabase) return;
 
@@ -200,6 +220,17 @@ export default function Navbar() {
 
   const dimOtherTabs = isLoggedIn && isRegistered === false;
 
+  const handleNavClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+      if (href === '/registeruser' && !isLoggedIn) {
+        event.preventDefault();
+        showNotice('กรุณาเข้าสู่ระบบหรือสมัครเจ้าหน้าที่ก่อนนะครับ');
+        router.push('/login');
+      }
+    },
+    [isLoggedIn, router, showNotice],
+  );
+
   // ✅ ถ้ายังไม่ล็อกอิน: โชว์เมนูแค่ /registeruser เท่านั้น
   const visibleLinks = isLoggedIn
     ? (canManageEvent ? [...navLinks, ...suratLinks] : navLinks)
@@ -207,6 +238,22 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
+      {notice && (
+        <div className="navbar__notice" role="status" aria-live="polite">
+          <span className="navbar__notice-icon" aria-hidden="true">
+            ⚠️
+          </span>
+          <span className="navbar__notice-text">{notice}</span>
+          <button
+            type="button"
+            className="navbar__notice-close"
+            onClick={() => setNotice(null)}
+            aria-label="ปิดข้อความแจ้งเตือน"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="navbar__container">
         <div className="navbar__brand">
           <Link href="/">
@@ -232,6 +279,7 @@ export default function Navbar() {
             <li key={link.href} className="navbar__item">
               <Link
                 href={link.href}
+                onClick={(event) => handleNavClick(event, link.href)}
                 className={`navbar__link ${isActive(link.href) ? 'navbar__link--active' : ''} ${
                   dimOtherTabs && link.href !== '/registeruser' ? 'navbar__link--dim' : ''
                 }`}
