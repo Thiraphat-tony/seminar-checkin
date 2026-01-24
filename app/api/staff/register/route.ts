@@ -161,7 +161,7 @@ export async function POST(req: Request) {
 
     // ถ้า insert ไม่ผ่าน ลบ user ทิ้งเพื่อไม่ให้ค้าง
     if (profErr) {
-      await admin.auth.admin.deleteUser(created.user.id);
+      await admin.auth.admin.deleteUser(createdUser.id);
       const msg =
         profErr.message.includes("duplicate") || profErr.message.includes("unique")
           ? "จังหวัดนี้มีเจ้าหน้าที่แล้ว (1 จังหวัดสมัครได้ 1 คน)"
