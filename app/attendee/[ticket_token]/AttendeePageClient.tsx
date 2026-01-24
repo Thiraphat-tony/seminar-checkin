@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import './attendee.css';
-import { maskPhone } from '@/lib/maskPhone';
 
 type Attendee = {
   id: string;
@@ -394,7 +393,7 @@ export default function Page() {
           </div>
 
           <div className="attendee-details">
-            <div>โทรศัพท์: {maskPhone(attendee.phone, 'ไม่ระบุ')}</div>
+            <div>โทรศัพท์: {attendee.phone || 'ไม่ระบุ'}</div>
             <div>ตำแหน่ง: {attendee.job_position || 'ไม่ระบุตำแหน่ง'}</div>
             <div>
               ภาค:{' '}
