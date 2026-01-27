@@ -49,8 +49,9 @@ export async function GET() {
   if (!auth.ok) return auth.response;
 
   const { supabase, staff } = auth;
+  const isSuperAdmin = staff.role === 'super_admin';
   const staffCourtId = (staff.court_id ?? '').trim();
-  if (!staffCourtId) {
+  if (!isSuperAdmin && !staffCourtId) {
     return NextResponse.json<DashboardSummaryResponse>(
       { ok: false, message: 'ไม่พบข้อมูลศาลของเจ้าหน้าที่' },
       { status: 403 },
@@ -64,30 +65,36 @@ export async function GET() {
     p_region: null,
     p_province: null,
     p_organization: null,
-    p_court_id: staffCourtId,
+    p_court_id: isSuperAdmin ? null : staffCourtId,
   };
 
   const summaryPromise = supabase
     .rpc('attendee_summary_counts', summaryParams)
     .single();
 
-  const checkedAnyPromise = supabase
+  let checkedAnyQuery = supabase
     .from('v_attendees_checkin_rounds')
     .select('id', { count: 'exact', head: true })
     .eq('event_id', eventId)
-    .eq('court_id', staffCourtId)
     .or('checkin_round1_at.not.is.null,checkin_round2_at.not.is.null,checkin_round3_at.not.is.null');
+  if (!isSuperAdmin) {
+    checkedAnyQuery = checkedAnyQuery.eq('court_id', staffCourtId);
+  }
+  const checkedAnyPromise = checkedAnyQuery;
 
-  const latestNotCheckedPromise = supabase
+  let latestNotCheckedQuery = supabase
     .from('v_attendees_checkin_rounds')
     .select('id, name_prefix, full_name, organization, phone')
     .eq('event_id', eventId)
-    .eq('court_id', staffCourtId)
     .is('checkin_round1_at', null)
     .is('checkin_round2_at', null)
     .is('checkin_round3_at', null)
     .order('created_at', { ascending: false })
     .limit(5);
+  if (!isSuperAdmin) {
+    latestNotCheckedQuery = latestNotCheckedQuery.eq('court_id', staffCourtId);
+  }
+  const latestNotCheckedPromise = latestNotCheckedQuery;
 
   const [
     { data: summaryRaw, error: summaryError },
@@ -113,6 +120,7 @@ export async function GET() {
 
   if (summaryError) {
     // Fallback when RPC function is missing or not in schema cache.
+    const withCourtFilter = (q: any) => (isSuperAdmin ? q : q.eq('court_id', staffCourtId));
     const [
       { count: totalCount, error: totalError },
       { count: round1Count, error: round1Error },
@@ -120,35 +128,40 @@ export async function GET() {
       { count: round3Count, error: round3Error },
       { count: slipCount, error: slipError },
     ] = await Promise.all([
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .eq('court_id', staffCourtId),
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .eq('court_id', staffCourtId)
-        .not('checkin_round1_at', 'is', null),
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .eq('court_id', staffCourtId)
-        .not('checkin_round2_at', 'is', null),
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .eq('court_id', staffCourtId)
-        .not('checkin_round3_at', 'is', null),
-      supabase
-        .from('v_attendees_checkin_rounds')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', eventId)
-        .eq('court_id', staffCourtId)
-        .not('slip_url', 'is', null),
+      withCourtFilter(
+        supabase
+          .from('v_attendees_checkin_rounds')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', eventId),
+      ),
+      withCourtFilter(
+        supabase
+          .from('v_attendees_checkin_rounds')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .not('checkin_round1_at', 'is', null),
+      ),
+      withCourtFilter(
+        supabase
+          .from('v_attendees_checkin_rounds')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .not('checkin_round2_at', 'is', null),
+      ),
+      withCourtFilter(
+        supabase
+          .from('v_attendees_checkin_rounds')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .not('checkin_round3_at', 'is', null),
+      ),
+      withCourtFilter(
+        supabase
+          .from('v_attendees_checkin_rounds')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .not('slip_url', 'is', null),
+      ),
     ]);
 
     const fallbackError =
