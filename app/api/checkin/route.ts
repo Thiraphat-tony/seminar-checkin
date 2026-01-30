@@ -91,8 +91,8 @@ type RateLimitConfig = {
 };
 
 const RATE_LIMIT: RateLimitConfig = {
-  ip: { limit: 10, windowSec: 300 },
-  token: { limit: 5, windowSec: 300 },
+  ip: { limit: 300, windowSec: 300 },
+  token: { limit: 30, windowSec: 300 },
 };
 
 const GENERIC_NOT_FOUND_MESSAGE = 'ไม่พบข้อมูลผู้เข้าร่วม';
@@ -201,6 +201,28 @@ async function enforceRateLimit(req: NextRequest, ticketToken: string) {
   return { blocked: false };
 }
 
+type CheckinRow = {
+  round: number | null;
+  checked_in_at: string | null;
+};
+
+function mergeRoundValue(current: string | null, next: string | null) {
+  if (!next) return current;
+  if (!current) return next;
+  return new Date(next) < new Date(current) ? next : current;
+}
+
+function buildRoundsFromRows(rows: CheckinRow[] | null | undefined) {
+  const rounds = { round1At: null as string | null, round2At: null as string | null, round3At: null as string | null };
+  for (const row of rows ?? []) {
+    if (!row || !row.round) continue;
+    if (row.round === 1) rounds.round1At = mergeRoundValue(rounds.round1At, row.checked_in_at);
+    if (row.round === 2) rounds.round2At = mergeRoundValue(rounds.round2At, row.checked_in_at);
+    if (row.round === 3) rounds.round3At = mergeRoundValue(rounds.round3At, row.checked_in_at);
+  }
+  return rounds;
+}
+
 export async function GET(req: NextRequest) {
   const ticketToken = req.nextUrl.searchParams.get('ticket_token')?.trim();
   if (!ticketToken) {
@@ -220,7 +242,10 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  const { data: attendee, error: attendeeError } = await supabase
+  let attendee: AttendeeCheckinView | null = null;
+  let rounds = { round1At: null as string | null, round2At: null as string | null, round3At: null as string | null };
+
+  const { data: viewRow, error: viewError } = await supabase
     .from('v_attendees_checkin_rounds')
     .select(
       'id, event_id, ticket_token, checked_in_at, checkin_round1_at, checkin_round2_at, checkin_round3_at',
@@ -228,11 +253,41 @@ export async function GET(req: NextRequest) {
     .eq('ticket_token', ticketToken)
     .maybeSingle();
 
-  if (attendeeError) {
-    return NextResponse.json<CheckinGetResponse>(
-      { ok: false, success: false, message: 'ATTENDEE_QUERY_FAILED' },
-      { status: 500 },
-    );
+  if (!viewError && viewRow) {
+    attendee = viewRow as AttendeeCheckinView;
+    rounds = {
+      round1At: viewRow.checkin_round1_at ?? null,
+      round2At: viewRow.checkin_round2_at ?? null,
+      round3At: viewRow.checkin_round3_at ?? null,
+    };
+  } else if (viewError) {
+    console.warn('checkin: v_attendees_checkin_rounds query failed, falling back', viewError);
+    const { data: attendeeBase, error: attendeeBaseError } = await supabase
+      .from('attendees')
+      .select('id, event_id, ticket_token, checked_in_at')
+      .eq('ticket_token', ticketToken)
+      .maybeSingle();
+
+    if (attendeeBaseError) {
+      return NextResponse.json<CheckinGetResponse>(
+        { ok: false, success: false, message: 'ATTENDEE_QUERY_FAILED' },
+        { status: 500 },
+      );
+    }
+
+    if (attendeeBase) {
+      attendee = attendeeBase as AttendeeCheckinView;
+      const { data: checkinRows, error: checkinsError } = await supabase
+        .from('attendee_checkins')
+        .select('round, checked_in_at')
+        .eq('attendee_id', attendeeBase.id);
+
+      if (checkinsError) {
+        console.warn('checkin: attendee_checkins fallback failed', checkinsError);
+      } else {
+        rounds = buildRoundsFromRows(checkinRows as CheckinRow[]);
+      }
+    }
   }
 
   const tokenMatches = timingSafeTokenMatch(ticketToken, attendee?.ticket_token);
@@ -268,8 +323,6 @@ export async function GET(req: NextRequest) {
   const checkinRoundOpen = normalizeRound(event.checkin_round_open);
   const allowed = checkinOpen && checkinRoundOpen > 0;
 
-  const viewRow = attendee as AttendeeCheckinView;
-
   return NextResponse.json<CheckinGetResponse>({
     ok: true,
     success: true,
@@ -277,14 +330,10 @@ export async function GET(req: NextRequest) {
     checkinRoundOpen,
     allowed,
     withinWindow: true,
-    alreadyCheckedIn: !!viewRow.checked_in_at,
-    checkedInAt: viewRow.checked_in_at ?? null,
-    checked_in_at: viewRow.checked_in_at ?? null,
-    rounds: {
-      round1At: viewRow.checkin_round1_at ?? null,
-      round2At: viewRow.checkin_round2_at ?? null,
-      round3At: viewRow.checkin_round3_at ?? null,
-    },
+    alreadyCheckedIn: !!attendee.checked_in_at,
+    checkedInAt: attendee.checked_in_at ?? null,
+    checked_in_at: attendee.checked_in_at ?? null,
+    rounds,
   });
 }
 
