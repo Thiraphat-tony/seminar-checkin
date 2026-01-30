@@ -922,6 +922,11 @@ a:hover {
     border-color: rgba(240, 173, 78, 0.55);
 }
 
+.admin-settings__card[data-open="true"][data-round-open="false"] {
+    border-color: rgba(240, 173, 78, 0.75);
+    background: linear-gradient(160deg, #ffffff 0%, #fff5e6 100%);
+}
+
 .admin-settings__row {
     display: flex;
     flex-wrap: wrap;
@@ -949,6 +954,19 @@ a:hover {
     margin: 0;
     font-size: 16px;
     color: var(--text-soft);
+}
+
+.admin-settings__round-warning {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px dashed rgba(240, 173, 78, 0.7);
+    background: rgba(240, 173, 78, 0.16);
+    color: #7a4b14;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.4;
+    max-width: 260px;
 }
 
 .admin-settings__status {

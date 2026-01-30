@@ -35,6 +35,8 @@ export default function SettingsForm({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const eventLabel = eventName ?? eventId;
+  const hasOpenRound = checkinRoundOpen > 0;
+  const showRoundWarning = checkinOpen && !hasOpenRound;
 
   const updateSettings = async (payload: {
     registrationOpen?: boolean;
@@ -118,7 +120,11 @@ export default function SettingsForm({
           </div>
         </div>
 
-        <div className="admin-settings__card" data-open={checkinOpen ? 'true' : 'false'}>
+        <div
+          className="admin-settings__card"
+          data-open={checkinOpen ? 'true' : 'false'}
+          data-round-open={hasOpenRound ? 'true' : 'false'}
+        >
           <div className="admin-settings__row">
             <div className="admin-settings__info">
               <p className="admin-settings__label">การลงทะเบียน</p>
@@ -165,6 +171,13 @@ export default function SettingsForm({
                   <option value={2}>รอบ 2 (บ่าย วันแรก)</option>
                   <option value={3}>รอบ 3 (เช้า วันที่สอง)</option>
                 </select>
+                {showRoundWarning && (
+                  <div className="admin-settings__round-warning" role="status">
+                    เปิดระบบแล้ว แต่ยังไม่เปิดรอบลงทะเบียน
+                    <br />
+                    ผู้เข้าร่วมยังลงทะเบียนหน้างานไม่ได้
+                  </div>
+                )}
               </div>
             </div>
           </div>

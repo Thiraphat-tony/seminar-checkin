@@ -330,6 +330,23 @@ export default function Page() {
     );
   }
 
+  const showClosedScreen =
+    checkinStatusChecked && !checkinStatusError && !checkinOpen;
+
+  if (showClosedScreen) {
+    return (
+      <main className="attendee-page-container attendee-page--closed">
+        <div className="attendee-closed-card">
+          <div className="attendee-closed__code">CHECKIN_CLOSED</div>
+          <h1 className="attendee-closed__title">ระบบปิดการลงทะเบียน</h1>
+          <p className="attendee-closed__subtitle">
+            ขณะนี้ปิดรับลงทะเบียนหน้างานแล้ว หากต้องการข้อมูลเพิ่มเติมโปรดติดต่อผู้ดูแลระบบ
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const displayName = (() => {
     const prefix = (attendee.name_prefix ?? '').trim();
     const fullName = (attendee.full_name ?? '').trim();
