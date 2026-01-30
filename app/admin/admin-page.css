@@ -2379,6 +2379,41 @@ summary.admin-link-edit:hover {
     position: relative;
 }
 
+.admin-forcecheckin__round {
+    display: grid;
+    gap: 6px;
+}
+
+.admin-forcecheckin__round-label {
+    font-size: 14px;
+    color: var(--text-soft);
+    font-weight: 600;
+}
+
+.admin-forcecheckin__round-select {
+    width: 100%;
+    min-width: 200px;
+    max-width: 260px;
+    border-color: #5bc0de;
+    box-shadow: 0 2px 8px rgba(91, 192, 222, 0.12);
+    font-size: 16px;
+    padding: 8px 14px;
+}
+
+.admin-forcecheckin__round-select:focus {
+    border-color: #5bc0de;
+    box-shadow: 0 0 0 2px rgba(91, 192, 222, 0.25);
+}
+
+.admin-forcecheckin__round-select option {
+    padding: 8px 12px;
+}
+
+.admin-forcecheckin__round-select option:checked {
+    background: #1d61d1;
+    color: #ffffff;
+}
+
 .admin-forcecheckin__button {
     border: none;
     border-radius: var(--radius-pill);
