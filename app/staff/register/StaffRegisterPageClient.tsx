@@ -170,7 +170,7 @@ export default function StaffRegisterPage() {
   return (
     <div className="login-container">
       <form className="login-form" onSubmit={handleSubmit}>
-        <h2>สมัครเจ้าหน้าที่การประชุมสัมมนาทางวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัวทั่วราชอาณาจักร ประจำปี ๒๕๖๙</h2>
+        <h2>สมัครเจ้าหน้าที่การประชุมสัมมนาวิชาการ ผู้พิพากษาสมทบในศาลเยาวชนและครอบครัวทั่วราชอาณาจักร ประจำปี ๒๕๖๙</h2>
 
         <label htmlFor="court">ศาล</label>
         <div style={{ position: "relative" }}>
