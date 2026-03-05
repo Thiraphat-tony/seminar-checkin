@@ -509,19 +509,6 @@ export default function RegisterUserPage() {
       );
     }
 
-    const missingHotelIndex = filledParticipants.findIndex((p) => {
-      const name = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
-      return !name || name === OTHER_HOTEL_VALUE;
-    });
-    if (missingHotelIndex >= 0) {
-      return setErrorMessage(
-        t(
-          `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
-          `Please select a hotel for participant #${missingHotelIndex + 1}`,
-        ),
-      );
-    }
-
     // ✅ แก้ข้อความ error ที่เป็น ????? ให้เป็นไทยชัด ๆ
     const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
       const position = typeof p.position === 'string' ? p.position.trim() : '';
@@ -533,19 +520,6 @@ export default function RegisterUserPage() {
         t(
           `กรุณาระบุตำแหน่ง (อื่น ๆ) ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`,
           `Please specify the position (other) for participant #${missingPositionOtherIndex + 1}`,
-        ),
-      );
-    }
-
-    const missingTravelModeIndex = filledParticipants.findIndex((p) => {
-      const mode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
-      return !mode;
-    });
-    if (missingTravelModeIndex >= 0) {
-      return setErrorMessage(
-        t(
-          `กรุณาเลือกวิธีการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`,
-          `Please select a travel mode for participant #${missingTravelModeIndex + 1}`,
         ),
       );
     }
@@ -954,8 +928,8 @@ export default function RegisterUserPage() {
 
               <p className="registeruser-help">
                 {t(
-                  '* หลังบันทึกจำนวนผู้เข้าร่วม ระบบจะพาไปหน้ากรอกข้อมูลรายบุคคล (รวมถึงโรงแรม / วิธีเดินทาง)',
-                  '* After saving the participant count, you will be taken to the participant details page (including hotel / travel mode).',
+                  '* หลังบันทึกจำนวนผู้เข้าร่วม ระบบจะพาไปหน้ากรอกข้อมูลรายบุคคล (โรงแรม / วิธีเดินทางไม่บังคับ)',
+                  '* After saving the participant count, you will be taken to the participant details page (hotel / travel mode are optional).',
                 )}
                 <br />
                 {t('* วิธีเดินทาง: ', '* Travel modes: ')}

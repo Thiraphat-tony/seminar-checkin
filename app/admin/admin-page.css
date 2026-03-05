@@ -533,6 +533,69 @@ a:hover {
     font-size: 16px; /* ฟอนต์เล็กลงเล็กน้อย */
 }
 
+.admin-table__bulkbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(148, 116, 84, 0.18);
+    background: #f7f3ea;
+}
+
+.admin-table__bulkmeta {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.admin-table__bulkactions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-table__bulkbtn {
+    border: 1px solid rgba(148, 116, 84, 0.35);
+    background: #ffffff;
+    color: var(--text-main);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.admin-table__bulkbtn:hover:not(:disabled) {
+    background: #f1ebe0;
+    border-color: rgba(91, 192, 222, 0.8);
+    transform: translateY(-1px);
+}
+
+.admin-table__bulkbtn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.admin-table__bulkbtn--primary {
+    background: linear-gradient(135deg, rgba(91, 192, 222, 0.2), rgba(91, 192, 222, 0.35));
+    border-color: rgba(91, 192, 222, 0.9);
+    color: #245e6d;
+}
+
+.admin-table__select-col {
+    width: 52px;
+    text-align: center !important;
+}
+
+.admin-table__check {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #2a74b8;
+}
+
 .admin-table thead {
     position: sticky;
     top: 0;
@@ -581,6 +644,170 @@ a:hover {
 .admin-table tbody tr:hover {
     background: #f1ebe0;
     transform: none;
+}
+
+.admin-table tbody tr.admin-table__row--selected td {
+    background: rgba(91, 192, 222, 0.16);
+}
+
+.admin-bulkedit {
+    margin-top: 12px;
+    padding: 18px;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(148, 116, 84, 0.2);
+    box-shadow: var(--shadow-soft);
+}
+
+.admin-bulkedit__title {
+    margin: 0 0 14px;
+    font-size: 24px;
+    color: var(--text-strong);
+}
+
+.admin-bulkedit__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.admin-bulkedit__list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-bulkedit__item {
+    border: 1px solid rgba(148, 116, 84, 0.18);
+    border-radius: 14px;
+    padding: 10px;
+    background: #f9f7f2;
+    overflow: hidden;
+}
+
+.admin-bulkedit__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.admin-bulkedit__index {
+    flex: 0 0 auto;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--text-strong);
+    background: #ece7de;
+    border: 1px solid rgba(148, 116, 84, 0.22);
+    border-radius: 999px;
+    padding: 6px 12px;
+}
+
+.admin-bulkedit__input {
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 116, 84, 0.28);
+    background: #fff;
+    padding: 6px 10px;
+    font-size: 15px;
+    color: var(--text-main);
+}
+
+.admin-bulkedit__input:focus {
+    border-color: rgba(91, 192, 222, 0.9);
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(91, 192, 222, 0.32);
+}
+
+.admin-bulkedit__other {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.admin-bulkedit__input--wide {
+    max-width: 420px;
+}
+
+.admin-bulkedit__input--prefix {
+    flex: 0 1 90px;
+}
+
+.admin-bulkedit__input--name {
+    flex: 2 1 260px;
+}
+
+.admin-bulkedit__input--position {
+    flex: 1 1 170px;
+}
+
+.admin-bulkedit__input--phone {
+    flex: 1 1 150px;
+}
+
+.admin-bulkedit__input--travel {
+    flex: 1 1 190px;
+}
+
+.admin-bulkedit__input--hotel {
+    flex: 1 1 190px;
+}
+
+.admin-bulkedit__input--food {
+    flex: 0 1 100px;
+}
+
+.admin-bulkedit__error {
+    margin: 0;
+    color: #8a6d3b;
+    font-size: 16px;
+}
+
+.admin-bulkedit__success {
+    margin: 0;
+    color: #2f7a2f;
+    font-size: 16px;
+}
+
+.admin-bulkedit__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+@media (max-width: 1600px) {
+    .admin-bulkedit__input--name {
+        flex-basis: 240px;
+    }
+}
+
+@media (max-width: 1280px) {
+    .admin-bulkedit__index {
+        width: 100%;
+    }
+    .admin-bulkedit__input--prefix,
+    .admin-bulkedit__input--name,
+    .admin-bulkedit__input--position,
+    .admin-bulkedit__input--phone,
+    .admin-bulkedit__input--travel,
+    .admin-bulkedit__input--hotel,
+    .admin-bulkedit__input--food {
+        flex: 1 1 calc(50% - 8px);
+    }
+}
+
+@media (max-width: 900px) {
+    .admin-bulkedit__input--prefix,
+    .admin-bulkedit__input--name,
+    .admin-bulkedit__input--position,
+    .admin-bulkedit__input--phone,
+    .admin-bulkedit__input--travel,
+    .admin-bulkedit__input--hotel,
+    .admin-bulkedit__input--food {
+        flex: 1 1 100%;
+    }
 }
 
 .admin-table__empty {
@@ -2908,6 +3135,10 @@ summary.admin-link-edit:hover {
 .attendee-edit-page {
     max-width: 900px;
     margin: 0 auto;
+}
+
+.attendee-edit-page--bulk {
+    max-width: min(1680px, calc(100vw - 48px));
 }
 
 /* -------------------------------------------------- Attendee Edit Header -------------------------------------------------- */

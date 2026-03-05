@@ -1,0 +1,22 @@
+export type AdminAttendeeRow = {
+  id: string;
+  name_prefix: string | null;
+  full_name: string | null;
+  phone: string | null;
+  organization: string | null;
+  job_position: string | null;
+  province: string | null;
+  region: number | null;
+  slip_url: string | null;
+  checked_in_at: string | null;
+  ticket_token: string | null;
+  food_type: string | null;
+  hotel_name: string | null;
+  coordinator_name: string | null;
+  coordinator_phone: string | null;
+  travel_mode: string | null;
+  travel_other: string | null;
+  checkin_round1_at: string | null;
+  checkin_round2_at: string | null;
+  checkin_round3_at: string | null;
+};

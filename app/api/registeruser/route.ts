@@ -271,24 +271,6 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (!hotelName) {
-      const missingHotelIndex = filledParticipants.findIndex(
-        (p) => {
-          const name = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
-          return !name || name === OTHER_HOTEL_VALUE;
-        },
-      );
-      if (missingHotelIndex >= 0) {
-        return NextResponse.json(
-          {
-            ok: false,
-            message: `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
-          },
-          { status: 400 },
-        );
-      }
-    }
-
     const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
       const position = typeof p.position === 'string' ? p.position.trim() : '';
       if (position !== 'other') return false;
@@ -299,21 +281,6 @@ export async function POST(req: NextRequest) {
         {
           ok: false,
           message: `กรุณาระบุตำแหน่งอื่น ๆ ของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`
-        },
-        { status: 400 },
-      );
-    }
-
-    const missingTravelModeIndex = filledParticipants.findIndex((p) => {
-      const rawMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
-      const mode = rawMode || fallbackTravelMode;
-      return !mode;
-    });
-    if (missingTravelModeIndex >= 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: `กรุณาเลือกวิธีเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`
         },
         { status: 400 },
       );
@@ -448,7 +415,7 @@ export async function POST(req: NextRequest) {
               : 'ผู้พิพากษาสมทบ';
 
       const rawTravelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
-      const travelModeResolved = rawTravelMode || fallbackTravelMode;
+      const travelModeResolved = rawTravelMode || fallbackTravelMode || null;
       const rawTravelOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
       const travelOtherResolved =
         travelModeResolved === 'other' ? rawTravelOther || fallbackTravelOther || null : null;

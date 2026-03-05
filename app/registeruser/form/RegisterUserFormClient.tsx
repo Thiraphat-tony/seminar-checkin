@@ -294,20 +294,6 @@ export default function RegisterUserFormClient() {
       return;
     }
 
-    const missingHotelIndex = filledParticipants.findIndex((p) => {
-      const name = (p.hotelName ?? '').trim();
-      return !name || name === OTHER_HOTEL_VALUE;
-    });
-    if (missingHotelIndex >= 0) {
-      setErrorMessage(
-        t(
-          `กรุณาเลือกโรงแรมของผู้เข้าร่วมคนที่ ${missingHotelIndex + 1}`,
-          `Please select a hotel for participant #${missingHotelIndex + 1}`,
-        ),
-      );
-      return;
-    }
-
     // ✅ ตำแหน่ง "อื่น ๆ" ต้องระบุข้อความ
     const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
       const position = (p.position ?? '').trim();
@@ -319,20 +305,6 @@ export default function RegisterUserFormClient() {
         t(
           `กรุณาระบุตำแหน่งของผู้เข้าร่วมคนที่ ${missingPositionOtherIndex + 1}`,
           `Please specify the position for participant #${missingPositionOtherIndex + 1}`,
-        ),
-      );
-      return;
-    }
-
-    const missingTravelModeIndex = filledParticipants.findIndex((p) => {
-      const mode = (p.travelMode ?? '').trim();
-      return !mode;
-    });
-    if (missingTravelModeIndex >= 0) {
-      setErrorMessage(
-        t(
-          `กรุณาเลือกพาหนะในการเดินทางของผู้เข้าร่วมคนที่ ${missingTravelModeIndex + 1}`,
-          `Please select a travel mode for participant #${missingTravelModeIndex + 1}`,
         ),
       );
       return;
@@ -553,7 +525,6 @@ export default function RegisterUserFormClient() {
                         handleParticipantChange(idx, 'travelMode', value);
                         if (value !== 'other') handleParticipantChange(idx, 'travelOther', '');
                       }}
-                      required={Boolean(p.fullName.trim())}
                       disabled={submitting}
                     >
                       <option value="">{t('เลือกพาหนะ/วิธีเดินทาง', 'Select travel mode')}</option>
@@ -574,7 +545,6 @@ export default function RegisterUserFormClient() {
                           e.target.value === OTHER_HOTEL_VALUE ? OTHER_HOTEL_VALUE : e.target.value,
                         )
                       }
-                      required={Boolean(p.fullName.trim())}
                       disabled={submitting}
                     >
                       <option value="">{t('เลือกโรงแรม', 'Select hotel')}</option>

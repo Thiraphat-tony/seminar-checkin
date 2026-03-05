@@ -2,16 +2,11 @@
 import type { ReactNode } from 'react';
 
 import { requireStaffForPage } from '@/lib/requireStaffForPage';
-import { maskPhone } from '@/lib/maskPhone';
 
 import AdminNav from './AdminNav';
 import AdminFilters from './AdminFilters';
-
-import ForceCheckinButton from './ForceCheckinButton';
-import AdminDeleteButton from './AdminDeleteButton';
-
-import AdminSlipUploadButton from './AdminSlipUploadButton';
-import AdminSlipClearButton from './AdminSlipClearButton';
+import AdminAttendeeTableClient from './AdminAttendeeTableClient';
+import type { AdminAttendeeRow } from './types';
 
 // 👉 นำเข้าไฟล์ CSS ที่สร้างขึ้นมาใช้กับหน้านี้โดยเฉพาะ
 import './admin-page.css';
@@ -29,29 +24,6 @@ type AdminPageProps = {
   }>;
 };
 
-type AttendeeRow = {
-  id: string;
-  name_prefix: string | null;
-  full_name: string | null;
-  phone: string | null;
-  organization: string | null;
-  job_position: string | null;
-  province: string | null;
-  region: number | null;
-  slip_url: string | null;
-  checked_in_at: string | null;
-  ticket_token: string | null;
-  food_type: string | null;
-  hotel_name: string | null;
-  coordinator_name: string | null;
-  coordinator_phone: string | null;
-  travel_mode: string | null;
-  travel_other: string | null;
-  checkin_round1_at: string | null;
-  checkin_round2_at: string | null;
-  checkin_round3_at: string | null;
-};
-
 type SummaryCounts = {
   total: number;
   round1: number;
@@ -59,85 +31,6 @@ type SummaryCounts = {
   round3: number;
   slip: number;
 };
-
-function formatDateTime(isoString: string | null) {
-  if (!isoString) return '-';
-  try {
-    return new Intl.DateTimeFormat('th-TH-u-ca-gregory', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-      timeZone: 'Asia/Bangkok',
-    }).format(new Date(isoString));
-  } catch {
-    return new Date(isoString).toLocaleString('th-TH');
-  }
-}
-
-function formatFoodType(foodType: string | null): string {
-  switch (foodType) {
-    case 'normal':
-      return 'ทั่วไป';
-    case 'no_pork':
-      return 'ไม่ทานหมู';
-    case 'vegetarian':
-      return 'มังสวิรัติ';
-    case 'vegan':
-      return 'เจ / วีแกน';
-    case 'halal':
-      return 'ฮาลาล';
-    case 'seafood_allergy':
-      return 'แพ้อาหารทะเล';
-    case 'other':
-      return 'อื่น ๆ';
-    case null:
-    case '':
-    default:
-      return 'ไม่ระบุ';
-  }
-}
-
-// Map enum values and legacy "????" strings from old registration encoding.
-const JOB_POSITION_LABELS: Record<string, string> = {
-  chief_judge: 'ผู้พิพากษาหัวหน้าศาล',
-  associate_judge: 'ผู้พิพากษาสมทบ',
-  '????????????????????': 'ผู้พิพากษาหัวหน้าศาล',
-  '??????????????': 'ผู้พิพากษาสมทบ',
-};
-
-function formatJobPosition(jobPosition: string | null): string {
-  if (!jobPosition) return '-';
-  const trimmed = jobPosition.trim();
-  if (!trimmed) return '-';
-  return JOB_POSITION_LABELS[trimmed] ?? trimmed;
-}
-
-const TRAVEL_MODE_LABELS: Record<string, string> = {
-  car: 'รถยนต์ส่วนตัว',
-  van: 'รถตู้',
-  bus: 'รถบัส',
-  train: 'รถไฟ',
-  plane: 'เครื่องบิน',
-  motorcycle: 'มอเตอร์ไซค์',
-  other: 'อื่น ๆ',
-};
-
-function formatTravelMode(mode: string | null, other: string | null): string {
-  if (!mode) return '-';
-  const trimmed = mode.trim();
-  if (!trimmed) return '-';
-  const label = TRAVEL_MODE_LABELS[trimmed] ?? trimmed;
-  if (trimmed === 'other') {
-    const extra = (other ?? '').trim();
-    return extra ? `${label}: ${extra}` : label;
-  }
-  return label;
-}
-
-function formatRegion(region: number | null): string {
-  if (region === null || Number.isNaN(region as any)) return '-';
-  if (region === 0) return 'ศาลเยาวชนและครอบครัวกลาง';
-  return `ภาค ${region}`;
-}
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const sp = await searchParams;
@@ -318,7 +211,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     );
   }
 
-  const attendees: AttendeeRow[] = data as AttendeeRow[];
+  const attendees: AdminAttendeeRow[] = data as AdminAttendeeRow[];
 
   // --- options สำหรับ dropdown (ตามโค้ดเดิม: จากข้อมูลหน้าเดียว) ---
   const organizationOptions = Array.from(
@@ -534,163 +427,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <section className="admin-table__wrapper">
           <div className="admin-table__inner">
-            <table className="admin-table">
-              <thead>
-                <tr className="admin-table__head-row">
-                  <th>#</th>
-                  <th>ชื่อ - นามสกุล</th>
-                  <th>หน่วยงาน</th>
-                  <th>ภาค/ศาลกลาง</th>
-                  <th>ตำแหน่ง</th>
-                  <th>ผู้ประสานงาน</th>
-                  <th>โรงแรม</th>
-                  <th>การเดินทาง</th>
-                  <th>สลิป</th>
-                  <th>ลงทะเบียน</th>
-                  <th>ประเภทอาหาร</th>
-                  <th>จัดการ</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {attendees.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} className="admin-table__empty">
-                      ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา
-                    </td>
-                  </tr>
-                ) : (
-                  attendees.map((a, idx) => {
-                    const hasSlip = !!a.slip_url;
-                    const isChecked = !!a.checked_in_at;
-                    const foodLabel = formatFoodType(a.food_type);
-                    const namePrefix = (a.name_prefix ?? '').trim();
-                    const fullName = (a.full_name ?? '').trim();
-                    const displayName =
-                      namePrefix || fullName
-                        ? `${namePrefix ? `${namePrefix} ` : ''}${fullName}`.trim()
-                        : '-';
-
-                    return (
-                      <tr key={a.id ?? idx}>
-                        <td>{from + idx + 1}</td>
-
-                        <td>
-                          <div>{displayName}</div>
-                          <div>
-                            <small>{maskPhone(a.phone)}</small>
-                          </div>
-                        </td>
-
-                        <td>
-                          <div>{a.organization || '-'}</div>
-                          <div>
-                            <small>{a.province || '-'}</small>
-                          </div>
-                        </td>
-
-                        <td>{formatRegion(a.region)}</td>
-                        <td>{formatJobPosition(a.job_position)}</td>
-
-                        <td>
-                          <div>{a.coordinator_name || '-'}</div>
-                          <div>
-                            <small>{maskPhone(a.coordinator_phone)}</small>
-                          </div>
-                        </td>
-
-                        <td>{a.hotel_name || '-'}</td>
-                        <td>{formatTravelMode(a.travel_mode, a.travel_other)}</td>
-
-                        <td>
-                          <div className="admin-table__slip-cell">
-                            {hasSlip ? (
-                              <span className="admin-pill admin-pill--blue">มีสลิป</span>
-                            ) : (
-                              <span className="admin-pill admin-pill--muted">ไม่มี</span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td>
-                          {isChecked ? (
-                            <div className="admin-table__checkin">
-                              <span className="admin-pill admin-pill--green">ลงทะเบียนแล้ว</span>
-                              <span className="admin-table__checkin-time" suppressHydrationWarning>
-                                {formatDateTime(a.checked_in_at)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="admin-table__checkin">
-                              <span className="admin-pill admin-pill--warning">ยังไม่ลงทะเบียน</span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td>
-                          <span className="admin-pill admin-pill--food">{foodLabel}</span>
-                        </td>
-
-                        <td>
-                          <details>
-                            <summary className="admin-link-edit">จัดการ</summary>
-
-                            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                              <a
-                                href={`/admin/attendee/${a.ticket_token}`}
-                                className="admin-link-edit"
-                              >
-                                แก้ไขข้อมูล
-                              </a>
-
-                              {hasSlip ? (
-                                <a
-                                  href={a.slip_url ?? '#'}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="admin-link-edit"
-                                >
-                                  ดูสลิป
-                                </a>
-                              ) : (
-                                <span className="admin-pill admin-pill--muted">ไม่มีสลิป</span>
-                              )}
-
-                              {isChecked ? (
-                                <ForceCheckinButton
-                                  attendeeId={a.id}
-                                  action="uncheckin"
-                                  label="ยกเลิกลงทะเบียน"
-                                  isCheckedIn={isChecked}
-                                  hasSlip={hasSlip}
-                                />
-                              ) : (
-                                <ForceCheckinButton
-                                  attendeeId={a.id}
-                                  action="checkin"
-                                  label="ลงทะเบียน"
-                                  isCheckedIn={isChecked}
-                                  hasSlip={hasSlip}
-                                />
-                              )}
-
-                              {/* ✅ สลิป: ถ้ามีสลิป = แสดงปุ่มยกเลิกสลิป, ถ้าไม่มีสลิป = แสดงปุ่มแนบสลิป */}
-                              {hasSlip ? (
-                                <AdminSlipClearButton attendeeId={a.id} />
-                              ) : (
-                                <AdminSlipUploadButton attendeeId={a.id} />
-                              )}
-
-                              <AdminDeleteButton attendeeId={a.id} fullName={a.full_name} />
-                            </div>
-                          </details>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+            <AdminAttendeeTableClient attendees={attendees} from={from} />
 
             {renderPagination(page, totalPages, sp)}
           </div>
