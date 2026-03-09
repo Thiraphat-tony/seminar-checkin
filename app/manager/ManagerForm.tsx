@@ -1,9 +1,17 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+type StaffOption = {
+  userId: string;
+  namePrefix: string;
+  fullName: string;
+  phone: string;
+  isActive: boolean;
+};
 
 type SetPasswordResponse =
-  | { ok: true }
+  | { ok: true; staff?: StaffOption[] }
   | { ok: false; error?: string };
 
 type CourtOption = {
@@ -12,8 +20,23 @@ type CourtOption = {
   max_staff: number | null;
 };
 
-function courtIdToEmail(courtId: string) {
-  return `${courtId}@staff.local`;
+function buildStaffLabel(staff: StaffOption) {
+  const fullName = [staff.namePrefix, staff.fullName]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  const name = fullName || '(ไม่ระบุชื่อ)';
+  const phone = staff.phone.trim();
+  const activeSuffix = staff.isActive ? '' : ' • ปิดใช้งาน';
+  return phone ? `${name} • ${phone}${activeSuffix}` : `${name}${activeSuffix}`;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export default function ManagerForm() {
@@ -102,10 +125,20 @@ export default function ManagerForm() {
   const [courts, setCourts] = useState<CourtOption[]>([]);
   const [courtsLoading, setCourtsLoading] = useState(true);
   const [courtsError, setCourtsError] = useState('');
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState('');
+  const [selectedStaffUserId, setSelectedStaffUserId] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const selectedCourt = useMemo(() => {
+    const trimmedCourt = courtName.trim();
+    if (!trimmedCourt) return null;
+    return courts.find((court) => court.court_name === trimmedCourt) ?? null;
+  }, [courtName, courts]);
 
   useEffect(() => {
     let active = true;
@@ -122,9 +155,9 @@ export default function ManagerForm() {
         }
         const list = Array.isArray(payload.courts) ? payload.courts : [];
         if (active) setCourts(list);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (active) {
-          setCourtsError(err?.message || 'โหลดรายชื่อศาลไม่สำเร็จ');
+          setCourtsError(getErrorMessage(err, 'โหลดรายชื่อศาลไม่สำเร็จ'));
         }
       } finally {
         if (active) setCourtsLoading(false);
@@ -137,6 +170,72 @@ export default function ManagerForm() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const trimmedPassphrase = passphrase.trim();
+    const selectedCourtId = selectedCourt?.id?.trim() ?? '';
+
+    if (!trimmedPassphrase || !selectedCourtId || courtsLoading || !!courtsError) {
+      setStaffOptions([]);
+      setSelectedStaffUserId('');
+      setStaffError('');
+      setStaffLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const loadStaffOptions = async () => {
+      setStaffLoading(true);
+      setStaffError('');
+
+      try {
+        const res = await fetch('/api/manager/set-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'listStaff',
+            passphrase: trimmedPassphrase,
+            courtId: selectedCourtId,
+          }),
+        });
+
+        const json = (await res.json().catch(() => null)) as SetPasswordResponse | null;
+        if (!res.ok || !json || !json.ok) {
+          const message =
+            json && 'error' in json && json.error
+              ? json.error
+              : 'โหลดรายชื่อบุคคลไม่สำเร็จ';
+          if (!active) return;
+          setStaffOptions([]);
+          setSelectedStaffUserId('');
+          setStaffError(message);
+          return;
+        }
+
+        const list = Array.isArray(json.staff) ? json.staff : [];
+        if (!active) return;
+
+        setStaffOptions(list);
+        setSelectedStaffUserId((prev) =>
+          list.some((item) => item.userId === prev) ? prev : (list[0]?.userId ?? ''),
+        );
+      } catch (e: unknown) {
+        if (!active) return;
+        setStaffOptions([]);
+        setSelectedStaffUserId('');
+        setStaffError(getErrorMessage(e, 'โหลดรายชื่อบุคคลไม่สำเร็จ'));
+      } finally {
+        if (active) setStaffLoading(false);
+      }
+    };
+
+    loadStaffOptions();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCourt?.id, passphrase, courtsLoading, courtsError]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,23 +275,43 @@ export default function ManagerForm() {
       return;
     }
 
-    const selectedCourt = courts.find((court) => court.court_name === trimmedCourt);
     if (!selectedCourt) {
       setError('กรุณาเลือกศาลจากรายการ');
       setBusy(false);
       return;
     }
+    if (staffLoading) {
+      setError('กำลังโหลดรายชื่อบุคคล กรุณารอสักครู่');
+      setBusy(false);
+      return;
+    }
+    if (staffError) {
+      setError(staffError);
+      setBusy(false);
+      return;
+    }
+    if (!selectedStaffUserId) {
+      setError('กรุณาเลือกบุคคลที่ต้องการรีเซ็ตรหัสผ่าน');
+      setBusy(false);
+      return;
+    }
+
+    const selectedStaff = staffOptions.find((item) => item.userId === selectedStaffUserId);
+    if (!selectedStaff) {
+      setError('ไม่พบบัญชีบุคคลที่เลือก');
+      setBusy(false);
+      return;
+    }
 
     try {
-      const email = courtIdToEmail(selectedCourt.id);
       const res = await fetch('/api/manager/set-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           passphrase: trimmedPassphrase,
           newPassword: trimmedPassword,
-          email,
           courtId: selectedCourt.id,
+          userId: selectedStaff.userId,
         }),
       });
       const json = (await res.json().catch(() => null)) as SetPasswordResponse | null;
@@ -204,11 +323,9 @@ export default function ManagerForm() {
       }
 
       setPassword('');
-      setCourtName('');
-      setPassphrase('');
-      setSuccess('ตั้งรหัสผ่านใหม่สำเร็จ');
-    } catch (e: any) {
-      setError(e?.message ?? 'ตั้งรหัสผ่านใหม่ไม่สำเร็จ');
+      setSuccess(`ตั้งรหัสผ่านใหม่สำเร็จ: ${buildStaffLabel(selectedStaff)}`);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'ตั้งรหัสผ่านใหม่ไม่สำเร็จ'));
     } finally {
       setBusy(false);
     }
@@ -247,6 +364,31 @@ export default function ManagerForm() {
             <option key={court.id} value={court.court_name} />
           ))}
         </datalist>
+
+        <label htmlFor="staffUserId">บุคคล</label>
+        <select
+          id="staffUserId"
+          value={selectedStaffUserId}
+          onChange={(e) => setSelectedStaffUserId(e.target.value)}
+          required
+          disabled={busy || !selectedCourt || staffLoading || staffOptions.length === 0}
+        >
+          <option value="">
+            {staffLoading ? 'กำลังโหลดรายชื่อบุคคล...' : 'เลือกบุคคลที่ต้องการรีเซ็ต'}
+          </option>
+          {staffOptions.map((staff) => (
+            <option key={staff.userId} value={staff.userId}>
+              {buildStaffLabel(staff)}
+            </option>
+          ))}
+        </select>
+        {!passphrase.trim() && (
+          <p className="manager-note">กรอกรหัสลับผู้สร้างก่อน เพื่อโหลดรายชื่อบุคคล</p>
+        )}
+        {staffError && <p className="manager-note">{staffError}</p>}
+        {selectedCourt && !staffLoading && passphrase.trim() && staffOptions.length === 0 && !staffError && (
+          <p className="manager-note">ไม่พบบุคคลในศาลที่เลือก</p>
+        )}
 
         <label htmlFor="password">รหัสผ่านใหม่</label>
         <input
@@ -298,7 +440,8 @@ export default function ManagerForm() {
         .manager-form label {
           font-weight: 500;
         }
-        .manager-form input {
+        .manager-form input,
+        .manager-form select {
           padding: 0.5rem 0.75rem;
           border: 1px solid #d1d5db;
           border-radius: 6px;

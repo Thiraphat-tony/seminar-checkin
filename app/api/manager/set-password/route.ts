@@ -5,19 +5,47 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Body = {
+  mode?: 'listStaff' | 'resetPassword';
   passphrase?: string;
   newPassword?: string;
   email?: string;
   courtId?: string;
+  userId?: string;
 };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+type StaffOption = {
+  userId: string;
+  namePrefix: string;
+  fullName: string;
+  phone: string;
+  isActive: boolean;
+};
+
+type AdminApi = {
+  getUserByEmail?: (
+    email: string,
+  ) => Promise<{ data?: { user?: { id?: string } | null } | null; error?: { message?: string } | null }>;
+  updateUserById?: (
+    userId: string,
+    attrs: { password: string },
+  ) => Promise<{ error?: { message?: string } | null }>;
+  updateUser?: (
+    userId: string,
+    attrs: { password: string },
+  ) => Promise<{ error?: { message?: string } | null }>;
+};
+
+function getAdminApi() {
+  const supabase = createServerClient() as { auth?: { admin?: AdminApi } };
+  return supabase.auth?.admin;
+}
+
 async function findUserIdByEmail(email: string) {
-  const supabase = createServerClient();
-  const admin = (supabase as any)?.auth?.admin;
+  const admin = getAdminApi();
 
   if (typeof admin?.getUserByEmail === 'function') {
     const { data, error } = await admin.getUserByEmail(email);
@@ -57,8 +85,7 @@ async function findUserIdByEmail(email: string) {
 }
 
 async function updatePassword(userId: string, newPassword: string) {
-  const supabase = createServerClient();
-  const admin = (supabase as any)?.auth?.admin;
+  const admin = getAdminApi();
 
   if (typeof admin?.updateUserById === 'function') {
     const { error } = await admin.updateUserById(userId, { password: newPassword });
@@ -106,6 +133,50 @@ async function updatePassword(userId: string, newPassword: string) {
   return { ok: true as const };
 }
 
+async function listStaffByCourt(courtId: string) {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('staff_profiles')
+    .select('user_id, name_prefix, full_name, phone, is_active')
+    .eq('court_id', courtId)
+    .order('full_name', { ascending: true });
+
+  if (error) {
+    return { ok: false as const, error: error.message ?? 'LOOKUP_FAILED' };
+  }
+
+  const staff: StaffOption[] = (data ?? []).map((row) => ({
+    userId: (row.user_id ?? '').trim(),
+    namePrefix: (row.name_prefix ?? '').trim(),
+    fullName: (row.full_name ?? '').trim(),
+    phone: (row.phone ?? '').trim(),
+    isActive: row.is_active !== false,
+  }));
+
+  return { ok: true as const, staff };
+}
+
+async function validateStaffUserInCourt(userId: string, courtId: string) {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from('staff_profiles')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('court_id', courtId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false as const, error: error.message ?? 'LOOKUP_FAILED' };
+  }
+
+  if (!data?.user_id) {
+    return { ok: false as const, error: 'STAFF_NOT_FOUND' };
+  }
+
+  return { ok: true as const };
+}
+
 export async function POST(req: Request) {
   try {
     const secret = process.env.MANAGER_CREATOR_PASSPHRASE;
@@ -114,10 +185,12 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json()) as Body;
+    const mode = (body.mode ?? 'resetPassword').trim();
     const passphrase = (body.passphrase ?? '').trim();
     const newPassword = (body.newPassword ?? '').trim();
     const emailFromBody = (body.email ?? '').trim();
     const courtId = (body.courtId ?? '').trim();
+    const userIdFromBody = (body.userId ?? '').trim();
 
     if (!passphrase) {
       return NextResponse.json({ ok: false, error: 'MISSING_PASSPHRASE' }, { status: 400 });
@@ -125,27 +198,54 @@ export async function POST(req: Request) {
     if (passphrase !== secret) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
+
+    if (mode === 'listStaff') {
+      if (!courtId) {
+        return NextResponse.json({ ok: false, error: 'MISSING_COURT' }, { status: 400 });
+      }
+
+      const list = await listStaffByCourt(courtId);
+      if (!list.ok) {
+        return NextResponse.json({ ok: false, error: list.error }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true, staff: list.staff });
+    }
+
     if (!newPassword || newPassword.length < 6) {
       return NextResponse.json({ ok: false, error: 'INVALID_PASSWORD' }, { status: 400 });
     }
 
-    let targetEmail = '';
-    if (courtId) {
-      targetEmail = normalizeEmail(`${courtId}@staff.local`);
+    let targetUserId = '';
+    if (userIdFromBody) {
+      if (courtId) {
+        const check = await validateStaffUserInCourt(userIdFromBody, courtId);
+        if (!check.ok) {
+          const status = check.error === 'STAFF_NOT_FOUND' ? 404 : 500;
+          return NextResponse.json({ ok: false, error: check.error }, { status });
+        }
+      }
+      targetUserId = userIdFromBody;
     } else {
-      const defaultEmail = process.env.MANAGER_ADMIN_EMAIL ?? '';
-      targetEmail = normalizeEmail(emailFromBody || defaultEmail);
-    }
-    if (!targetEmail) {
-      return NextResponse.json({ ok: false, error: 'MISSING_EMAIL' }, { status: 400 });
+      let targetEmail = '';
+      if (courtId) {
+        targetEmail = normalizeEmail(`${courtId}@staff.local`);
+      } else {
+        const defaultEmail = process.env.MANAGER_ADMIN_EMAIL ?? '';
+        targetEmail = normalizeEmail(emailFromBody || defaultEmail);
+      }
+      if (!targetEmail) {
+        return NextResponse.json({ ok: false, error: 'MISSING_EMAIL' }, { status: 400 });
+      }
+
+      const userLookup = await findUserIdByEmail(targetEmail);
+      if (!userLookup.ok) {
+        return NextResponse.json({ ok: false, error: userLookup.error }, { status: 404 });
+      }
+      targetUserId = userLookup.userId;
     }
 
-    const userLookup = await findUserIdByEmail(targetEmail);
-    if (!userLookup.ok) {
-      return NextResponse.json({ ok: false, error: userLookup.error }, { status: 404 });
-    }
-
-    const update = await updatePassword(userLookup.userId, newPassword);
+    const update = await updatePassword(targetUserId, newPassword);
     if (!update.ok) {
       return NextResponse.json({ ok: false, error: update.error }, { status: 500 });
     }
