@@ -82,23 +82,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ เช็คว่า “ศาลนี้มีเจ้าหน้าที่แล้ว”
-    const { data: existing, error: existErr } = await admin
-      .from("staff_profiles")
-      .select("id, court_id")
-      .eq("court_id", courtId)
-      .maybeSingle();
-
-    if (existErr) {
-      return NextResponse.json({ ok: false, message: existErr.message }, { status: 500 });
-    }
-    if (false && existing) {
-      return NextResponse.json(
-        { ok: false, message: "ศาลนี้มีเจ้าหน้าที่แล้ว (1 ศาลสมัครได้ 1 คน)" },
-        { status: 409 }
-      );
-    }
-
     // ✅ สร้าง user ใน Supabase Auth (รองรับหลายบัญชีต่อศาล)
     let createdUser: { id: string } | null = null;
     let sawDuplicateEmail = false;
