@@ -4,6 +4,7 @@
 import './registeruser-page.css';
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { clearParticipantSlipFiles, getParticipantSlipFiles } from './slipDraftStore';
 
 // ✅ ประเภทอาหาร (ตัด other ออก เหลือ 3 แบบ)
 type FoodType = 'normal' | 'vegetarian' | 'halal';
@@ -247,8 +248,7 @@ export default function RegisterUserPage() {
   const [coordinatorName, setCoordinatorName] = useState('');
   const [coordinatorPhone, setCoordinatorPhone] = useState('');
 
-  // ✅ แนบสลิปอยู่หน้านี้
-  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [participantSlipCount, setParticipantSlipCount] = useState(0);
 
   // ✅ จำนวนผู้เข้าร่วม (พิมพ์ได้)
   const [totalInput, setTotalInput] = useState<string>('1');
@@ -266,6 +266,7 @@ export default function RegisterUserPage() {
   const [courtsError, setCourtsError] = useState('');
 
   const currentOrganizations = useMemo(() => REGION_ORGANIZATIONS[region] ?? [], [region]);
+  const hasIndividualSlips = participantSlipCount > 0;
 
   useEffect(() => {
     let active = true;
@@ -335,6 +336,20 @@ export default function RegisterUserPage() {
   }, []);
 
   useEffect(() => {
+    const syncSlipCount = () => {
+      const files = getParticipantSlipFiles();
+      const count = Object.values(files).filter((file): file is File => file instanceof File).length;
+      setParticipantSlipCount(count);
+    };
+
+    syncSlipCount();
+    window.addEventListener('focus', syncSlipCount);
+    return () => {
+      window.removeEventListener('focus', syncSlipCount);
+    };
+  }, [completed]);
+
+  useEffect(() => {
     let active = true;
 
     const checkRegistrationStatus = async () => {
@@ -370,11 +385,6 @@ export default function RegisterUserPage() {
 
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(s));
-  }
-
-  function handleSlipChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    setSlipFile(file);
   }
 
   function handleRegionChange(e: ChangeEvent<HTMLSelectElement>) {
@@ -551,6 +561,29 @@ export default function RegisterUserPage() {
       );
     }
 
+    const participantSlipFiles = getParticipantSlipFiles();
+    const validParticipantSlipEntries = Object.entries(participantSlipFiles)
+      .map(([indexStr, file]) => ({
+        index: Number(indexStr),
+        file,
+      }))
+      .filter(
+        (entry): entry is { index: number; file: File } =>
+          Number.isInteger(entry.index) &&
+          entry.index >= 0 &&
+          entry.index < filledParticipants.length &&
+          entry.file instanceof File,
+      );
+
+    if (validParticipantSlipEntries.length === 0) {
+      return setErrorMessage(
+        t(
+          'ยังไม่มีสลีปรายบุคคล กรุณาไปที่หน้า /registeruser/form เพื่อแนบสลีปรายบุคคลก่อนส่งแบบฟอร์ม',
+          'No individual slips found. Please attach individual slips on /registeruser/form before submitting.',
+        ),
+      );
+    }
+
     try {
       setSubmitting(true);
 
@@ -604,7 +637,9 @@ export default function RegisterUserPage() {
       formData.append('coordinatorPhone', (await import('@/lib/phone')).phoneForStorage(coordinatorPhone) ?? '');
       formData.append('totalAttendees', String(filledParticipants.length));
       formData.append('participants', JSON.stringify(normalizedParticipants));
-      if (slipFile) formData.append('slip', slipFile);
+      for (const entry of validParticipantSlipEntries) {
+        formData.append(`participantSlip_${entry.index}`, entry.file);
+      }
 
       const res = await fetch('/api/registeruser', { method: 'POST', body: formData });
 
@@ -630,6 +665,8 @@ export default function RegisterUserPage() {
       setSuccessMessage(t('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'Registration saved successfully'));
       setCompleted(true);
       saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
+      clearParticipantSlipFiles();
+      setParticipantSlipCount(0);
       try {
         window.dispatchEvent(
           new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
@@ -946,20 +983,25 @@ export default function RegisterUserPage() {
               {t('3. หลักฐานค่าลงทะเบียน', '3. Registration payment proof')}
             </h2>
             <div className="registeruser-field">
-              <label htmlFor="slip" className="registeruser-label">
-                {t('แนบไฟล์ *', 'Attach file *')}
-              </label>
-              <input
-                id="slip"
-                type="file"
-                className="registeruser-input"
-                accept="image/*,application/pdf"
-                onChange={handleSlipChange}
-                required
-                disabled={submitting}
-              />
               <p className="registeruser-help">
-                {t('รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF', 'Supports image files (JPG, PNG) or PDF')}
+                {t(
+                  'หมายเหตุ: แนบสลีปรายบุคคล (ไม่บังคับ) ได้ที่หน้ากรอกข้อมูลผู้เข้าร่วม (/registeruser/form)',
+                  'Note: You can attach optional individual slips on the participant details page (/registeruser/form).',
+                )}
+              </p>
+            </div>
+
+            <div className="registeruser-field">
+              <p className="registeruser-help registeruser-help--ok">
+                {hasIndividualSlips
+                  ? t(
+                      `ปิดการแนบในหน้านี้ (มีสลีปรายบุคคลแล้ว ${participantSlipCount} รายการ)`,
+                      `Attachment is disabled on this page (${participantSlipCount} individual slip(s) found).`,
+                    )
+                  : t(
+                      'ปิดการแนบในหน้านี้ กรุณาแนบสลีปรายบุคคลที่ /registeruser/form ก่อนส่งแบบฟอร์ม',
+                      'Attachment is disabled on this page. Please attach individual slips on /registeruser/form before submitting.',
+                    )}
               </p>
             </div>
           </section>

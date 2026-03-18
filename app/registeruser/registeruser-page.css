@@ -195,6 +195,53 @@ html, body {
   line-height: 1.5;
 }
 
+.registeruser-help--ok {
+  color: #1f6b3a;
+  font-weight: 700;
+}
+
+.registeruser-slip-list {
+  display: grid;
+  gap: 10px;
+}
+
+.registeruser-slip-item {
+  border: 1px solid var(--border-medium);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.registeruser-slip-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.registeruser-slip-item__name {
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.registeruser-slip-item__clear {
+  border: 1px solid rgba(231, 84, 128, 0.45);
+  border-radius: 8px;
+  background: #fff;
+  color: #c6396f;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.registeruser-slip-item__clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* ===== INPUTS (Global) ===== */
 .registeruser-input,
 .registeruser-select {

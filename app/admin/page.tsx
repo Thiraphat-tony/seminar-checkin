@@ -427,7 +427,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <section className="admin-table__wrapper">
           <div className="admin-table__inner">
-            <AdminAttendeeTableClient attendees={attendees} from={from} />
+            <AdminAttendeeTableClient
+              attendees={attendees}
+              from={from}
+              canForceCheckin={staff.role === 'super_admin'}
+            />
 
             {renderPagination(page, totalPages, sp)}
           </div>

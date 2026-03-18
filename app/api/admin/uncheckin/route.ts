@@ -1,6 +1,6 @@
 ﻿// app/api/admin/uncheckin/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabaseServer';
+import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
 type Body = {
   attendeeId?: string;
@@ -28,6 +28,15 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireStaffForApi(req);
+    if (!auth.ok) return auth.response;
+    if (auth.staff.role !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, message: 'FORBIDDEN_SUPER_ADMIN_ONLY' },
+        { status: 403 },
+      );
+    }
+
     const body = (await req.json().catch(() => null)) as Body | null;
 
     if (!body || !body.attendeeId) {
@@ -42,7 +51,7 @@ export async function POST(req: NextRequest) {
     const requestedRound =
       typeof body.round === 'number' ? normalizeRound(body.round) : null;
 
-    const supabase = createServerClient();
+    const supabase = auth.supabase;
 
     const { data: attendee, error: attendeeError } = await supabase
       .from('attendees')

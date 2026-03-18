@@ -1,17 +1,51 @@
 // app/api/upload-slip/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { createServerClient } from '@/lib/supabaseServer';
 import { makeProvinceKey } from '@/lib/provinceKeys';
 
 export const runtime = 'nodejs';
 
 function makeSafeFilename(value: string) {
-  const cleaned = makeProvinceKey(value)
+  const raw = value.trim();
+  if (!raw) return 'unknown';
+
+  // Some provinces can be stored as "สุราษฎร์ธานี (เกาะสมุย)".
+  // Strip trailing parenthetical text so province-code mapping still works.
+  const normalizedProvince = raw.replace(/\s*\([^)]*\)\s*$/, '').trim() || raw;
+
+  const cleaned = makeProvinceKey(normalizedProvince)
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[\\/:"*?<>|]+/g, '')
     .replace(/\.+$/g, '');
-  return cleaned || 'unknown';
+
+  if (/^[A-Za-z0-9_-]+$/.test(cleaned)) {
+    return cleaned.toLowerCase();
+  }
+
+  // Fallback for unmapped/non-ASCII provinces.
+  const encoded = encodeURIComponent(raw)
+    .replace(/%/g, '')
+    .replace(/[^A-Za-z0-9_-]+/g, '')
+    .toLowerCase();
+
+  return encoded.slice(0, 64) || 'unknown';
+}
+
+function resolveFileExt(file: Blob, fileName = '') {
+  const extFromName = fileName.trim().split('.').pop()?.toLowerCase();
+  if (extFromName && /^[a-z0-9]{1,10}$/.test(extFromName)) {
+    return extFromName;
+  }
+
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  };
+  return mimeToExt[file.type] ?? 'bin';
 }
 
 export async function POST(req: NextRequest) {
@@ -26,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     const attendeeId = formData.get('attendeeId');
-    const file = formData.get('file');
+    const fileField = formData.get('file');
 
     if (!attendeeId || typeof attendeeId !== 'string') {
       return NextResponse.json(
@@ -35,12 +69,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!(file instanceof Blob)) {
+    if (!(fileField instanceof Blob)) {
       return NextResponse.json(
         { success: false, message: 'ไม่พบไฟล์แนบในคำขอ' },
         { status: 400 }
       );
     }
+    const file = fileField;
+    const incomingFileName = fileField instanceof File ? fileField.name : '';
 
     const supabase = createServerClient();
 
@@ -52,17 +88,17 @@ export async function POST(req: NextRequest) {
 
     const safeProvince = makeSafeFilename(attendee?.province ?? '');
 
-    // ✅ ใช้ bucket ชื่อ payments (ตามที่คุณสร้างไว้)
-    const fileExt = 'jpg'; // จะปรับตาม type จริงก็ได้
-    const fileName = `${safeProvince}.${fileExt}`;
+    const safeAttendeeId = attendeeId.replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+    const fileExt = resolveFileExt(file, incomingFileName);
+    const fileName = `${safeAttendeeId}-${Date.now()}-${randomUUID()}.${fileExt}`;
+    const filePath = `slips/${safeProvince}/${fileName}`;
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
 
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('payments') // ← ตรงนี้สำคัญ
-      .upload(fileName, fileBuffer, {
+      .from('payments')
+      .upload(filePath, fileBuffer, {
         contentType: file.type || 'image/jpeg',
-        upsert: true,
       });
 
     if (uploadError || !uploadData) {
@@ -77,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: publicUrlData } = supabase.storage
-      .from('payments') // ← ให้ตรงกับด้านบน
+      .from('payments')
       .getPublicUrl(uploadData.path);
 
     const slipUrl = publicUrlData.publicUrl;
@@ -105,6 +141,7 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         message: 'อัปโหลดสลิปเรียบร้อยแล้ว',
+        slipUrl: updated.slip_url,
         slip_url: updated.slip_url,
       },
       { status: 200 }

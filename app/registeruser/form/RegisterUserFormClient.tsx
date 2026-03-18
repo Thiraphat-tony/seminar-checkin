@@ -4,6 +4,11 @@
 import './registeruser-form.css';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  getParticipantSlipFiles,
+  setParticipantSlipFiles as setParticipantSlipFilesDraft,
+  type ParticipantSlipFiles,
+} from '../slipDraftStore';
 
 type FoodType = 'normal' | 'vegetarian' | 'halal';
 type PositionType = 'chief_judge' | 'associate_judge' | 'director' | 'other';
@@ -179,10 +184,25 @@ export default function RegisterUserFormClient() {
 
   const [state, setState] = useState<SavedState | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantSlipFiles, setParticipantSlipFiles] = useState<ParticipantSlipFiles>({});
+  const [participantSlipInputKeys, setParticipantSlipInputKeys] = useState<Record<number, number>>({});
 
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const participantSlipCount = useMemo(
+    () =>
+      Object.values(participantSlipFiles).filter((file): file is File => file instanceof File)
+        .length,
+    [participantSlipFiles],
+  );
+  const filledParticipantRows = useMemo(
+    () =>
+      participants
+        .map((participant, index) => ({ participant, index }))
+        .filter(({ participant }) => participant.fullName.trim().length > 0),
+    [participants],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,10 +211,13 @@ export default function RegisterUserFormClient() {
     if (!raw) {
       setState(null);
       setParticipants([]);
+      setParticipantSlipFiles(getParticipantSlipFiles());
       return;
     }
 
     try {
+      setParticipantSlipFiles(getParticipantSlipFiles());
+
       const s = JSON.parse(raw) as SavedState;
       setState(s);
 
@@ -234,6 +257,19 @@ export default function RegisterUserFormClient() {
     });
   }, [count, state]);
 
+  useEffect(() => {
+    setParticipantSlipFiles((prev) => {
+      const next: ParticipantSlipFiles = {};
+      for (const [indexStr, file] of Object.entries(prev)) {
+        const index = Number(indexStr);
+        if (!Number.isInteger(index) || index < 0 || index >= participants.length) continue;
+        if (file) next[index] = file;
+      }
+      setParticipantSlipFilesDraft(next);
+      return next;
+    });
+  }, [participants.length]);
+
   function persistBack(nextParticipants: Participant[]) {
     if (!state) return;
 
@@ -257,6 +293,27 @@ export default function RegisterUserFormClient() {
       queueMicrotask(() => persistBack(copy));
       return copy;
     });
+  }
+
+  function handleParticipantSlipChange(index: number, file: File | null) {
+    setParticipantSlipFiles((prev) => {
+      const next = { ...prev, [index]: file };
+      setParticipantSlipFilesDraft(next);
+      return next;
+    });
+  }
+
+  function handleParticipantSlipClear(index: number) {
+    setParticipantSlipFiles((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      setParticipantSlipFilesDraft(next);
+      return next;
+    });
+    setParticipantSlipInputKeys((prev) => ({
+      ...prev,
+      [index]: (prev[index] ?? 0) + 1,
+    }));
   }
 
   async function handleSave(e: FormEvent<HTMLFormElement>) {
@@ -365,13 +422,14 @@ export default function RegisterUserFormClient() {
 
       // ✅ เก็บทั้ง array (ไม่ตัดคนว่างทิ้ง) เพื่อกลับมาแก้ได้ตาม count
       persistBack(participants);
+      setParticipantSlipFilesDraft(participantSlipFiles);
 
       setSuccessMessage(t('บันทึกข้อมูลผู้เข้าร่วมแล้ว', 'Participant details saved'));
       router.replace('/registeruser');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setErrorMessage(
-        err?.message ||
+        (err instanceof Error ? err.message : null) ||
           t('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'Save failed. Please try again.'),
       );
     } finally {
@@ -646,6 +704,77 @@ export default function RegisterUserFormClient() {
                 </div>
               );
             })}
+          </section>
+
+          <section className="registeruser-section">
+            <h2 className="registeruser-section__title">
+              {t('3. แนบสลีปรายบุคคล (ไม่บังคับ)', '3. Attach individual slips (optional)')}
+            </h2>
+
+            {filledParticipantRows.length === 0 ? (
+              <p className="registeruser-help">
+                {t(
+                  'ยังไม่พบผู้เข้าร่วมที่กรอกชื่อแล้ว สามารถบันทึกข้อมูลผู้เข้าร่วมก่อน แล้วกลับมาแนบสลีปได้',
+                  'No named participants yet. Save participant details first, then attach slips.',
+                )}
+              </p>
+            ) : (
+              <div className="registeruser-slip-list">
+                {filledParticipantRows.map(({ participant, index }) => {
+                  const selectedFile = participantSlipFiles[index];
+                  const displayName =
+                    `${(participant.namePrefix ?? '').trim()} ${(participant.fullName ?? '').trim()}`
+                      .trim()
+                      .replace(/\s+/g, ' ') || '-';
+                  return (
+                    <div key={`participant-slip-${index}`} className="registeruser-slip-item">
+                      <div className="registeruser-slip-item__head">
+                        <span className="registeruser-slip-item__name">
+                          {t('ผู้เข้าร่วมคนที่', 'Participant')} {index + 1}: {displayName}
+                        </span>
+                        {selectedFile && (
+                          <button
+                            type="button"
+                            className="registeruser-slip-item__clear"
+                            onClick={() => handleParticipantSlipClear(index)}
+                            disabled={submitting}
+                          >
+                            {t('ล้างไฟล์', 'Clear')}
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        key={`participant-slip-input-${index}-${participantSlipInputKeys[index] ?? 0}`}
+                        type="file"
+                        className="registeruser-input"
+                        accept="image/*,application/pdf"
+                        onChange={(event) =>
+                          handleParticipantSlipChange(index, event.target.files?.[0] ?? null)
+                        }
+                        disabled={submitting}
+                      />
+                      <p className="registeruser-help">
+                        {selectedFile
+                          ? t(`ไฟล์ที่เลือก: ${selectedFile.name}`, `Selected file: ${selectedFile.name}`)
+                          : t('ยังไม่ได้เลือกไฟล์', 'No file selected')}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="registeruser-help registeruser-help--ok">
+              {participantSlipCount > 0
+                ? t(
+                    `แนบสลีปรายบุคคลแล้ว ${participantSlipCount} รายการ`,
+                    `${participantSlipCount} individual slip(s) attached`,
+                  )
+                : t(
+                    'หากไม่แนบรายบุคคล สามารถแนบสลิปรวมในหน้าก่อนส่งแบบฟอร์มได้',
+                    'If no individual slips are attached, you can attach one combined slip on the submit page.',
+                  )}
+            </p>
           </section>
 
           {successMessage && <p className="registeruser-note">{successMessage}</p>}

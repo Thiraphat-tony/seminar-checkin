@@ -31,18 +31,80 @@ const TRAVEL_MODE_VALUES = [
 ] as const;
 
 function makeSafeFilename(value: string) {
-  const cleaned = makeProvinceKey(value)
+  const raw = value.trim();
+  if (!raw) return 'unknown';
+
+  // Some provinces can be stored as "สุราษฎร์ธานี (เกาะสมุย)".
+  // Strip trailing parenthetical text so province-code mapping still works.
+  const normalizedProvince = raw.replace(/\s*\([^)]*\)\s*$/, '').trim() || raw;
+
+  const cleaned = makeProvinceKey(normalizedProvince)
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[\\/:"*?<>|]+/g, '')
     .replace(/\.+$/g, '');
-  return cleaned || 'unknown';
+
+  if (/^[A-Za-z0-9_-]+$/.test(cleaned)) {
+    return cleaned.toLowerCase();
+  }
+
+  // Fallback for unmapped/non-ASCII provinces.
+  const encoded = encodeURIComponent(raw)
+    .replace(/%/g, '')
+    .replace(/[^A-Za-z0-9_-]+/g, '')
+    .toLowerCase();
+
+  return encoded.slice(0, 64) || 'unknown';
 }
 
 function filterFilledParticipants(list: ParticipantPayload[]) {
   return list.filter(
     (p) => typeof p.fullName === 'string' && p.fullName.trim().length > 0,
   );
+}
+
+function resolveFileExt(file: Blob, fileName = '') {
+  const extFromName = fileName.trim().split('.').pop()?.toLowerCase();
+  if (extFromName && /^[a-z0-9]{1,10}$/.test(extFromName)) {
+    return extFromName;
+  }
+
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  };
+  return mimeToExt[file.type] ?? 'bin';
+}
+
+async function uploadSlipFile(params: {
+  supabase: ReturnType<typeof createServerClient>;
+  file: Blob;
+  fileName: string;
+  province: string;
+  pathPrefix: string;
+}) {
+  const { supabase, file, fileName, province, pathPrefix } = params;
+
+  const ext = resolveFileExt(file, fileName);
+  const safeProvince = makeSafeFilename(province);
+  const filePath = `slips/${safeProvince}/${pathPrefix}-${randomUUID()}.${ext}`;
+  const arrayBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+
+  const { error: uploadError } = await supabase.storage
+    .from('slips')
+    .upload(filePath, bytes, {
+      contentType: file.type || 'application/octet-stream',
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const { data: publicUrlData } = supabase.storage.from('slips').getPublicUrl(filePath);
+  return publicUrlData.publicUrl;
 }
 
 export async function GET() {
@@ -111,6 +173,16 @@ export async function POST(req: NextRequest) {
       .toString()
       .trim();
     const slip = formData.get('slip') as File | null;
+    const hasCombinedSlip = slip instanceof File && slip.size > 0;
+    const participantSlips = new Map<number, File>();
+    for (const [key, value] of formData.entries()) {
+      if (!key.startsWith('participantSlip_')) continue;
+      if (!(value instanceof File)) continue;
+      if (value.size <= 0) continue;
+      const index = Number.parseInt(key.replace('participantSlip_', ''), 10);
+      if (!Number.isInteger(index) || index < 0) continue;
+      participantSlips.set(index, value);
+    }
     const coordinatorPrefix = (formData.get('coordinatorPrefix') || '')
       .toString()
       .trim();
@@ -321,6 +393,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const hasAnyParticipantSlip = Array.from(participantSlips.keys()).some(
+      (index) => index >= 0 && index < filledParticipants.length,
+    );
+
+    if (!hasCombinedSlip && !hasAnyParticipantSlip) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ (รายบุคคล หรือสลิปรวม)',
+        },
+        { status: 400 },
+      );
+    }
+
     const EVENT_ID = process.env.EVENT_ID;
     if (!EVENT_ID) {
       return NextResponse.json(
@@ -358,10 +444,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let slipUrl: string | null = null;
+    let combinedSlipUrl: string | null = null;
+    const participantSlipUrlByIndex = new Map<number, string>();
 
     // ---------- อัปโหลดไฟล์สลิป (ถ้ามี) ----------
-    if (slip) {
+    if (hasCombinedSlip && slip) {
       console.log('[Register] Starting upload for:', slip.name);
 
       const ext = slip.name.split('.').pop() || 'bin';
@@ -397,13 +484,39 @@ export async function POST(req: NextRequest) {
         .from('slips')
         .getPublicUrl(filePath);
 
-      slipUrl = publicUrlData.publicUrl;
+      combinedSlipUrl = publicUrlData.publicUrl;
     } else {
       console.log('[Register] No slip file provided, skipping upload');
     }
 
     // ---------- เตรียม data สำหรับ insert ----------
-    const rows = filledParticipants.map((p) => {
+    try {
+      for (const [index, participantSlip] of participantSlips.entries()) {
+        if (index < 0 || index >= filledParticipants.length) continue;
+        const uploadedUrl = await uploadSlipFile({
+          supabase,
+          file: participantSlip,
+          fileName: participantSlip.name,
+          province,
+          pathPrefix: `participant-${index + 1}`,
+        });
+        participantSlipUrlByIndex.set(index, uploadedUrl);
+      }
+      console.log('[Register] Participant slip uploads:', participantSlipUrlByIndex.size);
+    } catch (uploadError) {
+      console.error('[Register] Participant slip upload error:', uploadError);
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `อัปโหลดไฟล์สลิปรายบุคคลไม่สำเร็จ: ${
+            uploadError instanceof Error ? uploadError.message : 'unknown error'
+          }`,
+        },
+        { status: 500 },
+      );
+    }
+
+    const rows = filledParticipants.map((p, index) => {
       const rawPositionOther = typeof p.positionOther === 'string' ? p.positionOther.trim() : '';
       const jobPosition =
         p.position === 'other'
@@ -441,7 +554,7 @@ export async function POST(req: NextRequest) {
         region, // 0–9 (0 = ศาลเยาวชนกลาง)
         ticket_token: randomUUID(), // ใช้ uuid เป็น token
         qr_image_url: null,
-        slip_url: slipUrl,
+        slip_url: participantSlipUrlByIndex.get(index) ?? combinedSlipUrl,
         food_type: foodType,
         travel_mode: travelModeResolved,
         travel_other: travelOtherResolved,

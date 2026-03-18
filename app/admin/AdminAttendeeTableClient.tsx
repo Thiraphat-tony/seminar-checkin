@@ -14,6 +14,7 @@ import type { AdminAttendeeRow } from './types';
 type AdminAttendeeTableClientProps = {
   attendees: AdminAttendeeRow[];
   from: number;
+  canForceCheckin: boolean;
 };
 
 const JOB_POSITION_LABELS: Record<string, string> = {
@@ -97,6 +98,7 @@ function formatRegion(region: number | null): string {
 export default function AdminAttendeeTableClient({
   attendees,
   from,
+  canForceCheckin,
 }: AdminAttendeeTableClientProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -223,7 +225,7 @@ export default function AdminAttendeeTableClient({
             <th>โรงแรม</th>
             <th>การเดินทาง</th>
             <th>สลิป</th>
-            <th>ลงทะเบียน</th>
+            <th>ลงทะเบียน (หน้างาน)</th>
             <th>ประเภทอาหาร</th>
             <th>จัดการ</th>
           </tr>
@@ -344,7 +346,7 @@ export default function AdminAttendeeTableClient({
                           <span className="admin-pill admin-pill--muted">ไม่มีสลิป</span>
                         )}
 
-                        {isChecked ? (
+                        {canForceCheckin && (isChecked ? (
                           <ForceCheckinButton
                             attendeeId={attendee.id}
                             action="uncheckin"
@@ -360,7 +362,7 @@ export default function AdminAttendeeTableClient({
                             isCheckedIn={isChecked}
                             hasSlip={hasSlip}
                           />
-                        )}
+                        ))}
 
                         {hasSlip ? (
                           <AdminSlipClearButton attendeeId={attendee.id} />
