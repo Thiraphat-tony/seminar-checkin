@@ -248,6 +248,7 @@ export default function RegisterUserPage() {
   const [coordinatorName, setCoordinatorName] = useState('');
   const [coordinatorPhone, setCoordinatorPhone] = useState('');
 
+  const [slipFile, setSlipFile] = useState<File | null>(null);
   const [participantSlipCount, setParticipantSlipCount] = useState(0);
 
   // ✅ จำนวนผู้เข้าร่วม (พิมพ์ได้)
@@ -350,6 +351,12 @@ export default function RegisterUserPage() {
   }, [completed]);
 
   useEffect(() => {
+    if (hasIndividualSlips) {
+      setSlipFile(null);
+    }
+  }, [hasIndividualSlips]);
+
+  useEffect(() => {
     let active = true;
 
     const checkRegistrationStatus = async () => {
@@ -434,6 +441,11 @@ export default function RegisterUserPage() {
     const v = e.target.value;
     setCoordinatorPrefix(v);
     if (v !== OTHER_PREFIX_VALUE) setCoordinatorPrefixOther('');
+  }
+
+  function handleSlipChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setSlipFile(file);
   }
 
   // ✅ ปุ่ม “บันทึกจำนวนผู้เข้าร่วม / แก้ไข” -> ไปหน้า /registeruser/form?count=
@@ -575,11 +587,14 @@ export default function RegisterUserPage() {
           entry.file instanceof File,
       );
 
-    if (validParticipantSlipEntries.length === 0) {
+    const hasAnyParticipantSlip = validParticipantSlipEntries.length > 0;
+    const hasCombinedSlip = slipFile instanceof File && slipFile.size > 0;
+
+    if (!hasAnyParticipantSlip && !hasCombinedSlip) {
       return setErrorMessage(
         t(
-          'ยังไม่มีสลีปรายบุคคล กรุณาไปที่หน้า /registeruser/form เพื่อแนบสลีปรายบุคคลก่อนส่งแบบฟอร์ม',
-          'No individual slips found. Please attach individual slips on /registeruser/form before submitting.',
+          'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ: แนบสลีปรายบุคคลที่ /registeruser/form หรือแนบสลิปรวมในหัวข้อ 3',
+          'Please attach at least one proof: individual slips on /registeruser/form or a combined slip in section 3.',
         ),
       );
     }
@@ -597,8 +612,7 @@ export default function RegisterUserPage() {
       }
 
       const normalizedParticipants = filledParticipants.map((p) => {
-        const { phoneForStorage: pPhoneForStorage } = require('@/lib/phone') as typeof import('@/lib/phone');
-        const n = pPhoneForStorage(p.phone);
+        const n = phoneForStorage(p.phone);
 
         const rawHotelName = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
         const hotelName = rawHotelName === OTHER_HOTEL_VALUE ? '' : rawHotelName;
@@ -634,11 +648,14 @@ export default function RegisterUserPage() {
       formData.append('courtId', resolvedCourtId);
       formData.append('coordinatorPrefixOther', coordinatorPrefixPayload);
       formData.append('coordinatorName', coordinatorName);
-      formData.append('coordinatorPhone', (await import('@/lib/phone')).phoneForStorage(coordinatorPhone) ?? '');
+      formData.append('coordinatorPhone', phoneForStorage(coordinatorPhone) ?? '');
       formData.append('totalAttendees', String(filledParticipants.length));
       formData.append('participants', JSON.stringify(normalizedParticipants));
       for (const entry of validParticipantSlipEntries) {
         formData.append(`participantSlip_${entry.index}`, entry.file);
+      }
+      if (!hasAnyParticipantSlip && slipFile instanceof File && slipFile.size > 0) {
+        formData.append('slip', slipFile);
       }
 
       const res = await fetch('/api/registeruser', { method: 'POST', body: formData });
@@ -985,24 +1002,42 @@ export default function RegisterUserPage() {
             <div className="registeruser-field">
               <p className="registeruser-help">
                 {t(
-                  'หมายเหตุ: แนบสลีปรายบุคคล (ไม่บังคับ) ได้ที่หน้ากรอกข้อมูลผู้เข้าร่วม (/registeruser/form)',
-                  'Note: You can attach optional individual slips on the participant details page (/registeruser/form).',
+                  'หมายเหตุ: แนบสลีปรายบุคคล (ไม่บังคับ) ได้ที่หน้ากรอกข้อมูลผู้เข้าร่วม (/registeruser/form) หากไม่มีรายบุคคลให้แนบสลิปรวมด้านล่าง',
+                  'Note: You can attach optional individual slips on /registeruser/form. If no individual slips are attached, upload one combined slip below.',
                 )}
               </p>
             </div>
 
             <div className="registeruser-field">
-              <p className="registeruser-help registeruser-help--ok">
-                {hasIndividualSlips
-                  ? t(
-                      `ปิดการแนบในหน้านี้ (มีสลีปรายบุคคลแล้ว ${participantSlipCount} รายการ)`,
-                      `Attachment is disabled on this page (${participantSlipCount} individual slip(s) found).`,
-                    )
-                  : t(
-                      'ปิดการแนบในหน้านี้ กรุณาแนบสลีปรายบุคคลที่ /registeruser/form ก่อนส่งแบบฟอร์ม',
-                      'Attachment is disabled on this page. Please attach individual slips on /registeruser/form before submitting.',
+              {hasIndividualSlips ? (
+                <p className="registeruser-help registeruser-help--ok">
+                  {t(
+                    `ปิดการแนบในหน้านี้ (มีสลีปรายบุคคลแล้ว ${participantSlipCount} รายการ)`,
+                    `Attachment is disabled on this page (${participantSlipCount} individual slip(s) found).`,
+                  )}
+                </p>
+              ) : (
+                <>
+                  <label htmlFor="slip" className="registeruser-label">
+                    {t('แนบไฟล์สลิปรวม *', 'Attach combined slip *')}
+                  </label>
+                  <input
+                    id="slip"
+                    type="file"
+                    className="registeruser-input"
+                    accept="image/*,application/pdf"
+                    onChange={handleSlipChange}
+                    required
+                    disabled={submitting}
+                  />
+                  <p className="registeruser-help">
+                    {t(
+                      'รองรับไฟล์ภาพ (JPG, PNG) หรือไฟล์ PDF',
+                      'Supports image files (JPG, PNG) or PDF',
                     )}
-              </p>
+                  </p>
+                </>
+              )}
             </div>
           </section>
 
