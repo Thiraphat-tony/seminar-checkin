@@ -997,7 +997,7 @@ export default function RegisterUserPage() {
           {/* 3. หลักฐานค่าลงทะเบียน */}
           <section className="registeruser-section">
             <h2 className="registeruser-section__title">
-              {t('3. หลักฐานค่าลงทะเบียน', '3. Registration payment proof')}
+              {t('3. หลักฐานค่าลงทะเบียน(แบบรวม)', '3. Registration payment proof (combined)')}
             </h2>
             <div className="registeruser-field">
               <p className="registeruser-help">
