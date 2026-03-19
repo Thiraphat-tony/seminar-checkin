@@ -32,6 +32,11 @@ type SummaryCounts = {
   slip: number;
 };
 
+type FilterOptionSourceRow = {
+  organization: string | null;
+  province: string | null;
+};
+
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const sp = await searchParams;
 
@@ -145,14 +150,40 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     p_court_id: staffCourtId || null,
   };
 
-  const [{ data: summaryDataRaw, error: summaryError }, { data, error }] = await Promise.all([
+  let filterOptionsQuery = supabase
+    .from('v_attendees_checkin_rounds')
+    .select('organization, province')
+    .eq('event_id', eventId);
+
+  if (regionFilterNum !== null) {
+    filterOptionsQuery = filterOptionsQuery.eq('region', regionFilterNum);
+  }
+  if (status === 'checked') {
+    filterOptionsQuery = filterOptionsQuery.not('checked_in_at', 'is', null);
+  } else if (status === 'unchecked') {
+    filterOptionsQuery = filterOptionsQuery.filter('checked_in_at', 'is', null);
+  }
+  if (staffCourtId) {
+    filterOptionsQuery = filterOptionsQuery.eq('court_id', staffCourtId);
+  }
+
+  const [
+    { data: summaryDataRaw, error: summaryError },
+    { data, error },
+    { data: filterOptionRowsRaw, error: filterOptionsError },
+  ] = await Promise.all([
     supabase.rpc('attendee_summary_counts', summaryParams).single(),
     dataQuery,
+    filterOptionsQuery,
   ]);
   const summaryData = summaryDataRaw as SummaryCounts | null;
+  const filterOptionRows = (filterOptionRowsRaw ?? []) as FilterOptionSourceRow[];
 
   if (summaryError) {
     console.error('Admin summary query error:', summaryError);
+  }
+  if (filterOptionsError) {
+    console.error('Admin filter options query error:', filterOptionsError);
   }
 
   let fallbackSummary: SummaryCounts | null = null;
@@ -214,13 +245,33 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const attendees: AdminAttendeeRow[] = data as AdminAttendeeRow[];
 
   // --- options สำหรับ dropdown (ตามโค้ดเดิม: จากข้อมูลหน้าเดียว) ---
-  const organizationOptions = Array.from(
+  const fallbackOrganizationOptions = Array.from(
     new Set(attendees.map((a) => a.organization ?? '').filter((org) => org.trim().length > 0)),
   ).sort((a, b) => a.localeCompare(b, 'th-TH'));
 
-  const provinceOptions = Array.from(
+  const fallbackProvinceOptions = Array.from(
     new Set(attendees.map((a) => a.province ?? '').filter((p) => p.trim().length > 0)),
   ).sort((a, b) => a.localeCompare(b, 'th-TH'));
+
+  const organizationOptions = Array.from(
+    new Set(
+      filterOptionRows
+        .map((row) => (row.organization ?? '').trim())
+        .filter((organization) => organization.length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b, 'th-TH'));
+
+  const provinceOptions = Array.from(
+    new Set(
+      filterOptionRows
+        .map((row) => (row.province ?? '').trim())
+        .filter((province) => province.length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b, 'th-TH'));
+
+  const effectiveOrganizationOptions =
+    organizationOptions.length > 0 ? organizationOptions : fallbackOrganizationOptions;
+  const effectiveProvinceOptions = provinceOptions.length > 0 ? provinceOptions : fallbackProvinceOptions;
 
   const totalCheckedRound1 = summary?.round1 ?? 0;
   const totalCheckedRound2 = summary?.round2 ?? 0;
@@ -417,8 +468,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               keyword={keyword}
               status={status}
               regionFilter={regionFilter}
-              organizationOptions={organizationOptions}
-              provinceOptions={provinceOptions}
+              organizationOptions={effectiveOrganizationOptions}
+              provinceOptions={effectiveProvinceOptions}
               organizationValue={sp.organization ?? ''}
               provinceValue={sp.province ?? ''}
             />
