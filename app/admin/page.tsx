@@ -396,22 +396,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </form>,
     );
 
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '0.25rem',
-          margin: '1rem 0',
-          flexWrap: 'wrap',
-          borderTop: '1px solid #eee',
-          borderRadius: '6px',
-          paddingTop: '0.5rem',
-        }}
-      >
-        {pageLinks}
-      </div>
-    );
+    return <div className="admin-pagination">{pageLinks}</div>;
   }
 
   return (
@@ -483,10 +468,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               from={from}
               canForceCheckin={staff.role === 'super_admin'}
             />
-
-            {renderPagination(page, totalPages, sp)}
           </div>
         </section>
+
+        {renderPagination(page, totalPages, sp)}
       </main>
     </div>
   );
