@@ -444,6 +444,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (auth.staff.role !== 'super_admin') {
+      const { data: existingRegistration, error: existingRegistrationError } = await supabase
+        .from('attendees')
+        .select('id')
+        .eq('event_id', EVENT_ID)
+        .eq('court_id', courtId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingRegistrationError) {
+        console.error('[Register] Existing registration check error:', existingRegistrationError);
+        return NextResponse.json(
+          { ok: false, message: 'FAILED_TO_CHECK_EXISTING_REGISTRATION' },
+          { status: 500 },
+        );
+      }
+
+      if (existingRegistration) {
+        return NextResponse.json(
+          { ok: false, message: 'ALREADY_REGISTERED' },
+          { status: 409 },
+        );
+      }
+    }
     let combinedSlipUrl: string | null = null;
     const participantSlipUrlByIndex = new Map<number, string>();
 

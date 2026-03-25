@@ -2,7 +2,7 @@
 'use client';
 
 import './registeruser-page.css';
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearParticipantSlipFiles, getParticipantSlipFiles } from './slipDraftStore';
 
@@ -258,6 +258,7 @@ export default function RegisterUserPage() {
   const [completed, setCompleted] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [registrationClosed, setRegistrationClosed] = useState(false);
@@ -482,6 +483,8 @@ export default function RegisterUserPage() {
   // ✅ ส่งแบบฟอร์มจริง (หน้านี้)
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submittingRef.current) return;
+
     setSuccessMessage(null);
     setErrorMessage(null);
 
@@ -599,6 +602,7 @@ export default function RegisterUserPage() {
       );
     }
 
+    submittingRef.current = true;
     try {
       setSubmitting(true);
 
@@ -674,6 +678,26 @@ export default function RegisterUserPage() {
           setRegistrationClosed(true);
           return;
         }
+        if (msg === 'ALREADY_REGISTERED') {
+          setSuccessMessage(
+            t(
+              'ศาลนี้มีข้อมูลลงทะเบียนแล้ว ระบบจะไม่บันทึกซ้ำ หากต้องการแก้ไขข้อมูลกรุณาติดต่อผู้ดูแลระบบ',
+              'This court is already registered. Duplicate submissions are blocked. Please contact an admin if updates are needed.',
+            ),
+          );
+          setCompleted(true);
+          saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
+          clearParticipantSlipFiles();
+          setParticipantSlipCount(0);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
+            );
+          } catch {
+            // ignore
+          }
+          return;
+        }
         throw new Error(String(msg));
       }
 
@@ -697,6 +721,7 @@ export default function RegisterUserPage() {
           t('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'Unable to save. Please try again.'),
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
