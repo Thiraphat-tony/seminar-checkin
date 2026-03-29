@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import AdminImportButton from './AdminImportButton';
 import AdminExportExcelButton from './AdminExportExcelButton';
+import AdminExportSelectableExcelButton from './AdminExportSelectableExcelButton';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type AdminFiltersProps = {
@@ -212,6 +213,7 @@ export default function AdminFilters({
 
         <div className="admin-filters__inline-group admin-filters__inline-group--buttons">
           <AdminImportButton />
+          <AdminExportSelectableExcelButton />
           <AdminExportExcelButton />
           <a href="/admin/namecards" className="admin-export-btn">
             ส่งออกนามบัตร (QR)

@@ -323,30 +323,129 @@ function formatCheckinStatus(checkedInAt: string | null) {
   });
   return `ลงทะเบียนเมื่อ ${formatted}`;
 }
-// setup header columns
-function setupSheetColumns(sheet: ExcelJS.Worksheet) {
-  sheet.columns = [
-    { header: 'คำนำหน้า', key: 'name_prefix', width: 12 },
-    { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
-    { header: 'เบอร์โทรศัพท์', key: 'phone', width: 16 },
-    { header: 'หน่วยงาน', key: 'organization', width: 28 },
-    { header: 'ตำแหน่ง', key: 'job_position', width: 24 },
-    { header: 'จังหวัด', key: 'province', width: 18 },
-    { header: 'ภาค', key: 'region', width: 12 },
-    { header: 'ประเภทอาหาร', key: 'food_type', width: 18 },
-    { header: 'คำนำหน้าผู้ประสานงาน', key: 'coordinator_prefix', width: 20 },
-    { header: 'ชื่อผู้ประสานงาน', key: 'coordinator_name', width: 26 },
-    { header: 'เบอร์ผู้ประสานงาน', key: 'coordinator_phone', width: 20 },
-    { header: 'โรงแรม', key: 'hotel_name', width: 24 },
-    { header: 'การเดินทาง', key: 'travel_mode', width: 20 },
-    { header: 'การเดินทางอื่น', key: 'travel_other', width: 24 },
-    { header: 'สถานะลงทะเบียน', key: 'checkin_status', width: 18 },
-    { header: 'รอบลงทะเบียน 1', key: 'checkin_round1_at', width: 18 },
-    { header: 'รอบลงทะเบียน 2', key: 'checkin_round2_at', width: 18 },
-    { header: 'รอบลงทะเบียน 3', key: 'checkin_round3_at', width: 18 },
-    { header: 'สลิป', key: 'slip', width: 20 },
-    { header: 'รหัสบัตร', key: 'ticket_token', width: 26 },
-  ];
+type SheetColumnDefinition = {
+  header: string;
+  key: string;
+  width: number;
+};
+
+type CustomExportFieldKey =
+  | 'full_name'
+  | 'organization'
+  | 'region_label'
+  | 'job_position'
+  | 'coordinator'
+  | 'hotel_name'
+  | 'travel_mode'
+  | 'slip'
+  | 'checkin_status'
+  | 'food_type';
+
+const DEFAULT_EXPORT_COLUMNS: SheetColumnDefinition[] = [
+  { header: 'คำนำหน้า', key: 'name_prefix', width: 12 },
+  { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
+  { header: 'เบอร์โทรศัพท์', key: 'phone', width: 16 },
+  { header: 'หน่วยงาน', key: 'organization', width: 28 },
+  { header: 'ตำแหน่ง', key: 'job_position', width: 24 },
+  { header: 'จังหวัด', key: 'province', width: 18 },
+  { header: 'ภาค', key: 'region', width: 12 },
+  { header: 'ประเภทอาหาร', key: 'food_type', width: 18 },
+  { header: 'คำนำหน้าผู้ประสานงาน', key: 'coordinator_prefix', width: 20 },
+  { header: 'ชื่อผู้ประสานงาน', key: 'coordinator_name', width: 26 },
+  { header: 'เบอร์ผู้ประสานงาน', key: 'coordinator_phone', width: 20 },
+  { header: 'โรงแรม', key: 'hotel_name', width: 24 },
+  { header: 'การเดินทาง', key: 'travel_mode', width: 20 },
+  { header: 'การเดินทางอื่น', key: 'travel_other', width: 24 },
+  { header: 'สถานะลงทะเบียน', key: 'checkin_status', width: 18 },
+  { header: 'รอบลงทะเบียน 1', key: 'checkin_round1_at', width: 18 },
+  { header: 'รอบลงทะเบียน 2', key: 'checkin_round2_at', width: 18 },
+  { header: 'รอบลงทะเบียน 3', key: 'checkin_round3_at', width: 18 },
+  { header: 'สลิป', key: 'slip', width: 20 },
+  { header: 'รหัสบัตร', key: 'ticket_token', width: 26 },
+];
+
+const CUSTOM_EXPORT_COLUMNS: Record<CustomExportFieldKey, SheetColumnDefinition> = {
+  full_name: { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
+  organization: { header: 'หน่วยงาน', key: 'organization', width: 28 },
+  region_label: { header: 'ภาค/ศาลกลาง', key: 'region_label', width: 16 },
+  job_position: { header: 'ตำแหน่ง', key: 'job_position', width: 24 },
+  coordinator: { header: 'ผู้ประสานงาน', key: 'coordinator', width: 34 },
+  hotel_name: { header: 'โรงแรม', key: 'hotel_name', width: 24 },
+  travel_mode: { header: 'การเดินทาง', key: 'travel_mode', width: 20 },
+  slip: { header: 'สลิป', key: 'slip', width: 20 },
+  checkin_status: { header: 'ลงทะเบียน (หน้างาน)', key: 'checkin_status', width: 24 },
+  food_type: { header: 'ประเภทอาหาร', key: 'food_type', width: 18 },
+};
+
+const CUSTOM_EXPORT_FIELD_KEY_SET = new Set<CustomExportFieldKey>(
+  Object.keys(CUSTOM_EXPORT_COLUMNS) as CustomExportFieldKey[],
+);
+
+function parseCustomFieldSelection(searchParams: URLSearchParams): CustomExportFieldKey[] | null {
+  const raw = searchParams.get('fields');
+  if (!raw) return null;
+
+  const keys = raw
+    .split(',')
+    .map((key) => key.trim())
+    .filter((key): key is CustomExportFieldKey => CUSTOM_EXPORT_FIELD_KEY_SET.has(key as CustomExportFieldKey));
+
+  const unique = [...new Set(keys)];
+  return unique.length > 0 ? unique : null;
+}
+
+function formatRegionLabel(region: number | null): string {
+  if (region === 0) return 'ศาลกลาง';
+  if (region !== null && region >= 1 && region <= 9) return `ภาค ${region}`;
+  return '-';
+}
+
+function formatCoordinator(
+  coordinatorPrefix: string | null,
+  coordinatorName: string | null,
+  coordinatorPhone: string | null,
+): string {
+  const prefix = (coordinatorPrefix ?? '').trim();
+  const name = (coordinatorName ?? '').trim();
+  const phone = (coordinatorPhone ?? '').trim();
+
+  const parts: string[] = [];
+  if (prefix || name) {
+    parts.push(`${prefix}${name}`.trim());
+  }
+  if (phone) {
+    parts.push(`โทร ${phone}`);
+  }
+  return parts.join(' / ') || '-';
+}
+
+const CUSTOM_EXPORT_VALUE_GETTERS: Record<CustomExportFieldKey, (attendee: DbAttendee) => string> = {
+  full_name: (attendee) => attendee.full_name ?? '',
+  organization: (attendee) => attendee.organization ?? '',
+  region_label: (attendee) => formatRegionLabel(attendee.region),
+  job_position: (attendee) => formatJobPosition(attendee.job_position ?? null),
+  coordinator: (attendee) =>
+    formatCoordinator(
+      attendee.coordinator_prefix_other,
+      attendee.coordinator_name,
+      attendee.coordinator_phone,
+    ),
+  hotel_name: (attendee) => attendee.hotel_name ?? '',
+  travel_mode: (attendee) =>
+    formatTravelMode(attendee.travel_mode ?? null, attendee.travel_other ?? null),
+  slip: () => '',
+  checkin_status: (attendee) => formatCheckinStatus(attendee.checked_in_at),
+  food_type: (attendee) => formatFoodType(attendee.food_type ?? null),
+};
+
+function setupSheetColumns(
+  sheet: ExcelJS.Worksheet,
+  selectedCustomFields: CustomExportFieldKey[] | null,
+) {
+  const columns = selectedCustomFields
+    ? selectedCustomFields.map((fieldKey) => CUSTOM_EXPORT_COLUMNS[fieldKey])
+    : DEFAULT_EXPORT_COLUMNS;
+  sheet.columns = columns.map((column) => ({ ...column }));
 
   const headerRow = sheet.getRow(1);
   headerRow.font = { bold: true };
@@ -354,6 +453,49 @@ function setupSheetColumns(sheet: ExcelJS.Worksheet) {
 
   // Freeze header row
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
+}
+
+function addAttendeeRow(
+  sheet: ExcelJS.Worksheet,
+  attendee: DbAttendee,
+  selectedCustomFields: CustomExportFieldKey[] | null,
+) {
+  if (selectedCustomFields) {
+    const rowValues: Record<string, string> = {};
+    for (const fieldKey of selectedCustomFields) {
+      rowValues[fieldKey] = CUSTOM_EXPORT_VALUE_GETTERS[fieldKey](attendee);
+    }
+    const row = sheet.addRow(rowValues);
+    if (selectedCustomFields.includes('slip')) {
+      setSlipLink(row.getCell('slip'), attendee.slip_url, attendee.province);
+    }
+    return;
+  }
+
+  const row = sheet.addRow({
+    name_prefix: attendee.name_prefix ?? '',
+    full_name: attendee.full_name ?? '',
+    phone: attendee.phone ?? '',
+    organization: attendee.organization ?? '',
+    job_position: formatJobPosition(attendee.job_position ?? null),
+    province: attendee.province ?? '',
+    region: attendee.region ?? '',
+    food_type: formatFoodType(attendee.food_type ?? null),
+    coordinator_prefix: attendee.coordinator_prefix_other ?? '',
+    coordinator_name: attendee.coordinator_name ?? '',
+    coordinator_phone: attendee.coordinator_phone ?? '',
+    hotel_name: attendee.hotel_name ?? '',
+    travel_mode: formatTravelMode(attendee.travel_mode ?? null, attendee.travel_other ?? null),
+    travel_other: attendee.travel_other ?? '',
+    checkin_status: formatCheckinStatus(attendee.checked_in_at),
+    checkin_round1_at: formatCheckinTime(attendee.checkin_round1_at),
+    checkin_round2_at: formatCheckinTime(attendee.checkin_round2_at),
+    checkin_round3_at: formatCheckinTime(attendee.checkin_round3_at),
+    slip: '',
+    ticket_token: attendee.ticket_token ?? '',
+  });
+
+  setSlipLink(row.getCell('slip'), attendee.slip_url, attendee.province);
 }
 
 export async function GET(req: NextRequest) {
@@ -380,6 +522,7 @@ export async function GET(req: NextRequest) {
       regionNumberRaw <= 9;
 
     const regionFilter: number | null = hasRegionFilter ? regionNumberRaw : null;
+    const selectedCustomFields = parseCustomFieldSelection(req.nextUrl.searchParams);
 
     const selectColumns = `
         id,
@@ -430,7 +573,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    let { data, error } = await query;
+    const { data: viewData, error } = await query;
+    let data = viewData;
 
     const fetchFromTables = async () => {
       let baseQuery = supabase
@@ -560,33 +704,10 @@ export async function GET(req: NextRequest) {
     if (regionFilter !== null) {
       if (regionFilter === 0) {
         const sheet = workbook.addWorksheet(sanitizeSheetName(SHEET_NAME_CENTRAL));
-        setupSheetColumns(sheet);
+        setupSheetColumns(sheet, selectedCustomFields);
 
         for (const a of attendees) {
-          const row = sheet.addRow({
-            name_prefix: a.name_prefix ?? '',
-            full_name: a.full_name ?? '',
-            phone: a.phone ?? '',
-            organization: a.organization ?? '',
-            job_position: formatJobPosition(a.job_position ?? null),
-            province: a.province ?? '',
-            region: a.region ?? '',
-            food_type: formatFoodType(a.food_type ?? null),
-            coordinator_prefix: a.coordinator_prefix_other ?? '',
-            coordinator_name: a.coordinator_name ?? '',
-            coordinator_phone: a.coordinator_phone ?? '',
-            hotel_name: a.hotel_name ?? '',
-            travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
-            travel_other: a.travel_other ?? '',
-            checkin_status: formatCheckinStatus(a.checked_in_at),
-            checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
-            checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
-            checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
-            slip: '',
-            ticket_token: a.ticket_token ?? '',
-          });
-
-          setSlipLink(row.getCell('slip'), a.slip_url, a.province);
+          addAttendeeRow(sheet, a, selectedCustomFields);
         }
       } else {
         const allowedOrganizations = REGION_ORGANIZATIONS[String(regionFilter)] ?? [];
@@ -610,7 +731,7 @@ export async function GET(req: NextRequest) {
             }
             usedSheetNames.add(sheetName);
             sheet = workbook.addWorksheet(sheetName);
-            setupSheetColumns(sheet);
+            setupSheetColumns(sheet, selectedCustomFields);
             organizationSheets.set(organization, sheet);
           }
           return sheet;
@@ -628,7 +749,7 @@ export async function GET(req: NextRequest) {
             }
             usedSheetNames.add(sheetName);
             otherSheet = workbook.addWorksheet(sheetName);
-            setupSheetColumns(otherSheet);
+            setupSheetColumns(otherSheet, selectedCustomFields);
           }
           return otherSheet;
         };
@@ -638,36 +759,13 @@ export async function GET(req: NextRequest) {
           const sheet = allowedSet.has(organization)
             ? getOrganizationSheet(organization)
             : getOtherSheet();
-          const row = sheet.addRow({
-            name_prefix: a.name_prefix ?? '',
-            full_name: a.full_name ?? '',
-            phone: a.phone ?? '',
-            organization: a.organization ?? '',
-            job_position: formatJobPosition(a.job_position ?? null),
-            province: a.province ?? '',
-            region: a.region ?? '',
-            food_type: formatFoodType(a.food_type ?? null),
-            coordinator_prefix: a.coordinator_prefix_other ?? '',
-            coordinator_name: a.coordinator_name ?? '',
-            coordinator_phone: a.coordinator_phone ?? '',
-            hotel_name: a.hotel_name ?? '',
-            travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
-            travel_other: a.travel_other ?? '',
-            checkin_status: formatCheckinStatus(a.checked_in_at),
-            checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
-            checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
-            checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
-            slip: '',
-            ticket_token: a.ticket_token ?? '',
-          });
-
-          setSlipLink(row.getCell('slip'), a.slip_url, a.province);
+          addAttendeeRow(sheet, a, selectedCustomFields);
         }
       }
 
       if (workbook.worksheets.length === 0) {
         const sheet = workbook.addWorksheet(sanitizeSheetName(SHEET_NAME_EXPORT));
-        setupSheetColumns(sheet);
+        setupSheetColumns(sheet, selectedCustomFields);
       }
 
       const fileArrayBuffer = await workbook.xlsx.writeBuffer();
@@ -689,12 +787,12 @@ export async function GET(req: NextRequest) {
     }
 
     const centralSheet = workbook.addWorksheet(sanitizeSheetName(SHEET_NAME_CENTRAL));
-    setupSheetColumns(centralSheet);
+    setupSheetColumns(centralSheet, selectedCustomFields);
 
     const regionSheets: Record<string, ExcelJS.Worksheet> = {};
     for (let r = 1; r <= 9; r += 1) {
       const sheet = workbook.addWorksheet(sanitizeSheetName(`${SHEET_NAME_REGION_PREFIX} ${r}`));
-      setupSheetColumns(sheet);
+      setupSheetColumns(sheet, selectedCustomFields);
       regionSheets[String(r)] = sheet;
     }
 
@@ -702,7 +800,7 @@ export async function GET(req: NextRequest) {
     const getOtherSheet = () => {
       if (!otherSheet) {
         otherSheet = workbook.addWorksheet(sanitizeSheetName(SHEET_NAME_OTHER));
-        setupSheetColumns(otherSheet);
+        setupSheetColumns(otherSheet, selectedCustomFields);
       }
       return otherSheet;
     };
@@ -719,30 +817,7 @@ export async function GET(req: NextRequest) {
         targetSheet = getOtherSheet();
       }
 
-      const row = targetSheet.addRow({
-        name_prefix: a.name_prefix ?? '',
-        full_name: a.full_name ?? '',
-        phone: a.phone ?? '',
-        organization: a.organization ?? '',
-        job_position: formatJobPosition(a.job_position ?? null),
-        province: a.province ?? '',
-        region: a.region ?? '',
-        food_type: formatFoodType(a.food_type ?? null),
-        coordinator_prefix: a.coordinator_prefix_other ?? '',
-        coordinator_name: a.coordinator_name ?? '',
-        coordinator_phone: a.coordinator_phone ?? '',
-        hotel_name: a.hotel_name ?? '',
-        travel_mode: formatTravelMode(a.travel_mode ?? null, a.travel_other ?? null),
-        travel_other: a.travel_other ?? '',
-        checkin_status: formatCheckinStatus(a.checked_in_at),
-        checkin_round1_at: formatCheckinTime(a.checkin_round1_at),
-        checkin_round2_at: formatCheckinTime(a.checkin_round2_at),
-        checkin_round3_at: formatCheckinTime(a.checkin_round3_at),
-        slip: '',
-        ticket_token: a.ticket_token ?? '',
-      });
-
-      setSlipLink(row.getCell('slip'), a.slip_url, a.province);
+      addAttendeeRow(targetSheet, a, selectedCustomFields);
     }
 
     const fileArrayBuffer = await workbook.xlsx.writeBuffer();
