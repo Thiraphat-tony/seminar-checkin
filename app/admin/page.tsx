@@ -17,6 +17,7 @@ type AdminPageProps = {
   searchParams: Promise<{
     q?: string;
     status?: string;
+    slip?: string;
     region?: string;
     organization?: string;
     province?: string;
@@ -52,6 +53,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   // --- Filter params ---
   const keyword = (sp.q ?? '').trim().toLowerCase();
   const status = sp.status ?? 'all';
+  const slipStatus =
+    sp.slip === 'attached' || sp.slip === 'missing' ? sp.slip : 'all';
   const regionFilter = (sp.region ?? '').trim();
   const regionFilterNum =
     regionFilter && !Number.isNaN(Number(regionFilter)) ? Number(regionFilter) : null;
@@ -89,6 +92,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }
     if (status === 'checked') q = q.filter('checked_in_at', 'not.is', null);
     else if (status === 'unchecked') q = q.filter('checked_in_at', 'is', null);
+    if (slipStatus === 'attached') q = q.not('slip_url', 'is', null);
+    else if (slipStatus === 'missing') q = q.filter('slip_url', 'is', null);
     if (regionFilterNum !== null) q = q.eq('region', regionFilterNum);
     if (provinceFilter) q = q.eq('province', provinceFilter);
     if (organizationFilter) q = q.eq('organization', organizationFilter);
@@ -163,16 +168,28 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   } else if (status === 'unchecked') {
     filterOptionsQuery = filterOptionsQuery.filter('checked_in_at', 'is', null);
   }
+  if (slipStatus === 'attached') {
+    filterOptionsQuery = filterOptionsQuery.not('slip_url', 'is', null);
+  } else if (slipStatus === 'missing') {
+    filterOptionsQuery = filterOptionsQuery.filter('slip_url', 'is', null);
+  }
   if (staffCourtId) {
     filterOptionsQuery = filterOptionsQuery.eq('court_id', staffCourtId);
   }
+
+  // RPC summary currently does not support slip-status filtering.
+  // When slip filter is active, use fallback count queries so totals stay accurate.
+  const summaryQueryPromise =
+    slipStatus === 'all'
+      ? supabase.rpc('attendee_summary_counts', summaryParams).single()
+      : Promise.resolve({ data: null, error: null });
 
   const [
     { data: summaryDataRaw, error: summaryError },
     { data, error },
     { data: filterOptionRowsRaw, error: filterOptionsError },
   ] = await Promise.all([
-    supabase.rpc('attendee_summary_counts', summaryParams).single(),
+    summaryQueryPromise,
     dataQuery,
     filterOptionsQuery,
   ]);
@@ -452,6 +469,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <AdminFilters
               keyword={keyword}
               status={status}
+              slipStatus={slipStatus}
               regionFilter={regionFilter}
               organizationOptions={effectiveOrganizationOptions}
               provinceOptions={effectiveProvinceOptions}

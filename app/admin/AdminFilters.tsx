@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 type AdminFiltersProps = {
   keyword: string;
   status: string;
+  slipStatus: string;
   regionFilter: string;
   organizationOptions: string[];
   provinceOptions: string[];
@@ -19,6 +20,7 @@ type AdminFiltersProps = {
 export default function AdminFilters({
   keyword,
   status,
+  slipStatus,
   regionFilter,
   organizationOptions,
   provinceOptions,
@@ -29,6 +31,7 @@ export default function AdminFilters({
   const searchParams = useSearchParams();
   const [keywordValue, setKeywordValue] = useState(keyword);
   const [statusValue, setStatusValue] = useState(status);
+  const [slipStatusValue, setSlipStatusValue] = useState(slipStatus);
   const [regionValue, setRegionValue] = useState(regionFilter);
   const [organizationValueState, setOrganizationValueState] = useState(organizationValue);
   const [provinceValueState, setProvinceValueState] = useState(provinceValue);
@@ -37,14 +40,16 @@ export default function AdminFilters({
   useEffect(() => {
     setKeywordValue(keyword);
     setStatusValue(status);
+    setSlipStatusValue(slipStatus);
     setRegionValue(regionFilter);
     setOrganizationValueState(organizationValue);
     setProvinceValueState(provinceValue);
-  }, [keyword, status, regionFilter, organizationValue, provinceValue]);
+  }, [keyword, status, slipStatus, regionFilter, organizationValue, provinceValue]);
 
   const pushWithFilters = (next?: Partial<{
     keyword: string;
     status: string;
+    slipStatus: string;
     region: string;
     province: string;
     organization: string;
@@ -52,6 +57,7 @@ export default function AdminFilters({
     const merged = {
       keyword: keywordValue,
       status: statusValue,
+      slipStatus: slipStatusValue,
       region: regionValue,
       province: provinceValueState,
       organization: organizationValueState,
@@ -71,6 +77,12 @@ export default function AdminFilters({
       params.set('status', merged.status);
     } else {
       params.delete('status');
+    }
+
+    if (merged.slipStatus) {
+      params.set('slip', merged.slipStatus);
+    } else {
+      params.delete('slip');
     }
 
     if (merged.region) {
@@ -199,6 +211,20 @@ export default function AdminFilters({
             <option value="all">ทั้งหมด</option>
             <option value="checked">ลงทะเบียนแล้ว</option>
             <option value="unchecked">ยังไม่ลงทะเบียน</option>
+          </select>
+        </div>
+
+        <div className="admin-filters__inline-group">
+          <label className="admin-filters__label">สถานะสลิป</label>
+          <select
+            name="slip"
+            value={slipStatusValue}
+            className="admin-filters__select"
+            onChange={(e) => setSlipStatusValue(e.target.value)}
+          >
+            <option value="all">ทั้งหมด</option>
+            <option value="attached">แนบสลิปแล้ว</option>
+            <option value="missing">ยังไม่แนบสลิป</option>
           </select>
         </div>
 
