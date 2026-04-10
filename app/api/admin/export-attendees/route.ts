@@ -341,6 +341,12 @@ type CustomExportFieldKey =
   | 'checkin_status'
   | 'food_type';
 
+const SEQUENCE_COLUMN: SheetColumnDefinition = {
+  header: 'ลำดับที่',
+  key: 'sequence',
+  width: 10,
+};
+
 const DEFAULT_EXPORT_COLUMNS: SheetColumnDefinition[] = [
   { header: 'คำนำหน้า', key: 'name_prefix', width: 12 },
   { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
@@ -442,9 +448,10 @@ function setupSheetColumns(
   sheet: ExcelJS.Worksheet,
   selectedCustomFields: CustomExportFieldKey[] | null,
 ) {
-  const columns = selectedCustomFields
+  const baseColumns = selectedCustomFields
     ? selectedCustomFields.map((fieldKey) => CUSTOM_EXPORT_COLUMNS[fieldKey])
     : DEFAULT_EXPORT_COLUMNS;
+  const columns = [SEQUENCE_COLUMN, ...baseColumns];
   sheet.columns = columns.map((column) => ({ ...column }));
 
   const headerRow = sheet.getRow(1);
@@ -466,6 +473,7 @@ function addAttendeeRow(
       rowValues[fieldKey] = CUSTOM_EXPORT_VALUE_GETTERS[fieldKey](attendee);
     }
     const row = sheet.addRow(rowValues);
+    row.getCell('sequence').value = row.number - 1;
     if (selectedCustomFields.includes('slip')) {
       setSlipLink(row.getCell('slip'), attendee.slip_url, attendee.province);
     }
@@ -495,6 +503,7 @@ function addAttendeeRow(
     ticket_token: attendee.ticket_token ?? '',
   });
 
+  row.getCell('sequence').value = row.number - 1;
   setSlipLink(row.getCell('slip'), attendee.slip_url, attendee.province);
 }
 
