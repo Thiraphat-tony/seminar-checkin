@@ -13,6 +13,11 @@ export default function ProfileFormClient({ initialCourtName }: Props) {
   // email (read-only)
   const [email, setEmail] = useState<string>('');
 
+  // editable fields
+  const [fullName, setFullName] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +32,6 @@ export default function ProfileFormClient({ initialCourtName }: Props) {
   const [pwError, setPwError] = useState<string | null>(null);
 
   useEffect(() => {
-    // load current user email
     let mounted = true;
     (async () => {
       try {
@@ -35,6 +39,16 @@ export default function ProfileFormClient({ initialCourtName }: Props) {
         const { data } = await supabase.auth.getUser();
         if (!mounted) return;
         setEmail(data?.user?.email ?? '');
+
+        // Load profile data
+        const profileRes = await fetch('/api/profile');
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          if (mounted) {
+            setFullName(profileData.full_name || '');
+            setPhone(profileData.phone || '');
+          }
+        }
       } catch (e) {
         // ignore — leave email blank
       }
@@ -44,7 +58,40 @@ export default function ProfileFormClient({ initialCourtName }: Props) {
     };
   }, []);
 
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+    setError(null);
 
+    if (!fullName.trim()) {
+      setError('กรุณากรอกชื่อ-นามสกุล');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName, phone }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || 'ไม่สามารถบันทึกข้อมูลได้');
+        setLoading(false);
+        return;
+      }
+
+      setMessage('บันทึกข้อมูลเรียบร้อยแล้ว');
+    } catch (err: any) {
+      setError(err?.message || 'ไม่สามารถบันทึกข้อมูลได้');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,14 +167,43 @@ export default function ProfileFormClient({ initialCourtName }: Props) {
         <div className="profile-value">{courtName || 'ไม่ระบุ'}</div>
       </div>
 
-      {/* Email: read-only display */}
-      <div className="profile-readonly">
-        <label className="profile-label">อีเมล (สำหรับการล็อกอิน)</label>
-        <div className="profile-value">{email || '-'}</div>
-      </div>
+      <hr style={{ margin: '1rem 0' }} />
+
+      {/* Editable Profile Form */}
+      <form className="profile-form" onSubmit={handleUpdateProfile}>
+        <label className="profile-label">ข้อมูลส่วนตัว</label>
+
+        <input
+          className="profile-input"
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="ชื่อ-นามสกุล"
+          required
+        />
+
+        <input
+          className="profile-input"
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="เบอร์โทร (10 หลัก)"
+          maxLength={10}
+        />
+
+        <div className="profile-actions">
+          <button className="profile-btn" type="submit" disabled={loading}>
+            {loading ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+          </button>
+        </div>
+
+        {message && <div className="profile-success">{message}</div>}
+        {error && <div className="profile-error">{error}</div>}
+      </form>
 
       <hr style={{ margin: '1rem 0' }} />
 
+      {/* Password Change Form */}
       <form className="profile-form" onSubmit={handleChangePassword}>
         <label className="profile-label">เปลี่ยนรหัสผ่าน</label>
 

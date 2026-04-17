@@ -200,6 +200,14 @@ export default function AdminAttendeeTableClient({
           >
             แก้ไขรายการที่เลือก
           </button>
+          <button
+            type="button"
+            className="admin-table__bulkbtn admin-table__bulkbtn--secondary"
+            onClick={() => router.push('/admin/coordinator-edit')}
+            title="แก้ไขข้อมูลผู้ประสานงานสำหรับศาลของคุณ"
+          >
+            แก้ไขข้อมูลผู้ประสานงาน
+          </button>
         </div>
       </div>
 
@@ -325,52 +333,69 @@ export default function AdminAttendeeTableClient({
                     <details>
                       <summary className="admin-link-edit">จัดการ</summary>
 
-                      <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                        <a
-                          href={`/admin/attendee/${attendee.ticket_token}`}
-                          className="admin-link-edit"
-                        >
-                          แก้ไขข้อมูล
-                        </a>
+                      <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+                        {/* กลุ่ม 1: จัดการข้อมูล */}
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', marginBottom: 6 }}>
+                            📝 จัดการข้อมูล
+                          </div>
+                          <div style={{ display: 'grid', gap: 6 }}>
+                            <a
+                              href={`/admin/attendee/${attendee.ticket_token}`}
+                              className="admin-link-edit"
+                            >
+                              แก้ไขข้อมูล
+                            </a>
 
-                        {hasSlip ? (
-                          <a
-                            href={attendee.slip_url ?? '#'}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="admin-link-edit"
-                          >
-                            ดูสลิป
-                          </a>
-                        ) : (
-                          <span className="admin-pill admin-pill--muted">ไม่มีสลิป</span>
-                        )}
+                            {hasSlip ? (
+                              <a
+                                href={attendee.slip_url ?? '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="admin-link-edit"
+                              >
+                                ดูสลิป
+                              </a>
+                            ) : (
+                              <span className="admin-pill admin-pill--muted">ไม่มีสลิป</span>
+                            )}
 
-                        {canForceCheckin && (isChecked ? (
-                          <ForceCheckinButton
-                            attendeeId={attendee.id}
-                            action="uncheckin"
-                            label="ยกเลิกลงทะเบียน"
-                            isCheckedIn={isChecked}
-                            hasSlip={hasSlip}
-                          />
-                        ) : (
-                          <ForceCheckinButton
-                            attendeeId={attendee.id}
-                            action="checkin"
-                            label="ลงทะเบียน"
-                            isCheckedIn={isChecked}
-                            hasSlip={hasSlip}
-                          />
-                        ))}
+                            {canForceCheckin && (isChecked ? (
+                              <ForceCheckinButton
+                                attendeeId={attendee.id}
+                                action="uncheckin"
+                                label="ยกเลิกลงทะเบียน"
+                                isCheckedIn={isChecked}
+                                hasSlip={hasSlip}
+                              />
+                            ) : (
+                              <ForceCheckinButton
+                                attendeeId={attendee.id}
+                                action="checkin"
+                                label="ลงทะเบียน"
+                                isCheckedIn={isChecked}
+                                hasSlip={hasSlip}
+                              />
+                            ))}
 
-                        {hasSlip ? (
-                          <AdminSlipClearButton attendeeId={attendee.id} />
-                        ) : (
-                          <AdminSlipUploadButton attendeeId={attendee.id} />
-                        )}
+                            {hasSlip ? (
+                              <AdminSlipClearButton attendeeId={attendee.id} />
+                            ) : (
+                              <AdminSlipUploadButton attendeeId={attendee.id} />
+                            )}
+                          </div>
+                        </div>
 
-                        <AdminDeleteButton attendeeId={attendee.id} fullName={attendee.full_name} />
+                        {/* Divider */}
+                        <hr style={{ margin: '0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
+
+                        {/* กลุ่ม 2: ลบข้อมูล */}
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#dc2626', marginBottom: 6 }}>
+                            🗑️ ลบข้อมูล
+                          </div>
+                          <AdminDeleteButton attendeeId={attendee.id} fullName={attendee.full_name} />
+                        </div>
                       </div>
                     </details>
                   </td>

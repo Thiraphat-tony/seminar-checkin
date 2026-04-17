@@ -4,15 +4,23 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserClient } from "@/lib/supabaseBrowser";
+import { writeRegistrationStatusCache } from "@/lib/registrationClientCache";
 type CourtOption = {
   id: string;
   court_name: string;
   max_staff: number | null;
 };
 
-function courtIdToEmail(courtId: string, slot = 0) {
-  return slot > 0 ? `${courtId}+${slot}@staff.local` : `${courtId}@staff.local`;
-}
+type StaffLoginResponse =
+  | {
+      ok: true;
+      session: {
+        accessToken: string;
+        refreshToken: string;
+        user: { id: string; email: string | null };
+      };
+    }
+  | { ok: false; message?: string };
 
 export default function LoginPage() {
   const router = useRouter();
@@ -118,7 +126,7 @@ export default function LoginPage() {
       setCourtsError("");
 
       try {
-        const res = await fetch("/api/courts", { cache: "no-store" });
+        const res = await fetch("/api/courts");
         const payload = await res.json().catch(() => null);
 
         if (!res.ok || !payload?.ok) {
@@ -127,9 +135,13 @@ export default function LoginPage() {
 
         const list = Array.isArray(payload.courts) ? payload.courts : [];
         if (active) setCourts(list);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (active) {
-          setCourtsError(err?.message || "โหลดรายชื่อศาลไม่สำเร็จ");
+          const message =
+            err instanceof Error && err.message
+              ? err.message
+              : "Failed to load courts";
+          setCourtsError(message);
         }
       } finally {
         if (active) setCourtsLoading(false);
@@ -155,16 +167,19 @@ export default function LoginPage() {
     }
   }, []);
 
-  const checkStaffExists = async (courtId: string) => {
+  const syncRegistrationCache = async (userId: string) => {
     try {
-      const res = await fetch(`/api/staff/exists?court_id=${encodeURIComponent(courtId)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch("/api/registeruser", { method: "GET", cache: "no-store" });
       const payload = await res.json().catch(() => null);
-      if (!res.ok || !payload?.ok) return null;
-      return Boolean(payload.exists);
+      if (!res.ok || !payload?.ok) return;
+
+      const hasRegistration = Boolean(payload.hasRegistration);
+      writeRegistrationStatusCache(userId, hasRegistration);
+      window.dispatchEvent(
+        new CustomEvent("registration:completed", { detail: { hasRegistration } }),
+      );
     } catch {
-      return null;
+      // ignore cache sync failures
     }
   };
 
@@ -219,34 +234,19 @@ export default function LoginPage() {
 
     try {
       const trimmedPassword = password.trim();
-      const baseEmail = courtIdToEmail(selectedCourt.id, 0);
-      let signInData = await supabase.auth.signInWithPassword({
-        email: baseEmail,
-        password: trimmedPassword,
+      const loginRes = await fetch("/api/staff/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courtId: selectedCourt.id,
+          password: trimmedPassword,
+        }),
       });
 
-      let { data, error: signInErr } = signInData;
-      const maxStaffSlots = Math.max(1, selectedCourt.max_staff ?? 1);
-
-      if ((signInErr || !data.session) && maxStaffSlots > 1) {
-        for (let slot = 1; slot < maxStaffSlots; slot += 1) {
-          const altEmail = courtIdToEmail(selectedCourt.id, slot);
-          signInData = await supabase.auth.signInWithPassword({
-            email: altEmail,
-            password: trimmedPassword,
-          });
-
-          if (!signInData.error && signInData.data.session) {
-            data = signInData.data;
-            signInErr = null;
-            break;
-          }
-        }
-      }
-
-      if (signInErr || !data.session) {
-        const exists = await checkStaffExists(selectedCourt.id);
-        if (exists === false) {
+      const loginPayload = (await loginRes.json().catch(() => null)) as StaffLoginResponse | null;
+      if (!loginRes.ok || !loginPayload || !loginPayload.ok) {
+        const code = loginPayload && "message" in loginPayload ? loginPayload.message : "";
+        if (code === "STAFF_NOT_FOUND") {
           setError("ยังไม่ได้สมัครเจ้าหน้าที่ กรุณาสมัครก่อน");
         } else {
           setError("ศาลหรือรหัสผ่านไม่ถูกต้อง");
@@ -255,10 +255,25 @@ export default function LoginPage() {
         return;
       }
 
+      const { accessToken, refreshToken, user } = loginPayload.session;
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (setSessionError) {
+        setError("ไม่สามารถเริ่มเซสชันได้");
+        setLoading(false);
+        return;
+      }
+
       try {
-        document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600; SameSite=Lax`;
+        document.cookie = `sb-access-token=${accessToken}; path=/; max-age=3600; SameSite=Lax`;
       } catch (e) {
         void e;
+      }
+
+      if (user?.id) {
+        void syncRegistrationCache(user.id);
       }
 
       router.push("/");
@@ -425,3 +440,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

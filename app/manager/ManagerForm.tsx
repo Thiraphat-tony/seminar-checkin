@@ -148,7 +148,7 @@ export default function ManagerForm() {
       setCourtsError('');
 
       try {
-        const res = await fetch('/api/courts', { cache: 'no-store' });
+        const res = await fetch('/api/courts');
         const payload = await res.json().catch(() => null);
         if (!res.ok || !payload?.ok) {
           throw new Error(payload?.error || 'โหลดรายชื่อศาลไม่สำเร็จ');
@@ -230,10 +230,13 @@ export default function ManagerForm() {
       }
     };
 
-    loadStaffOptions();
+    const debounceTimer = setTimeout(() => {
+      void loadStaffOptions();
+    }, 400);
 
     return () => {
       active = false;
+      clearTimeout(debounceTimer);
     };
   }, [selectedCourt?.id, passphrase, courtsLoading, courtsError]);
 

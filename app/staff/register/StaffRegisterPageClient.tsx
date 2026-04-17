@@ -52,7 +52,7 @@ export default function StaffRegisterPage() {
       setCourtsError("");
 
       try {
-        const res = await fetch("/api/courts", { cache: "no-store" });
+        const res = await fetch("/api/courts");
         const payload = await res.json().catch(() => null);
         if (!res.ok || !payload?.ok) {
           throw new Error(payload?.error || "โหลดรายชื่อศาลไม่สำเร็จ");

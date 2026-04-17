@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let singletonClient: SupabaseClient | null = null;
@@ -13,13 +12,10 @@ export function createServerClient(): SupabaseClient {
     throw new Error("Supabase environment variables are not set");
   }
 
-  // ถ้าอยากใช้ cookies ในอนาคตยังเรียก cookies() ได้จากตรงนี้
-  const cookieStore = cookies();
-  void cookieStore; // ป้องกัน unused variable warning
-
   singletonClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
-      persistSession: false, // เหมาะกับ server-side
+      persistSession: false,
+      autoRefreshToken: false,
     },
   });
 

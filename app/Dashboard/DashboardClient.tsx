@@ -5,8 +5,6 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { maskPhone } from '@/lib/maskPhone';
 import './Dashboard.css';
 
-export const dynamic = 'force-dynamic';
-
 type AttendeeRow = {
   id: string;
   name_prefix: string | null;
@@ -57,9 +55,13 @@ export default function DashboardPage() {
         if (!isMounted) return;
         setSummary(payload.data);
         setError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isMounted) return;
-        setError(err?.message || 'โหลดข้อมูลไม่สำเร็จ');
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Failed to load dashboard data';
+        setError(message);
       } finally {
         inFlight.current = false;
         if (isMounted) setLoading(false);
@@ -423,3 +425,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

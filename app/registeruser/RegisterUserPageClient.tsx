@@ -278,7 +278,7 @@ export default function RegisterUserPage() {
       setCourtsError('');
 
       try {
-        const res = await fetch('/api/courts', { cache: 'no-store' });
+        const res = await fetch('/api/courts');
         const payload = await res.json().catch(() => null);
 
         if (!res.ok || !payload?.ok) {
@@ -992,18 +992,45 @@ export default function RegisterUserPage() {
                 disabled={submitting}
               />
 
-              <div className="registeruser-actions">
-                <button
-                  type="button"
-                  className="registeruser-button"
-                  onClick={goToFormCount}
-                  disabled={submitting}
-                >
-                  {completed
-                    ? t('แก้ไข', 'Edit')
-                    : t('บันทึกจำนวนผู้เข้าร่วม', 'Save participant count')}
-                </button>
-              </div>
+              {!completed ? (
+                <div className="registeruser-actions">
+                  <button
+                    type="button"
+                    className="registeruser-button"
+                    onClick={goToFormCount}
+                    disabled={submitting}
+                  >
+                    {t('บันทึกจำนวนผู้เข้าร่วม', 'Save participant count')}
+                  </button>
+                </div>
+              ) : (
+                <div className="registeruser-actions">
+                  <select
+                    className="registeruser-input"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === 'edit') {
+                        goToFormCount();
+                      } else if (value === 'add') {
+                        router.push('/registeruser/add');
+                      }
+                      e.target.value = '';
+                    }}
+                    disabled={submitting}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      {t('— เลือกการดำเนินการ —', '— Select action —')}
+                    </option>
+                    <option value="edit">
+                      {t('📝 แก้ไขข้อมูลผู้เข้าร่วม', '📝 Edit participant data')}
+                    </option>
+                    <option value="add">
+                      {t('➕ เพิ่มผู้เข้าร่วม', '➕ Add participants')}
+                    </option>
+                  </select>
+                </div>
+              )}
 
               <p className="registeruser-help">
                 {t(

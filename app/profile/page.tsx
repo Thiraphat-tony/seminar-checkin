@@ -19,10 +19,6 @@ export default async function ProfilePage() {
       <div className="profile-card">
         <h1 className="profile-title">โปรไฟล์ผู้ใช้งาน</h1>
 
-        <div className="profile-meta">
-          <div><strong>อีเมล:</strong> {user?.email ?? '-'}</div>
-        </div>
-
         <ProfileFormClient
           initialCourtName={courtName}
         />

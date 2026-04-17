@@ -6,6 +6,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/supabaseBrowser';
+import {
+  clearRegistrationStatusCache,
+  readRegistrationStatusCache,
+  writeRegistrationStatusCache,
+} from '@/lib/registrationClientCache';
 import './Navbar.css';
 
 const navLinks = [
@@ -45,6 +50,14 @@ function getDisplayNameFromEmail(email?: string | null) {
 }
 
 type CourtRelation = { court_name: string | null } | { court_name: string | null }[] | null;
+type SessionUser = { id: string; email?: string | null };
+type SessionLike = { user: SessionUser | null } | null | undefined;
+type RegistrationEventDetail = { hasRegistration?: boolean };
+type StaffRow = {
+  role: string | null;
+  court_id: string | null;
+  courts: CourtRelation;
+};
 
 function getCourtNameFromRelation(courts: CourtRelation): string {
   if (!courts) return '';
@@ -61,50 +74,34 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
-  const [canManageEvent, setCanManageEvent] = useState(false);
-  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const supabase = useMemo<SupabaseClient | null>(() => {
     try {
       return getBrowserClient();
     } catch {
-      return null as any;
+      return null;
     }
   }, []);
+  const currentUserIdRef = useRef<string | null>(null);
 
-  const refreshRegistrationStatus = useCallback(async (preferTrue?: boolean) => {
-    if (preferTrue) {
-      setIsRegistered(true);
-      return;
-    }
-    try {
-      const res = await fetch('/api/registeruser', { method: 'GET', cache: 'no-store' });
-      const payload = await res.json().catch(() => null);
-      if (!res.ok || !payload?.ok) return;
-      setIsRegistered(Boolean(payload.hasRegistration));
-    } catch {
-      // ignore
-    }
-  }, []);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [canManageEvent, setCanManageEvent] = useState(false);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(() => supabase !== null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
+    if (!supabase) return;
 
     let active = true;
 
-    const applySession = async (session: any) => {
+    const applySession = async (session: SessionLike) => {
       const user = session?.user;
-      if (!user) {
+      if (!user?.id) {
         if (!active) return;
+        currentUserIdRef.current = null;
         setIsLoggedIn(false);
         setUserName(null);
         setCanManageEvent(false);
@@ -113,10 +110,11 @@ export default function Navbar() {
       }
 
       if (!active) return;
+      currentUserIdRef.current = user.id;
       setIsLoggedIn(true);
       setUserName(getDisplayNameFromEmail(user.email));
       setCanManageEvent(false);
-      setIsRegistered(null);
+      setIsRegistered(readRegistrationStatusCache(user.id));
 
       try {
         const { data: staff } = await supabase
@@ -126,27 +124,22 @@ export default function Navbar() {
           .maybeSingle();
 
         if (!active) return;
-        if (staff) {
-          let courtName = getCourtNameFromRelation(
-            (staff as { courts: CourtRelation }).courts ?? null,
-          );
-          if (!courtName && staff.court_id) {
+        const row = (staff ?? null) as StaffRow | null;
+        if (row) {
+          let courtName = getCourtNameFromRelation(row.courts ?? null);
+          if (!courtName && row.court_id) {
             const { data: court } = await supabase
               .from('courts')
               .select('court_name')
-              .eq('id', staff.court_id)
+              .eq('id', row.court_id)
               .maybeSingle();
             courtName = (court?.court_name ?? '').trim();
           }
           setUserName(courtName || getDisplayNameFromEmail(user.email));
-          setCanManageEvent(staff.role === 'super_admin');
+          setCanManageEvent(row.role === 'super_admin');
         }
       } catch {
         // ignore; fallback to email display
-      }
-
-      if (active) {
-        void refreshRegistrationStatus();
       }
     };
 
@@ -166,25 +159,22 @@ export default function Navbar() {
       active = false;
       authListener?.subscription.unsubscribe();
     };
-  }, [supabase, refreshRegistrationStatus]);
+  }, [supabase]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent)?.detail;
-      if (detail?.hasRegistration === true) {
-        setIsRegistered(true);
-        return;
+      const detail = (event as CustomEvent<RegistrationEventDetail>).detail;
+      if (typeof detail?.hasRegistration === 'boolean') {
+        setIsRegistered(detail.hasRegistration);
+        if (currentUserIdRef.current) {
+          writeRegistrationStatusCache(currentUserIdRef.current, detail.hasRegistration);
+        }
       }
-      void refreshRegistrationStatus();
     };
     window.addEventListener('registration:completed', handler);
     return () => window.removeEventListener('registration:completed', handler);
-  }, [refreshRegistrationStatus]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -207,8 +197,15 @@ export default function Navbar() {
   const handleLogout = async () => {
     if (!supabase) return;
 
+    const currentUserId = currentUserIdRef.current;
     await supabase.auth.signOut();
+    if (currentUserId) {
+      clearRegistrationStatusCache(currentUserId);
+    }
+    currentUserIdRef.current = null;
     document.cookie = 'sb-access-token=; path=/; max-age=0';
+    setMenuOpen(false);
+    setIsRegistered(null);
 
     router.push('/login');
   };
@@ -222,6 +219,7 @@ export default function Navbar() {
 
   const handleNavClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+      setMenuOpen(false);
       if (href === '/registeruser' && !isLoggedIn) {
         event.preventDefault();
         showNotice('กรุณาเข้าสู่ระบบหรือสมัครเจ้าหน้าที่ก่อนนะครับ');
@@ -297,7 +295,9 @@ export default function Navbar() {
             <>
               {isLoggedIn ? (
                 <div className="navbar__user">
-  <span className="navbar__username">👤 {userName}</span>
+  <span className="navbar__username">
+    👤 {userName}
+  </span>
 
   <button onClick={handleLogout} className="navbar__logout-btn">
     ออกจากระบบ
@@ -305,14 +305,16 @@ export default function Navbar() {
 
   <Link
     href="/profile"
+    onClick={() => setMenuOpen(false)}
     className="navbar__profile-btn"
     style={{
-      marginRight: '10px',
-      padding: '8px 16px',
+      padding: '6px 12px',
       background: '#667eea',
       color: 'white',
       borderRadius: '6px',
       textDecoration: 'none',
+      fontSize: '0.85rem',
+      fontWeight: 600,
     }}
   >
     โปรไฟล์
@@ -320,7 +322,7 @@ export default function Navbar() {
 </div>
 
               ) : (
-                <Link href="/login" className="navbar__login-btn">
+                <Link href="/login" className="navbar__login-btn" onClick={() => setMenuOpen(false)}>
                   🔐 เข้าสู่ระบบ
                 </Link>
               )}
@@ -331,3 +333,4 @@ export default function Navbar() {
     </nav>
   );
 }
+
