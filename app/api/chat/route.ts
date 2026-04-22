@@ -115,7 +115,7 @@ enum → อังกฤษเสมอ  |  region → string เช่น "8"  
 
 export const runtime = 'nodejs';
 
-const MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+const MODEL = process.env.OPENROUTER_MODEL || 'z-ai/glm-4.5-air:free';
 
 export async function POST(request: NextRequest) {
   try {
