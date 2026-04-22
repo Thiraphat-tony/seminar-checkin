@@ -234,6 +234,20 @@ export default function ChatClient() {
     );
   }
 
+  if (!aiEnabled) {
+    return (
+      <div className="chat-page chat-page--closed">
+        <div className="chat-closed-card">
+          <div className="chat-closed__code">AI_CLOSED</div>
+          <h1 className="chat-closed__title">ระบบปิด AI Form Assistant</h1>
+          <p className="chat-closed__subtitle">
+            ขณะนี้ปิดการใช้งาน AI ช่วยกรอกแบบฟอร์มแล้ว หากต้องการใช้งาน กรุณาติดต่อผู้จัดการสัมมนา
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="chat-container">
       <div className="chat-header">

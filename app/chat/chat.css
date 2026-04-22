@@ -212,6 +212,57 @@
   background: #555;
 }
 
+/* AI Closed State */
+.chat-page--closed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(240, 173, 78, 0.14), transparent 60%),
+              radial-gradient(900px 500px at 90% 10%, rgba(102, 126, 234, 0.14), transparent 55%),
+              linear-gradient(135deg, #f5f3ee 0%, #faf8f3 55%, #ffffff 100%);
+  padding: 20px;
+}
+
+.chat-closed-card {
+  width: min(92vw, 680px);
+  background: white;
+  border: 2px solid rgba(240, 173, 78, 0.5);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(139, 92, 56, 0.12);
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.chat-closed__code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px dashed rgba(240, 173, 78, 0.55);
+  background: rgba(240, 173, 78, 0.14);
+  color: #6a3f0f;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+  margin-bottom: 14px;
+}
+
+.chat-closed__title {
+  margin: 0 0 8px;
+  font-size: clamp(1.5rem, 3.2vw, 2.2rem);
+  font-weight: 900;
+  color: #6a3f0f;
+}
+
+.chat-closed__subtitle {
+  margin: 0;
+  color: #6b5d54;
+  line-height: 1.6;
+  font-size: 1.02rem;
+}
+
 @media (max-width: 768px) {
   .chat-bubble {
     max-width: 95%;
