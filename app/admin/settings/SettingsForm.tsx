@@ -8,6 +8,7 @@ type Props = {
   initialRegistrationOpen: boolean;
   initialCheckinOpen: boolean;
   initialCheckinRoundOpen: number;
+  initialAiAssistantEnabled: boolean;
 };
 
 type ApiResponse =
@@ -17,6 +18,7 @@ type ApiResponse =
         registration_open: boolean | null;
         checkin_open: boolean | null;
         checkin_round_open: number | null;
+        ai_assistant_enabled: boolean | null;
       };
     }
   | { ok: false; error?: string };
@@ -27,10 +29,12 @@ export default function SettingsForm({
   initialRegistrationOpen,
   initialCheckinOpen,
   initialCheckinRoundOpen,
+  initialAiAssistantEnabled,
 }: Props) {
   const [registrationOpen, setRegistrationOpen] = useState(initialRegistrationOpen);
   const [checkinOpen, setCheckinOpen] = useState(initialCheckinOpen);
   const [checkinRoundOpen, setCheckinRoundOpen] = useState(initialCheckinRoundOpen);
+  const [aiAssistantEnabled, setAiAssistantEnabled] = useState(initialAiAssistantEnabled);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,7 @@ export default function SettingsForm({
     registrationOpen?: boolean;
     checkinOpen?: boolean;
     checkinRoundOpen?: number;
+    aiAssistantEnabled?: boolean;
   }) => {
     setBusy(true);
     setMessage(null);
@@ -65,10 +70,12 @@ export default function SettingsForm({
       const nextRegistrationOpen = data.event.registration_open !== false;
       const nextCheckinOpen = data.event.checkin_open !== false;
       const nextCheckinRoundOpen = data.event.checkin_round_open ?? 0;
+      const nextAiAssistantEnabled = data.event.ai_assistant_enabled !== false;
 
       setRegistrationOpen(nextRegistrationOpen);
       setCheckinOpen(nextCheckinOpen);
       setCheckinRoundOpen(nextCheckinRoundOpen);
+      setAiAssistantEnabled(nextAiAssistantEnabled);
       setMessage('บันทึกแล้ว');
     } catch (err: any) {
       setError(err?.message ?? 'บันทึกไม่สำเร็จ');
@@ -179,6 +186,40 @@ export default function SettingsForm({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="admin-settings__card"
+          data-open={aiAssistantEnabled ? 'true' : 'false'}
+        >
+          <div className="admin-settings__row">
+            <div className="admin-settings__info">
+              <p className="admin-settings__label">AI Form Assistant</p>
+              <p className="admin-settings__hint">เปิด/ปิดตัวช่วยกรอกแบบฟอร์มโดย AI</p>
+            </div>
+            <div className="admin-settings__status">
+              <span
+                className={
+                  'admin-settings__badge ' +
+                  (aiAssistantEnabled ? 'is-open' : 'is-closed')
+                }
+              >
+                {aiAssistantEnabled ? 'เปิดอยู่' : 'ปิดอยู่'}
+              </span>
+              <button
+                type="button"
+                className="admin-form__button admin-form__button--primary admin-settings__button"
+                onClick={() => updateSettings({ aiAssistantEnabled: !aiAssistantEnabled })}
+                disabled={busy}
+              >
+                {busy
+                  ? 'กำลังบันทึก...'
+                  : aiAssistantEnabled
+                  ? 'ปิด AI Assistant'
+                  : 'เปิด AI Assistant'}
+              </button>
             </div>
           </div>
         </div>

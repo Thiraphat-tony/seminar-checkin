@@ -51,7 +51,7 @@ export default async function AdminSettingsPage() {
 
   const { data: event, error } = await supabase
     .from('events')
-    .select('id, name, registration_open, checkin_open, checkin_round_open')
+    .select('id, name, registration_open, checkin_open, checkin_round_open, ai_assistant_enabled')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -82,6 +82,7 @@ export default async function AdminSettingsPage() {
   const checkinOpen = event.checkin_open !== false;
   const checkinRoundOpen =
     typeof event.checkin_round_open === 'number' ? event.checkin_round_open : 0;
+  const aiAssistantEnabled = event.ai_assistant_enabled !== false;
   const eventName = event.name ?? null;
   const currentUserId = staff?.user_id ?? '';
 
@@ -137,6 +138,7 @@ export default async function AdminSettingsPage() {
           initialRegistrationOpen={registrationOpen}
           initialCheckinOpen={checkinOpen}
           initialCheckinRoundOpen={checkinRoundOpen}
+          initialAiAssistantEnabled={aiAssistantEnabled}
         />
 
         <section className="admin-form__section admin-settings">

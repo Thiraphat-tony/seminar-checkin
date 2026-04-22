@@ -6,6 +6,7 @@ type Body = {
   registrationOpen?: boolean;
   checkinOpen?: boolean;
   checkinRoundOpen?: number;
+  aiAssistantEnabled?: boolean;
 };
 
 export async function POST(req: Request) {
@@ -40,6 +41,9 @@ export async function POST(req: Request) {
     const normalizedRound = Math.max(0, Math.min(3, Math.trunc(body.checkinRoundOpen)));
     updateData.checkin_round_open = normalizedRound;
   }
+  if (typeof body.aiAssistantEnabled === 'boolean') {
+    updateData.ai_assistant_enabled = body.aiAssistantEnabled;
+  }
 
   if (typeof body.checkinOpen === 'boolean' && body.checkinOpen === false) {
     updateData.checkin_round_open = 0;
@@ -53,7 +57,7 @@ export async function POST(req: Request) {
     .from('events')
     .update(updateData)
     .eq('id', eventId)
-    .select('id, registration_open, checkin_open, checkin_round_open')
+    .select('id, registration_open, checkin_open, checkin_round_open, ai_assistant_enabled')
     .maybeSingle();
 
   if (error || !data) {
