@@ -15,6 +15,10 @@ const links = [
     href: '/Dashboard',
     label: 'Dashboard ภาพรวม',
   },
+  {
+    href: '/admin/hotel-summary',
+    label: 'ตัวสรุปยอด',
+  },
 ];
 export default function AdminNav() {
   const pathname = usePathname();
@@ -33,6 +37,8 @@ export default function AdminNav() {
           } else if (link.href === '/Dashboard') {
             // Dashboard active ถ้าอยู่หน้า /Dashboard (เผื่ออนาคตมี /Dashboard/xxx)
             isActive = pathname === '/Dashboard' || pathname.startsWith('/Dashboard/');
+          } else if (link.href === '/admin/hotel-summary') {
+            isActive = pathname === '/admin/hotel-summary' || pathname.startsWith('/admin/hotel-summary/');
           } else {
             isActive = pathname === link.href;
           }
