@@ -214,10 +214,12 @@
 
 /* AI Closed State */
 .chat-page--closed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  max-width: 100% !important;
   background: radial-gradient(1200px 600px at 20% 0%, rgba(240, 173, 78, 0.14), transparent 60%),
               radial-gradient(900px 500px at 90% 10%, rgba(102, 126, 234, 0.14), transparent 55%),
               linear-gradient(135deg, #f5f3ee 0%, #faf8f3 55%, #ffffff 100%);
