@@ -120,7 +120,19 @@ export default function ChatClient() {
   const extractMessage = (apiResponse: string) => {
     try {
       const parsed = JSON.parse(apiResponse);
-      return parsed.message || '';
+      let message = parsed.message || '';
+
+      // Handle double-encoded JSON from AI
+      if (typeof message === 'string' && message.startsWith('{')) {
+        try {
+          const doubleParsed = JSON.parse(message);
+          message = doubleParsed.message || message;
+        } catch (e) {
+          // Not double-encoded, use original
+        }
+      }
+
+      return message;
     } catch (e) {
       console.error('Failed to parse API response:', e);
       return apiResponse;
