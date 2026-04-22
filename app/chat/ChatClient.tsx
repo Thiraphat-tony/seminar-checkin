@@ -20,6 +20,7 @@ export default function ChatClient() {
   const [loading, setLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,6 +61,23 @@ export default function ChatClient() {
 
   const initializeChat = async () => {
     try {
+      const settingsRes = await fetch('/api/event-settings');
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        setAiEnabled(settings.aiAssistantEnabled !== false);
+        if (!settings.aiAssistantEnabled) {
+          setMessages([
+            {
+              id: '0',
+              role: 'assistant',
+              content: 'ขออภัยครับ AI Form Assistant ปิดการใช้งานอยู่ในขณะนี้',
+              displayContent: 'ขออภัยครับ AI Form Assistant ปิดการใช้งานอยู่ในขณะนี้',
+            },
+          ]);
+          return;
+        }
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -248,15 +266,15 @@ export default function ChatClient() {
         <input
           type="text"
           className="chat-input"
-          placeholder="พิมพ์ข้อความของคุณ..."
+          placeholder={aiEnabled ? 'พิมพ์ข้อความของคุณ...' : 'AI Assistant ปิดการใช้งานอยู่'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={loading}
+          disabled={loading || !aiEnabled}
         />
         <button
           type="submit"
           className="chat-send-btn"
-          disabled={loading || !input.trim()}
+          disabled={loading || !input.trim() || !aiEnabled}
         >
           {loading ? '⏳' : '📤'}
         </button>
