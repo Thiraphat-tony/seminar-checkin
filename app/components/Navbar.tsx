@@ -19,7 +19,6 @@ const navLinks = [
   { href: '/Dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/admin/namecards', label: 'Namecard', icon: '🏷️' },
   { href: '/registeruser', label: 'ลงทะเบียน', icon: '✍️' },
-  { href: '/chat', label: 'AI', icon: '🧠' },
 ];
 
 const suratLinks = [
