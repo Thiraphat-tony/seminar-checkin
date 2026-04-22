@@ -71,7 +71,8 @@ export default function ChatClient() {
       if (!response.ok) throw new Error('Failed to initialize chat');
 
       const text = await response.text();
-      const { assistantMessage, formData } = parseResponse(text);
+      const messageContent = extractMessage(text);
+      const { assistantMessage, formData } = parseResponse(messageContent);
 
       setMessages([
         {
@@ -115,6 +116,16 @@ export default function ChatClient() {
     return { assistantMessage: displayContent, formData };
   };
 
+  const extractMessage = (apiResponse: string) => {
+    try {
+      const parsed = JSON.parse(apiResponse);
+      return parsed.message || '';
+    } catch (e) {
+      console.error('Failed to parse API response:', e);
+      return apiResponse;
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -150,7 +161,8 @@ export default function ChatClient() {
       }
 
       const text = await response.text();
-      const { assistantMessage, formData } = parseResponse(text);
+      const messageContent = extractMessage(text);
+      const { assistantMessage, formData } = parseResponse(messageContent);
 
       const assistantMsg: Message = {
         id: `assistant-${Date.now()}`,
