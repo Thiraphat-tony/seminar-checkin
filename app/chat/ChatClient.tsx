@@ -109,6 +109,7 @@ export default function ChatClient() {
 
     const displayContent = text
       .replace(/\[FORMDATA:.*?\]/g, '')
+      .replace(/\n\s*\n/g, '\n')
       .trim();
 
     return { assistantMessage: displayContent, formData };
