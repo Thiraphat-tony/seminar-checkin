@@ -114,6 +114,8 @@ enum → อังกฤษเสมอ  |  region → string เช่น "8"  
 
 export const runtime = 'nodejs';
 
+const MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+
 export async function POST(request: NextRequest) {
   try {
     const { messages } = await request.json();
@@ -143,7 +145,7 @@ export async function POST(request: NextRequest) {
         'X-Title': 'Seminar Check-in Form',
       },
       body: JSON.stringify({
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        model: MODEL,
         messages: [
           {
             role: 'system',
