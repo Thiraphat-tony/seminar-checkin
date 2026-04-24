@@ -80,13 +80,24 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient();
 
-    const { data: attendee } = await supabase
+    const { data: attendee, error: attendeeError } = await supabase
       .from('attendees')
       .select('province')
       .eq('id', attendeeId)
       .single();
 
-    const safeProvince = makeSafeFilename(attendee?.province ?? '');
+    if (attendeeError || !attendee) {
+      console.error('upload-slip: attendee not found', attendeeError);
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'ไม่พบข้อมูลผู้เข้าร่วม อาจถูกลบแล้ว',
+        },
+        { status: 404 }
+      );
+    }
+
+    const safeProvince = makeSafeFilename(attendee.province ?? '');
 
     const safeAttendeeId = attendeeId.replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
     const fileExt = resolveFileExt(file, incomingFileName);

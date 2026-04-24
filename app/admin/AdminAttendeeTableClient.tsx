@@ -9,6 +9,7 @@ import ForceCheckinButton from './ForceCheckinButton';
 import AdminDeleteButton from './AdminDeleteButton';
 import AdminSlipUploadButton from './AdminSlipUploadButton';
 import AdminSlipClearButton from './AdminSlipClearButton';
+import AdminBulkSlipModal from './AdminBulkSlipModal';
 import type { AdminAttendeeRow } from './types';
 
 type AdminAttendeeTableClientProps = {
@@ -102,6 +103,7 @@ export default function AdminAttendeeTableClient({
 }: AdminAttendeeTableClientProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBulkSlipModal, setShowBulkSlipModal] = useState(false);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const attendeeIds = useMemo(() => attendees.map((attendee) => attendee.id), [attendees]);
@@ -199,6 +201,19 @@ export default function AdminAttendeeTableClient({
             }
           >
             แก้ไขรายการที่เลือก
+          </button>
+          <button
+            type="button"
+            className="admin-table__bulkbtn admin-table__bulkbtn--primary"
+            onClick={() => setShowBulkSlipModal(true)}
+            disabled={selectedCount === 0}
+            title={
+              selectedCount === 0
+                ? 'เลือกผู้เข้าร่วมอย่างน้อย 1 รายการ'
+                : `แนบสลิปให้ผู้เข้าร่วม ${selectedCount} รายการ`
+            }
+          >
+            แนบสลิป ({selectedCount} รายการ)
           </button>
           <button
             type="button"
@@ -405,6 +420,18 @@ export default function AdminAttendeeTableClient({
           )}
         </tbody>
       </table>
+
+      {showBulkSlipModal && (
+        <AdminBulkSlipModal
+          selectedIds={selectedIdsOnPage}
+          onClose={() => setShowBulkSlipModal(false)}
+          onSuccess={() => {
+            setShowBulkSlipModal(false);
+            setSelectedIds([]);
+            router.refresh();
+          }}
+        />
+      )}
     </>
   );
 }

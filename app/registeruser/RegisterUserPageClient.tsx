@@ -267,6 +267,15 @@ export default function RegisterUserPage() {
   const [courtsLoading, setCourtsLoading] = useState(true);
   const [courtsError, setCourtsError] = useState('');
 
+  const [showNoSlipConfirm, setShowNoSlipConfirm] = useState(false);
+  const [submitParams, setSubmitParams] = useState<{
+    resolvedCourtId: string;
+    filledParticipants: Participant[];
+    participantSlipFiles: Record<number, File | null>;
+    hasAnyParticipantSlip: boolean;
+    slipFile: File | null;
+  } | null>(null);
+
   const currentOrganizations = useMemo(() => REGION_ORGANIZATIONS[region] ?? [], [region]);
   const hasIndividualSlips = participantSlipCount > 0;
 
@@ -480,6 +489,167 @@ export default function RegisterUserPage() {
     router.push(`/registeruser/form?count=${count}`);
   }
 
+  // ✅ ฟังก์ชันจริงส่งแบบฟอร์ม (ไม่มี validation)
+  async function performSubmit(
+    resolvedCourtId: string,
+    filledParticipants: Participant[],
+    participantSlipFiles: Record<number, File | null>,
+    hasAnyParticipantSlip: boolean,
+    combinedSlipFile: File | null,
+  ) {
+    submittingRef.current = true;
+    try {
+      setSubmitting(true);
+
+      const { normalizePhone, isValidPhone, phoneForStorage } = await import('@/lib/phone');
+      const normCoordinator = normalizePhone(coordinatorPhone);
+      if (!isValidPhone(normCoordinator)) {
+        setErrorMessage(t('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก', 'Coordinator phone number must be 10 digits'));
+        setSubmitting(false);
+        submittingRef.current = false;
+        return;
+      }
+
+      const normalizedParticipants = filledParticipants.map((p) => {
+        const n = phoneForStorage(p.phone);
+
+        const rawHotelName = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
+        const hotelName = rawHotelName === OTHER_HOTEL_VALUE ? '' : rawHotelName;
+
+        const rawPrefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
+        const namePrefix = rawPrefix === OTHER_PREFIX_VALUE ? '' : rawPrefix;
+
+        const rawPositionOther = typeof p.positionOther === 'string' ? p.positionOther.trim() : '';
+        const positionOther = p.position === 'other' ? rawPositionOther : '';
+
+        const travelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
+        const rawTravelOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
+        const travelOther = travelMode === 'other' ? rawTravelOther : '';
+
+        return {
+          ...p,
+          namePrefix,
+          phone: n,
+          hotelName,
+          positionOther,
+          travelMode,
+          travelOther,
+        };
+      });
+
+      const coordinatorPrefixPayload =
+        coordinatorPrefix === OTHER_PREFIX_VALUE ? coordinatorPrefixOther.trim() : coordinatorPrefix.trim();
+
+      const validParticipantSlipEntries = Object.entries(participantSlipFiles)
+        .map(([indexStr, file]) => ({
+          index: Number(indexStr),
+          file,
+        }))
+        .filter(
+          (entry): entry is { index: number; file: File } =>
+            Number.isInteger(entry.index) &&
+            entry.index >= 0 &&
+            entry.index < filledParticipants.length &&
+            entry.file instanceof File,
+        );
+
+      const formData = new FormData();
+      formData.append('organization', organization);
+      formData.append('province', province);
+      formData.append('region', region);
+      formData.append('courtId', resolvedCourtId);
+      formData.append('coordinatorPrefixOther', coordinatorPrefixPayload);
+      formData.append('coordinatorName', coordinatorName);
+      formData.append('coordinatorPhone', phoneForStorage(coordinatorPhone) ?? '');
+      formData.append('totalAttendees', String(filledParticipants.length));
+      formData.append('participants', JSON.stringify(normalizedParticipants));
+      for (const entry of validParticipantSlipEntries) {
+        formData.append(`participantSlip_${entry.index}`, entry.file);
+      }
+      if (!hasAnyParticipantSlip && combinedSlipFile instanceof File && combinedSlipFile.size > 0) {
+        formData.append('slip', combinedSlipFile);
+      }
+
+      console.log('FormData:', {
+        organization,
+        province,
+        region,
+        coordinatorPrefixOther: coordinatorPrefixPayload,
+        coordinatorName,
+        coordinatorPhone: phoneForStorage(coordinatorPhone),
+        totalAttendees: String(filledParticipants.length),
+        hasParticipants: filledParticipants.length > 0,
+        hasCombinedSlip: combinedSlipFile instanceof File && combinedSlipFile.size > 0,
+        participantSlipCount: validParticipantSlipEntries.length,
+      });
+
+      const res = await fetch('/api/registeruser', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        let data: any = null;
+        let errorMsg = 'ไม่สามารถบันทึกข้อมูลได้';
+        try {
+          data = await res.json();
+          errorMsg = data?.message || errorMsg;
+        } catch {
+          errorMsg = `Server error: ${res.status}`;
+        }
+
+        console.error('❌ API Error:', { status: res.status, message: errorMsg, data });
+        alert(`🔴 Error: ${errorMsg}`);
+
+        if (errorMsg === 'REGISTRATION_CLOSED') {
+          setRegistrationClosed(true);
+          return;
+        }
+        if (errorMsg === 'ALREADY_REGISTERED') {
+          setSuccessMessage(
+            t(
+              'ศาลนี้มีข้อมูลลงทะเบียนแล้ว ระบบจะไม่บันทึกซ้ำ หากต้องการแก้ไขข้อมูลกรุณาติดต่อผู้ดูแลระบบ',
+              'This court is already registered. Duplicate submissions are blocked. Please contact an admin if updates are needed.',
+            ),
+          );
+          setCompleted(true);
+          saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
+          clearParticipantSlipFiles();
+          setParticipantSlipCount(0);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
+            );
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        throw new Error(String(errorMsg));
+      }
+
+      await res.json();
+
+      setSuccessMessage(t('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'Registration saved successfully'));
+      setCompleted(true);
+      saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
+      clearParticipantSlipFiles();
+      setParticipantSlipCount(0);
+      try {
+        window.dispatchEvent(
+          new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
+        );
+      } catch {
+        // ignore
+      }
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message ||
+          t('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'Unable to save. Please try again.'),
+      );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
   // ✅ ส่งแบบฟอร์มจริง (หน้านี้)
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -534,7 +704,6 @@ export default function RegisterUserPage() {
       );
     }
 
-    // ✅ แก้ข้อความ error ที่เป็น ????? ให้เป็นไทยชัด ๆ
     const missingPositionOtherIndex = filledParticipants.findIndex((p) => {
       const position = typeof p.position === 'string' ? p.position.trim() : '';
       if (position !== 'other') return false;
@@ -593,137 +762,21 @@ export default function RegisterUserPage() {
     const hasAnyParticipantSlip = validParticipantSlipEntries.length > 0;
     const hasCombinedSlip = slipFile instanceof File && slipFile.size > 0;
 
+    // ✅ ถ้าไม่มีสลีป ให้ถามยืนยัน
     if (!hasAnyParticipantSlip && !hasCombinedSlip) {
-      return setErrorMessage(
-        t(
-          'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ: แนบสลีปรายบุคคลที่ /registeruser/form หรือแนบสลิปรวมในหัวข้อ 3',
-          'Please attach at least one proof: individual slips on /registeruser/form or a combined slip in section 3.',
-        ),
-      );
-    }
-
-    submittingRef.current = true;
-    try {
-      setSubmitting(true);
-
-      // validate coordinator phone
-      const { normalizePhone, isValidPhone, phoneForStorage } = await import('@/lib/phone');
-      const normCoordinator = normalizePhone(coordinatorPhone);
-      if (!isValidPhone(normCoordinator)) {
-      setErrorMessage(t('เบอร์โทรผู้ประสานงานต้องเป็นตัวเลข 10 หลัก', 'Coordinator phone number must be 10 digits'));
-        setSubmitting(false);
-        return;
-      }
-
-      const normalizedParticipants = filledParticipants.map((p) => {
-        const n = phoneForStorage(p.phone);
-
-        const rawHotelName = typeof p.hotelName === 'string' ? p.hotelName.trim() : '';
-        const hotelName = rawHotelName === OTHER_HOTEL_VALUE ? '' : rawHotelName;
-
-        const rawPrefix = typeof p.namePrefix === 'string' ? p.namePrefix.trim() : '';
-        const namePrefix = rawPrefix === OTHER_PREFIX_VALUE ? '' : rawPrefix;
-
-        const rawPositionOther = typeof p.positionOther === 'string' ? p.positionOther.trim() : '';
-        const positionOther = p.position === 'other' ? rawPositionOther : '';
-
-        const travelMode = typeof p.travelMode === 'string' ? p.travelMode.trim() : '';
-        const rawTravelOther = typeof p.travelOther === 'string' ? p.travelOther.trim() : '';
-        const travelOther = travelMode === 'other' ? rawTravelOther : '';
-
-        return {
-          ...p,
-          namePrefix,
-          phone: n,
-          hotelName,
-          positionOther,
-          travelMode,
-          travelOther,
-        };
+      setSubmitParams({
+        resolvedCourtId,
+        filledParticipants,
+        participantSlipFiles,
+        hasAnyParticipantSlip,
+        slipFile,
       });
-
-      const coordinatorPrefixPayload =
-        coordinatorPrefix === OTHER_PREFIX_VALUE ? coordinatorPrefixOther.trim() : coordinatorPrefix.trim();
-
-      const formData = new FormData();
-      formData.append('organization', organization);
-      formData.append('province', province);
-      formData.append('region', region);
-      formData.append('courtId', resolvedCourtId);
-      formData.append('coordinatorPrefixOther', coordinatorPrefixPayload);
-      formData.append('coordinatorName', coordinatorName);
-      formData.append('coordinatorPhone', phoneForStorage(coordinatorPhone) ?? '');
-      formData.append('totalAttendees', String(filledParticipants.length));
-      formData.append('participants', JSON.stringify(normalizedParticipants));
-      for (const entry of validParticipantSlipEntries) {
-        formData.append(`participantSlip_${entry.index}`, entry.file);
-      }
-      if (!hasAnyParticipantSlip && slipFile instanceof File && slipFile.size > 0) {
-        formData.append('slip', slipFile);
-      }
-
-      const res = await fetch('/api/registeruser', { method: 'POST', body: formData });
-
-      if (!res.ok) {
-        let data: any = null;
-        try {
-          data = await res.json();
-        } catch {
-          // ignore
-        }
-        const msg =
-          (data && typeof data === 'object' && 'message' in data && (data as any).message) ||
-          'ไม่สามารถบันทึกข้อมูลได้';
-        if (msg === 'REGISTRATION_CLOSED') {
-          setRegistrationClosed(true);
-          return;
-        }
-        if (msg === 'ALREADY_REGISTERED') {
-          setSuccessMessage(
-            t(
-              'ศาลนี้มีข้อมูลลงทะเบียนแล้ว ระบบจะไม่บันทึกซ้ำ หากต้องการแก้ไขข้อมูลกรุณาติดต่อผู้ดูแลระบบ',
-              'This court is already registered. Duplicate submissions are blocked. Please contact an admin if updates are needed.',
-            ),
-          );
-          setCompleted(true);
-          saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
-          clearParticipantSlipFiles();
-          setParticipantSlipCount(0);
-          try {
-            window.dispatchEvent(
-              new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
-            );
-          } catch {
-            // ignore
-          }
-          return;
-        }
-        throw new Error(String(msg));
-      }
-
-      await res.json();
-
-      setSuccessMessage(t('บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'Registration saved successfully'));
-      setCompleted(true);
-      saveState(clampCount(Number(totalInput)), true, resolvedCourtId);
-      clearParticipantSlipFiles();
-      setParticipantSlipCount(0);
-      try {
-        window.dispatchEvent(
-          new CustomEvent('registration:completed', { detail: { hasRegistration: true } }),
-        );
-      } catch {
-        // ignore
-      }
-    } catch (err: any) {
-      setErrorMessage(
-        err?.message ||
-          t('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'Unable to save. Please try again.'),
-      );
-    } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      setShowNoSlipConfirm(true);
+      return;
     }
+
+    // ✅ ส่งแบบฟอร์ม
+    await performSubmit(resolvedCourtId, filledParticipants, participantSlipFiles, hasAnyParticipantSlip, slipFile);
   }
 
   const organizationSelectValue = useMemo(() => {
@@ -736,6 +789,24 @@ export default function RegisterUserPage() {
     () => getPrefixSelectValue(coordinatorPrefix),
     [coordinatorPrefix],
   );
+
+  async function handleConfirmNoSlip() {
+    if (!submitParams) return;
+    setShowNoSlipConfirm(false);
+    await performSubmit(
+      submitParams.resolvedCourtId,
+      submitParams.filledParticipants,
+      submitParams.participantSlipFiles,
+      submitParams.hasAnyParticipantSlip,
+      submitParams.slipFile,
+    );
+    setSubmitParams(null);
+  }
+
+  function handleCancelNoSlip() {
+    setShowNoSlipConfirm(false);
+    setSubmitParams(null);
+  }
 
   if (registrationClosed) {
     return (
@@ -1071,7 +1142,7 @@ export default function RegisterUserPage() {
               ) : (
                 <>
                   <label htmlFor="slip" className="registeruser-label">
-                    {t('แนบไฟล์สลิปรวม *', 'Attach combined slip *')}
+                    {t('แนบไฟล์สลิปรวม', 'Attach combined slip')}
                   </label>
                   <input
                     id="slip"
@@ -1079,7 +1150,6 @@ export default function RegisterUserPage() {
                     className="registeruser-input"
                     accept="image/*,application/pdf"
                     onChange={handleSlipChange}
-                    required
                     disabled={submitting}
                   />
                   <p className="registeruser-help">
@@ -1102,6 +1172,40 @@ export default function RegisterUserPage() {
             </button>
           </div>
         </form>
+
+        {showNoSlipConfirm && (
+          <div className="registeruser-overlay">
+            <div className="registeruser-dialog">
+              <h2 className="registeruser-dialog__title">
+                {t('กรุณาแนบหลักฐานภายหลัง', 'Attach proof later')}
+              </h2>
+              <p className="registeruser-dialog__message">
+                {t(
+                  'ยังไม่มีสลีปรายบุคคลหรือสลิปรวม คุณสามารถแนบได้ภายหลังและส่งแบบฟอร์มต่อไปได้',
+                  'No individual or combined slip has been attached. You can attach it later and submit the form now.',
+                )}
+              </p>
+              <div className="registeruser-dialog__actions">
+                <button
+                  type="button"
+                  className="registeruser-button registeruser-button--secondary"
+                  onClick={handleCancelNoSlip}
+                  disabled={submitting}
+                >
+                  {t('ยกเลิก', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  className="registeruser-button"
+                  onClick={handleConfirmNoSlip}
+                  disabled={submitting}
+                >
+                  {t('ส่งต่อ', 'Continue')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

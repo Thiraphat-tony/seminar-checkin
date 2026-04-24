@@ -397,15 +397,7 @@ export async function POST(req: NextRequest) {
       (index) => index >= 0 && index < filledParticipants.length,
     );
 
-    if (!hasCombinedSlip && !hasAnyParticipantSlip) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ (รายบุคคล หรือสลิปรวม)',
-        },
-        { status: 400 },
-      );
-    }
+    // ✅ สลีปไม่บังคับ - ผู้ใช้สามารถแนบภายหลังได้
 
     const EVENT_ID = process.env.EVENT_ID;
     if (!EVENT_ID) {

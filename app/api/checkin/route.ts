@@ -132,8 +132,12 @@ function hashTokenBuffer(token: string): Buffer {
 }
 
 function timingSafeTokenMatch(token: string, stored: string | null | undefined): boolean {
+  // Early return if stored token is missing - definitely doesn't match
+  if (!stored) {
+    return false;
+  }
   const provided = hashTokenBuffer(token);
-  const storedHash = hashTokenBuffer(stored ?? '');
+  const storedHash = hashTokenBuffer(stored);
   return timingSafeEqual(provided, storedHash);
 }
 

@@ -3869,3 +3869,158 @@ summary.admin-link-edit:hover {
   font-size: 15px;
   color: var(--text-soft);
 }
+
+/* -------------------------------------------------- Admin Bulk Slip Modal -------------------------------------------------- */
+.admin-bulk-slip-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.admin-bulk-slip-modal {
+  background-color: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-deep);
+  width: min(90vw, 500px);
+  padding: 24px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-bulk-slip-modal__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0 0 16px 0;
+}
+
+.admin-bulk-slip-modal__content {
+  margin-bottom: 20px;
+}
+
+.admin-bulk-slip-modal__info {
+  font-size: 15px;
+  color: var(--text-main);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.admin-bulk-slip-modal__label {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.admin-bulk-slip-modal__input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.admin-bulk-slip-modal__input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.admin-bulk-slip-modal__selected {
+  font-size: 14px;
+  color: #10b981;
+  margin: 8px 0 0 0;
+  font-weight: 500;
+}
+
+.admin-bulk-slip-modal__progress {
+  text-align: center;
+}
+
+.admin-bulk-slip-modal__progress-text {
+  font-size: 15px;
+  color: var(--text-main);
+  margin: 0 0 16px 0;
+}
+
+.admin-bulk-slip-modal__spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-soft);
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-bulk-slip-modal__error {
+  font-size: 14px;
+  color: #dc2626;
+  margin: 12px 0 0 0;
+  padding: 8px;
+  background-color: #fee2e2;
+  border-radius: var(--radius-md);
+}
+
+.admin-bulk-slip-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.admin-bulk-slip-modal__button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-bulk-slip-modal__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-bulk-slip-modal__button--cancel {
+  background-color: white;
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+}
+
+.admin-bulk-slip-modal__button--cancel:hover:not(:disabled) {
+  background-color: #f9fafb;
+}
+
+.admin-bulk-slip-modal__button--confirm {
+  background-color: var(--primary);
+  color: white;
+}
+
+.admin-bulk-slip-modal__button--confirm:hover:not(:disabled) {
+  opacity: 0.9;
+}

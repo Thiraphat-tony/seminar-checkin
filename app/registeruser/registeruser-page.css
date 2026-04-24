@@ -502,3 +502,79 @@ html, body {
     min-width: 0;
   }
 }
+
+/* ===== CONFIRMATION DIALOG ===== */
+.registeruser-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.registeruser-dialog {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-medium);
+  border-radius: 18px;
+  box-shadow: var(--shadow-medium);
+  padding: 28px 24px;
+  max-width: 480px;
+  width: 100%;
+  animation: slideUp .3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.registeruser-dialog__title {
+  margin: 0 0 12px;
+  font-size: 1.28rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.registeruser-dialog__message {
+  margin: 0 0 20px;
+  font-size: 1.02rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.registeruser-dialog__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.registeruser-button--secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: rgba(148, 116, 84, 0.35);
+  transition: transform .12s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+.registeruser-button--secondary:hover {
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
+}
+
+.registeruser-button--secondary:active {
+  transform: translateY(0);
+}
+
