@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabaseServer';
 import { requireStaffForApi } from '@/lib/requireStaffForApi';
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireStaffForApi();
   if (!auth.ok) return auth.response;
 
@@ -12,7 +12,10 @@ export async function GET() {
     return NextResponse.json({ ok: false, message: 'MISSING_EVENT_ID' }, { status: 500 });
   }
 
-  const courtId = auth.staff.court_id;
+  const url = new URL(request.url);
+  const queryCourtId = url.searchParams.get('courtId');
+  const courtId = queryCourtId || auth.staff.court_id;
+
   if (!courtId) {
     return NextResponse.json(
       { ok: false, message: 'ไม่พบข้อมูลศาลของบัญชีผู้ใช้' },

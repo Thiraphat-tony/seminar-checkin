@@ -276,8 +276,12 @@ export default function RegisterUserPage() {
     slipFile: File | null;
   } | null>(null);
 
+  const [dbAttendeeCount, setDbAttendeeCount] = useState<number | null>(null);
+  const [loadingAttendeeCount, setLoadingAttendeeCount] = useState(true);
+
   const currentOrganizations = useMemo(() => REGION_ORGANIZATIONS[region] ?? [], [region]);
   const hasIndividualSlips = participantSlipCount > 0;
+  const hasExistingAttendees = dbAttendeeCount && dbAttendeeCount > 0;
 
   useEffect(() => {
     let active = true;
@@ -308,6 +312,55 @@ export default function RegisterUserPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadAttendeeCount = async () => {
+      const trimmedOrg = organization.trim();
+      if (!trimmedOrg || courts.length === 0) {
+        if (active) setDbAttendeeCount(0);
+        setLoadingAttendeeCount(false);
+        return;
+      }
+
+      setLoadingAttendeeCount(true);
+
+      const selectedCourtId = resolveCourtId(trimmedOrg, courts);
+      if (!selectedCourtId) {
+        if (active) setDbAttendeeCount(0);
+        if (active) setLoadingAttendeeCount(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `/api/registeruser/count?courtId=${encodeURIComponent(selectedCourtId)}`,
+          { cache: 'no-store' },
+        );
+        const payload = await res.json().catch(() => null);
+
+        if (!res.ok || !payload?.ok) {
+          if (active) setDbAttendeeCount(0);
+          return;
+        }
+
+        if (active) {
+          const count = typeof payload.count === 'number' ? payload.count : 0;
+          setDbAttendeeCount(count);
+        }
+      } catch {
+        if (active) setDbAttendeeCount(0);
+      } finally {
+        if (active) setLoadingAttendeeCount(false);
+      }
+    };
+
+    loadAttendeeCount();
+    return () => {
+      active = false;
+    };
+  }, [organization, courts]);
 
   // ✅ โหลดสถานะเดิม
   useEffect(() => {
@@ -1063,43 +1116,35 @@ export default function RegisterUserPage() {
                 disabled={submitting}
               />
 
-              {!completed ? (
+              {!hasExistingAttendees ? (
                 <div className="registeruser-actions">
                   <button
                     type="button"
                     className="registeruser-button"
                     onClick={goToFormCount}
-                    disabled={submitting}
+                    disabled={submitting || loadingAttendeeCount}
                   >
                     {t('บันทึกจำนวนผู้เข้าร่วม', 'Save participant count')}
                   </button>
                 </div>
               ) : (
                 <div className="registeruser-actions">
-                  <select
-                    className="registeruser-input"
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'edit') {
-                        goToFormCount();
-                      } else if (value === 'add') {
-                        router.push('/registeruser/add');
-                      }
-                      e.target.value = '';
-                    }}
+                  <button
+                    type="button"
+                    className="registeruser-button registeruser-button--secondary"
+                    onClick={goToFormCount}
                     disabled={submitting}
-                    defaultValue=""
                   >
-                    <option value="" disabled>
-                      {t('— เลือกการดำเนินการ —', '— Select action —')}
-                    </option>
-                    <option value="edit">
-                      {t('📝 แก้ไขข้อมูลผู้เข้าร่วม', '📝 Edit participant data')}
-                    </option>
-                    <option value="add">
-                      {t('➕ เพิ่มผู้เข้าร่วม', '➕ Add participants')}
-                    </option>
-                  </select>
+                    {t('📝 แก้ไขข้อมูลผู้เข้าร่วม', '📝 Edit participant data')}
+                  </button>
+                  <button
+                    type="button"
+                    className="registeruser-button registeruser-button--secondary"
+                    onClick={() => router.push('/registeruser/add')}
+                    disabled={submitting}
+                  >
+                    {t('➕ เพิ่มผู้เข้าร่วม', '➕ Add participants')}
+                  </button>
                 </div>
               )}
 
