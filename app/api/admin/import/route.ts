@@ -675,57 +675,36 @@ export async function POST(req: NextRequest) {
 
     const eventId = eventRow.id as string;
 
-    // 6) upsert ลง attendees ตาม schema ใหม่
-    let importedCount = 0;
+    // 6) Prepare attendee data as JSONB array for transaction function
+    const attendeeDataForTransaction = prepared.map((row) => ({
+      court_id: row.court_id,
+      name_prefix: row.name_prefix,
+      full_name: row.full_name,
+      phone: row.phone,
+      organization: row.organization,
+      job_position: row.job_position,
+      province: row.province,
+      region: row.region,
+      qr_image_url: row.qr_image_url,
+      slip_url: row.slip_url,
+      food_type: row.food_type,
+      travel_mode: row.travel_mode,
+      travel_other: row.travel_other,
+      coordinator_prefix_other: row.coordinator_prefix_other,
+      coordinator_name: row.coordinator_name,
+      coordinator_phone: row.coordinator_phone,
+      hotel_name: row.hotel_name,
+      ticket_token: row.ticket_token,
+    }));
 
-    for (let i = 0; i < prepared.length; i += UPSERT_BATCH_SIZE) {
-      const slice = prepared.slice(i, i + UPSERT_BATCH_SIZE);
-      const { error: insertError } = await supabase
-        .from('attendees')
-        .upsert(
-          slice.map((row) => ({
-            event_id: eventId,
-            court_id: row.court_id,
-            name_prefix: row.name_prefix,
-            full_name: row.full_name,
-            phone: row.phone,
-            organization: row.organization,
-            job_position: row.job_position,
-            province: row.province,
-            region: row.region,
-            qr_image_url: row.qr_image_url,
-            slip_url: row.slip_url,
-            food_type: row.food_type,
-            travel_mode: row.travel_mode,
-            travel_other: row.travel_other,
-            coordinator_prefix_other: row.coordinator_prefix_other,
-            coordinator_name: row.coordinator_name,
-            coordinator_phone: row.coordinator_phone,
-            hotel_name: row.hotel_name,
-            ticket_token: row.ticket_token,
-          })),
-          { onConflict: 'ticket_token' },
-        );
+    // 7) Prepare checkin data as JSONB array
+    const checkinDataForTransaction = prepared.flatMap((row) => {
+      const items: Array<{
+        ticket_token: string;
+        round: number;
+        checked_in_at: string;
+      }> = [];
 
-      if (insertError) {
-        console.error('IMPORT INSERT ERROR', insertError);
-        return NextResponse.json(
-          {
-            ok: false,
-            message:
-              'เกิดข้อผิดพลาดระหว่างการบันทึกข้อมูลเข้าฐานข้อมูล (เช่น ticket_token ซ้ำ หรือข้อมูลไม่ตรง constraint)',
-            detail: insertError.message,
-          },
-          { status: 500 },
-        );
-      }
-
-      importedCount += slice.length;
-    }
-
-    // 6.1) ถ้ามีข้อมูลลงทะเบียนรายรอบ ให้เขียนลง attendee_checkins
-    const checkinSeed = prepared.flatMap((row) => {
-      const items: Array<{ ticket_token: string; round: number; checked_in_at: string }> = [];
       if (row.checkin_round1_at) {
         items.push({
           ticket_token: row.ticket_token,
@@ -747,58 +726,112 @@ export async function POST(req: NextRequest) {
           checked_in_at: row.checkin_round3_at,
         });
       }
+
       return items;
     });
 
-    if (checkinSeed.length > 0) {
-      const tokenList = Array.from(new Set(checkinSeed.map((c) => c.ticket_token)));
-      for (let i = 0; i < tokenList.length; i += UPSERT_BATCH_SIZE) {
-        const tokenBatch = tokenList.slice(i, i + UPSERT_BATCH_SIZE);
-        const { data: attendeeIds, error: attendeeError } = await supabase
-          .from('attendees')
-          .select('id, ticket_token')
-          .in('ticket_token', tokenBatch);
-
-        if (attendeeError) {
-          return NextResponse.json(
-            { ok: false, message: `ดึง attendee_id ไม่สำเร็จ: ${attendeeError.message}` },
-            { status: 500 },
-          );
-        }
-
-        const idMap = new Map(
-          (attendeeIds ?? []).map((row: any) => [row.ticket_token, row.id]),
-        );
-
-        const checkinRows = checkinSeed
-          .filter((c) => tokenBatch.includes(c.ticket_token))
-          .map((c) => ({
-            attendee_id: idMap.get(c.ticket_token),
-            round: c.round,
-            checked_in_at: c.checked_in_at,
-          }))
-          .filter((row) => Boolean(row.attendee_id));
-
-        if (checkinRows.length > 0) {
-          const { error: checkinError } = await supabase
-            .from('attendee_checkins')
-            .upsert(checkinRows, { onConflict: 'attendee_id,round' });
-
-          if (checkinError) {
-            return NextResponse.json(
-              { ok: false, message: `บันทึกลงทะเบียนรายรอบไม่สำเร็จ: ${checkinError.message}` },
-              { status: 500 },
-            );
-          }
-        }
+    // 8) ATOMIC TRANSACTION: Call the PostgreSQL function
+    // This function ensures that either:
+    // - ALL attendees and checkins are inserted successfully, OR
+    // - NOTHING is inserted (automatic rollback on any error)
+    const { data: transactionResult, error: transactionError } = await supabase.rpc(
+      'import_attendees_with_checkins',
+      {
+        p_event_id: eventId,
+        p_attendee_data: attendeeDataForTransaction,
+        p_checkin_data: checkinDataForTransaction,
       }
+    );
+
+    // 9) Check transaction result
+    if (transactionError) {
+      console.error('IMPORT TRANSACTION ERROR', {
+        code: transactionError.code,
+        message: transactionError.message,
+        details: transactionError,
+      });
+
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `นำเข้าข้อมูลล้มเหลว - ทั้งหมดถูก Rollback เพื่อความปลอดภัย`,
+          errorDetails: transactionError.message,
+          importedCount: 0,
+          totalRows: prepared.length,
+        },
+        { status: 500 }
+      );
     }
 
-    // 7) ตอบกลับสำเร็จ
+    // 10) Validate transaction result structure
+    if (!transactionResult || !Array.isArray(transactionResult) || transactionResult.length === 0) {
+      console.error('IMPORT TRANSACTION: Invalid response structure', transactionResult);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'นำเข้าข้อมูลล้มเหลว - ไม่สามารถดำเนินการได้',
+          importedCount: 0,
+        },
+        { status: 500 }
+      );
+    }
+
+    const result = transactionResult[0];
+
+    // 11) Check if transaction succeeded
+    if (!result.success) {
+      const errorMessage = result.error_message || 'Unknown error occurred';
+      const failedRowIdx = result.failed_row_index;
+      const failedValue = result.failed_value;
+
+      console.error('IMPORT TRANSACTION FAILED', {
+        errorMessage,
+        failedRowIndex: failedRowIdx,
+        failedValue,
+      });
+
+      // Build detailed error message
+      let userMessage = `นำเข้าข้อมูลล้มเหลว (ทั้งหมดถูก Rollback): ${errorMessage}`;
+      if (failedRowIdx !== null && failedRowIdx !== undefined) {
+        // Row index is 0-based from the array, but Excel rows are 1-based with header
+        const excelRowNumber = failedRowIdx + 2; // +1 for 0-index, +1 for header row
+        userMessage += ` (ที่แถวที่ ${excelRowNumber})`;
+      }
+      if (failedValue) {
+        userMessage += ` [${failedValue}]`;
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          message: userMessage,
+          errorCode: 'TRANSACTION_FAILED',
+          failedRowNumber: failedRowIdx !== null ? failedRowIdx + 2 : undefined,
+          failedValue: failedValue,
+          importedCount: 0,
+          totalRows: prepared.length,
+        },
+        { status: 422 }
+      );
+    }
+
+    // 12) Success!
+    const importedCount = result.imported_count ?? prepared.length;
+
+    console.log('IMPORT TRANSACTION SUCCESS', {
+      eventId,
+      importedCount,
+      totalRows: prepared.length,
+      checkinsProcessed: checkinDataForTransaction.length,
+    });
+
     return NextResponse.json({
       ok: true,
       imported: importedCount,
       message: `นำเข้าข้อมูลสำเร็จ ${importedCount} รายการ`,
+      totalRows: prepared.length,
+      checkinRecords: checkinDataForTransaction.length,
     });
   } catch (err) {
     console.error('IMPORT ROUTE ERROR', err);
