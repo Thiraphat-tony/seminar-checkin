@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import '../registeruser-page.css';
 
 type Lang = 'th' | 'en';
@@ -18,6 +18,8 @@ function clampCount(n: number) {
 
 export default function AddParticipantPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const courtId = searchParams.get('courtId');
 
   const [lang, setLang] = useState<Lang>('th');
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,10 @@ export default function AddParticipantPageClient() {
           }
 
           // ดึงข้อมูลจำนวนคนที่ลงทะเบียนแล้ว
-          const countRes = await fetch('/api/registeruser/count', { cache: 'no-store' });
+          const countUrl = courtId
+            ? `/api/registeruser/count?courtId=${encodeURIComponent(courtId)}`
+            : '/api/registeruser/count';
+          const countRes = await fetch(countUrl, { cache: 'no-store' });
           if (countRes.ok) {
             const countData = await countRes.json();
             if (countData.ok) {
@@ -109,7 +114,7 @@ export default function AddParticipantPageClient() {
     return () => {
       active = false;
     };
-  }, [lang]);
+  }, [lang, courtId]);
 
   function goToAddForm() {
     const count = clampCount(Number(additionalCountInput));
@@ -121,7 +126,12 @@ export default function AddParticipantPageClient() {
       // ignore
     }
 
-    router.push(`/registeruser/add/form?count=${count}`);
+    const params = new URLSearchParams();
+    params.set('count', String(count));
+    if (courtId) {
+      params.set('courtId', courtId);
+    }
+    router.push(`/registeruser/add/form?${params.toString()}`);
   }
 
   if (registrationClosed) {

@@ -125,7 +125,10 @@ export async function POST(req: NextRequest) {
       participantSlips.set(index, value);
     }
 
-    let courtId = auth.staff.court_id;
+    // Allow Super Admin to specify courtId via query parameter, otherwise use logged-in user's court
+    const url = new URL(req.url);
+    const queryCourtId = url.searchParams.get('courtId');
+    let courtId = queryCourtId || auth.staff.court_id;
 
     if (!courtId) {
       return NextResponse.json(
@@ -273,16 +276,6 @@ export async function POST(req: NextRequest) {
     const hasAnyParticipantSlip = Array.from(participantSlips.keys()).some(
       (index) => index >= 0 && index < filledParticipants.length,
     );
-
-    if (!hasCombinedSlip && !hasAnyParticipantSlip) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: 'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ (รายบุคคล หรือสลิปรวม)',
-        },
-        { status: 400 },
-      );
-    }
 
     // validate participant phones
     for (let idx = 0; idx < participants.length; idx++) {

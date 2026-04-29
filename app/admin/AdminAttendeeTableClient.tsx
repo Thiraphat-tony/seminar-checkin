@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { maskPhone } from '@/lib/maskPhone';
 
 import ForceCheckinButton from './ForceCheckinButton';
 import AdminDeleteButton from './AdminDeleteButton';
@@ -291,7 +290,7 @@ export default function AdminAttendeeTableClient({
                   <td>
                     <div>{displayName}</div>
                     <div>
-                      <small>{maskPhone(attendee.phone)}</small>
+                      <small>{attendee.phone || '-'}</small>
                     </div>
                   </td>
 
@@ -308,7 +307,7 @@ export default function AdminAttendeeTableClient({
                   <td>
                     <div>{attendee.coordinator_name || '-'}</div>
                     <div>
-                      <small>{maskPhone(attendee.coordinator_phone)}</small>
+                      <small>{attendee.coordinator_phone || '-'}</small>
                     </div>
                   </td>
 

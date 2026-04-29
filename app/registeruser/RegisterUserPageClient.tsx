@@ -1140,7 +1140,12 @@ export default function RegisterUserPage() {
                   <button
                     type="button"
                     className="registeruser-button registeruser-button--secondary"
-                    onClick={() => router.push('/registeruser/add')}
+                    onClick={() => {
+                      const selectedCourtId = resolveCourtId(organization, courts);
+                      if (selectedCourtId) {
+                        router.push(`/registeruser/add?courtId=${encodeURIComponent(selectedCourtId)}`);
+                      }
+                    }}
                     disabled={submitting}
                   >
                     {t('➕ เพิ่มผู้เข้าร่วม', '➕ Add participants')}

@@ -164,6 +164,8 @@ export default function AddParticipantFormClient() {
     return clampCount(Number(raw ?? '1'));
   }, [searchParams]);
 
+  const courtId = useMemo(() => searchParams.get('courtId'), [searchParams]);
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantSlipFiles, setParticipantSlipFiles] = useState<ParticipantSlipFiles>({});
   const [participantSlipInputKeys, setParticipantSlipInputKeys] = useState<Record<number, number>>({});
@@ -341,15 +343,6 @@ export default function AddParticipantFormClient() {
     const hasAnyParticipantSlip = validParticipantSlipEntries.length > 0;
     const hasCombinedSlip = slipFile instanceof File && slipFile.size > 0;
 
-    if (!hasAnyParticipantSlip && !hasCombinedSlip) {
-      return setErrorMessage(
-        t(
-          'กรุณาแนบหลักฐานอย่างน้อย 1 แบบ: สลิปรายบุคคลหรือสลิปรวม',
-          'Please attach at least one proof: individual slips or a combined slip.',
-        ),
-      );
-    }
-
     // validate participant phones
     for (let idx = 0; idx < participants.length; idx++) {
       const p = participants[idx];
@@ -415,7 +408,10 @@ export default function AddParticipantFormClient() {
         formData.append('slip', slipFile);
       }
 
-      const res = await fetch('/api/registeruser/add', { method: 'POST', body: formData });
+      const apiUrl = courtId
+        ? `/api/registeruser/add?courtId=${encodeURIComponent(courtId)}`
+        : '/api/registeruser/add';
+      const res = await fetch(apiUrl, { method: 'POST', body: formData });
 
       if (!res.ok) {
         let data: any = null;
