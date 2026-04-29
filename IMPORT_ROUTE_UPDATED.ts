@@ -1,5 +1,14 @@
 // NEW VERSION OF: app/api/admin/import/route.ts
-// Lines 678-813 REPLACEMENT (transaction-safe version)
+// REPLACEMENT INSTRUCTIONS:
+// 1) ENSURE IMPORT at top of file: import { createServerClient } from '@/lib/supabaseServer';
+// 2) REPLACE Line 551 (supabase initialization) with the code below
+// 3) REPLACE Lines 678-813 (attendee import logic) with the code below
+
+// ============================================================================
+// REPLACE LINE 551 (initialize supabase):
+// FROM: const supabase = createServerClient();
+// ============================================================================
+    const supabase = createServerClient();
 
 // ============================================================================
 // REPLACE THE ENTIRE SECTION BELOW (from line 678 onwards)
