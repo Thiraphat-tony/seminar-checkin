@@ -5,6 +5,28 @@
 // REPLACE THE ENTIRE SECTION BELOW (from line 678 onwards)
 // ============================================================================
 
+    // 5) ใช้ EVENT_ID จาก env เป็นค่าเริ่มต้น
+    const envEventId = (process.env.EVENT_ID ?? '').trim();
+    if (!envEventId) {
+      return NextResponse.json(
+        { ok: false, message: 'ยังไม่ได้ตั้งค่า EVENT_ID ใน Environment' },
+        { status: 500 },
+      );
+    }
+
+    const { data: eventRow, error: eventError } = await supabase
+      .from('events')
+      .select('id')
+      .eq('id', envEventId)
+      .maybeSingle();
+
+    if (eventError || !eventRow) {
+      return NextResponse.json(
+        { ok: false, message: 'EVENT_ID ไม่ถูกต้อง หรือไม่พบ event' },
+        { status: 400 },
+      );
+    }
+
     const eventId = eventRow.id as string;
 
     // 6) Prepare attendee data as JSONB array for transaction function
