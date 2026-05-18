@@ -11,10 +11,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const courtId = staff.court_id;
-  if (!courtId) {
+  const staffCourtId = (staff.court_id ?? '').trim();
+  if (!staffCourtId) {
     return NextResponse.json(
       { ok: false, error: 'ไม่พบข้อมูลศาลของคุณ' },
+      { status: 403 }
+    );
+  }
+  const selectedCourtId = (request.nextUrl.searchParams.get('courtId') ?? '').trim();
+  const courtId = selectedCourtId || staffCourtId;
+  const isSuperAdmin = staff.role === 'super_admin';
+  if (!isSuperAdmin && courtId !== staffCourtId) {
+    return NextResponse.json(
+      { ok: false, error: 'คุณไม่มีสิทธิ์เข้าถึงข้อมูลศาลนี้' },
       { status: 403 }
     );
   }
@@ -45,6 +54,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    courtId,
     coordinator: {
       prefix: attendees?.coordinator_prefix_other ?? '',
       name: attendees?.coordinator_name ?? '',
@@ -63,8 +73,8 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const courtId = staff.court_id;
-  if (!courtId) {
+  const staffCourtId = (staff.court_id ?? '').trim();
+  if (!staffCourtId) {
     return NextResponse.json(
       { ok: false, error: 'ไม่พบข้อมูลศาลของคุณ' },
       { status: 403 }
@@ -79,13 +89,23 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  let body: { prefix?: string; name?: string; phone?: string };
+  let body: { prefix?: string; name?: string; phone?: string; courtId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json(
       { ok: false, error: 'ข้อมูลไม่ถูกต้อง' },
       { status: 400 }
+    );
+  }
+
+  const selectedCourtId = (body.courtId ?? '').trim();
+  const courtId = selectedCourtId || staffCourtId;
+  const isSuperAdmin = staff.role === 'super_admin';
+  if (!isSuperAdmin && courtId !== staffCourtId) {
+    return NextResponse.json(
+      { ok: false, error: 'คุณไม่มีสิทธิ์แก้ไขข้อมูลศาลนี้' },
+      { status: 403 }
     );
   }
 
