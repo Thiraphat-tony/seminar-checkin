@@ -330,6 +330,7 @@ type SheetColumnDefinition = {
 };
 
 type CustomExportFieldKey =
+  | 'name_prefix'
   | 'full_name'
   | 'organization'
   | 'region_label'
@@ -371,6 +372,7 @@ const DEFAULT_EXPORT_COLUMNS: SheetColumnDefinition[] = [
 ];
 
 const CUSTOM_EXPORT_COLUMNS: Record<CustomExportFieldKey, SheetColumnDefinition> = {
+  name_prefix: { header: 'คำนำหน้า', key: 'name_prefix', width: 12 },
   full_name: { header: 'ชื่อ-นามสกุล', key: 'full_name', width: 30 },
   organization: { header: 'หน่วยงาน', key: 'organization', width: 28 },
   region_label: { header: 'ภาค/ศาลกลาง', key: 'region_label', width: 16 },
@@ -426,6 +428,7 @@ function formatCoordinator(
 }
 
 const CUSTOM_EXPORT_VALUE_GETTERS: Record<CustomExportFieldKey, (attendee: DbAttendee) => string> = {
+  name_prefix: (attendee) => attendee.name_prefix ?? '',
   full_name: (attendee) => attendee.full_name ?? '',
   organization: (attendee) => attendee.organization ?? '',
   region_label: (attendee) => formatRegionLabel(attendee.region),

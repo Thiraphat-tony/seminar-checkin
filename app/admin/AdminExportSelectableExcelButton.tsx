@@ -10,6 +10,7 @@ type ExportFieldOption = {
 };
 
 const EXPORT_FIELD_OPTIONS: ExportFieldOption[] = [
+  { key: 'name_prefix', label: 'คำนำหน้า' },
   { key: 'full_name', label: 'ชื่อ - นามสกุล' },
   { key: 'organization', label: 'หน่วยงาน' },
   { key: 'region_label', label: 'ภาค/ศาลกลาง' },
