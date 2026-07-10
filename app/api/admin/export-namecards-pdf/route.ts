@@ -133,6 +133,8 @@ export async function GET(req: Request) {
       )
       .eq('event_id', eventId)
       .eq('region', region)
+      .order('organization', { ascending: true })
+      .order('job_position', { ascending: true })
       .order('full_name', { ascending: true });
 
     if (error) {

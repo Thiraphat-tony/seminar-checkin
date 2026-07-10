@@ -15,6 +15,7 @@ type AdminAttendeeTableClientProps = {
   attendees: AdminAttendeeRow[];
   from: number;
   canForceCheckin: boolean;
+  checkinRoundOpen: number;
 };
 
 const JOB_POSITION_LABELS: Record<string, string> = {
@@ -99,6 +100,7 @@ export default function AdminAttendeeTableClient({
   attendees,
   from,
   canForceCheckin,
+  checkinRoundOpen,
 }: AdminAttendeeTableClientProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -263,7 +265,15 @@ export default function AdminAttendeeTableClient({
           ) : (
             attendees.map((attendee, idx) => {
               const hasSlip = Boolean(attendee.slip_url);
-              const isChecked = Boolean(attendee.checked_in_at);
+              // Check if the attendee has checked in for the CURRENTLY OPEN ROUND
+              const isChecked =
+                checkinRoundOpen === 1
+                  ? Boolean(attendee.checkin_round1_at)
+                  : checkinRoundOpen === 2
+                  ? Boolean(attendee.checkin_round2_at)
+                  : checkinRoundOpen === 3
+                  ? Boolean(attendee.checkin_round3_at)
+                  : false;
               const foodLabel = formatFoodType(attendee.food_type);
               const namePrefix = (attendee.name_prefix ?? '').trim();
               const fullName = (attendee.full_name ?? '').trim();

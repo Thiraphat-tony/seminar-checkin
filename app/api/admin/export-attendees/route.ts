@@ -568,6 +568,8 @@ export async function GET(req: NextRequest) {
       .from('v_attendees_checkin_rounds')
       .select(selectColumns)
       .order('region', { ascending: true, nullsFirst: false })
+      .order('organization', { ascending: true })
+      .order('job_position', { ascending: true })
       .order('full_name', { ascending: true });
 
     if (eventId) {
@@ -618,6 +620,8 @@ export async function GET(req: NextRequest) {
         `,
         )
         .order('region', { ascending: true, nullsFirst: false })
+        .order('organization', { ascending: true })
+        .order('job_position', { ascending: true })
         .order('full_name', { ascending: true });
 
       baseQuery = baseQuery.eq('event_id', eventId);

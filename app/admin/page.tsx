@@ -112,6 +112,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const staffCourtId =
     staff && staff.role !== 'super_admin' ? (staff.court_id ?? null) : null;
 
+  // --- Fetch event settings to get current checkin round ---
+  const { data: eventData, error: eventError } = await supabase
+    .from('events')
+    .select('id, checkin_round_open')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (eventError) {
+    console.error('Admin event query error:', eventError);
+  }
+
+  const checkinRoundOpen = (eventData?.checkin_round_open ?? 0) as number;
+
   // --- Query paged data ---
   let dataQuery = supabase
     .from('v_attendees_checkin_rounds')
@@ -485,6 +498,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               attendees={attendees}
               from={from}
               canForceCheckin={staff.role === 'super_admin'}
+              checkinRoundOpen={checkinRoundOpen}
             />
           </div>
         </section>
