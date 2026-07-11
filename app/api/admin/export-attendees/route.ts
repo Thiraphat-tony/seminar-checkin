@@ -340,6 +340,9 @@ type CustomExportFieldKey =
   | 'travel_mode'
   | 'slip'
   | 'checkin_status'
+  | 'checkin_round1_at'
+  | 'checkin_round2_at'
+  | 'checkin_round3_at'
   | 'food_type';
 
 const SEQUENCE_COLUMN: SheetColumnDefinition = {
@@ -382,6 +385,9 @@ const CUSTOM_EXPORT_COLUMNS: Record<CustomExportFieldKey, SheetColumnDefinition>
   travel_mode: { header: 'การเดินทาง', key: 'travel_mode', width: 20 },
   slip: { header: 'สลิป', key: 'slip', width: 20 },
   checkin_status: { header: 'ลงทะเบียน (หน้างาน)', key: 'checkin_status', width: 24 },
+  checkin_round1_at: { header: 'รอบลงทะเบียน 1', key: 'checkin_round1_at', width: 18 },
+  checkin_round2_at: { header: 'รอบลงทะเบียน 2', key: 'checkin_round2_at', width: 18 },
+  checkin_round3_at: { header: 'รอบลงทะเบียน 3', key: 'checkin_round3_at', width: 18 },
   food_type: { header: 'ประเภทอาหาร', key: 'food_type', width: 18 },
 };
 
@@ -444,6 +450,9 @@ const CUSTOM_EXPORT_VALUE_GETTERS: Record<CustomExportFieldKey, (attendee: DbAtt
     formatTravelMode(attendee.travel_mode ?? null, attendee.travel_other ?? null),
   slip: () => '',
   checkin_status: (attendee) => formatCheckinStatus(attendee.checked_in_at),
+  checkin_round1_at: (attendee) => formatCheckinTime(attendee.checkin_round1_at),
+  checkin_round2_at: (attendee) => formatCheckinTime(attendee.checkin_round2_at),
+  checkin_round3_at: (attendee) => formatCheckinTime(attendee.checkin_round3_at),
   food_type: (attendee) => formatFoodType(attendee.food_type ?? null),
 };
 

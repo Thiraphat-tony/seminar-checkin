@@ -20,6 +20,9 @@ const EXPORT_FIELD_OPTIONS: ExportFieldOption[] = [
   { key: 'travel_mode', label: 'การเดินทาง' },
   { key: 'slip', label: 'สลิป' },
   { key: 'checkin_status', label: 'ลงทะเบียน (หน้างาน)' },
+  { key: 'checkin_round1_at', label: 'รอบลงทะเบียน 1' },
+  { key: 'checkin_round2_at', label: 'รอบลงทะเบียน 2' },
+  { key: 'checkin_round3_at', label: 'รอบลงทะเบียน 3' },
   { key: 'food_type', label: 'ประเภทอาหาร' },
 ];
 
